@@ -1,0 +1,31 @@
+{
+  "name": "visualize-anything-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Storyboard \u2192 edge-tts narration \u2192 code / archify / manim scenes \u2192 Remotion video.",
+  "bin": {
+    "va": "./va.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.2.5",
+    "@fontsource/jetbrains-mono": "^5.2.5",
+    "@remotion/cli": "4.0.534",
+    "@remotion/media": "4.0.534",
+    "puppeteer-core": "^24.10.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "remotion": "4.0.534",
+    "shiki": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "typescript": "^5.8.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

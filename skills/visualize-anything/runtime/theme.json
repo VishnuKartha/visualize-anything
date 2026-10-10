@@ -1,0 +1,16 @@
+{
+  "bg": "#020617",
+  "panel": "#0b1220",
+  "panelBorder": "#1e293b",
+  "grid": "#101a30",
+  "text": "#f8fafc",
+  "muted": "#94a3b8",
+  "dim": "#475569",
+  "accent": "#34d399",
+  "cyan": "#22d3ee",
+  "violet": "#a78bfa",
+  "amber": "#fbbf24",
+  "rose": "#fb7185",
+  "orange": "#fb923c",
+  "codeTheme": "github-dark-default"
+}

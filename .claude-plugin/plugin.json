@@ -1,0 +1,9 @@
+{
+  "name": "visualize-anything",
+  "version": "0.1.0",
+  "description": "Router skill that turns code into a narrated explainer video: edge-tts narration, with each scene routed to syntax-highlighted code, an Archify diagram, or a Manim animation, composed with Remotion.",
+  "author": {
+    "name": "Vishnu Kartha"
+  },
+  "keywords": ["claude-skill", "claude-code", "video", "explainer", "remotion", "manim", "archify", "edge-tts", "visualization"]
+}
