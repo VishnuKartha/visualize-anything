@@ -3,7 +3,6 @@
 // and cached, so fixing a single scene never redoes the rest.
 import {existsSync, mkdirSync} from 'node:fs';
 import path from 'node:path';
-import * as steps from './lib/steps.mjs';
 import {resolveProject} from './lib/storyboard.mjs';
 import {
   ARCHIFY_BIN, ARCHIFY_DIR, ARCHIFY_REF, ARCHIFY_REPO, MANIM_UV_ARGS, RUNTIME_DIR, TYPST_SPEC, VaError, findChrome, has,
@@ -98,6 +97,8 @@ const main = async () => {
   const {flags, positional} = parse(rest);
   if (command === 'setup') return setup();
   if (command === 'doctor') return doctor();
+  // Loaded after setup/doctor: steps pulls in npm packages that setup is what installs.
+  const steps = await import('./lib/steps.mjs');
   if (command === 'init') return steps.init(positional[0], flags);
   const paths = resolveProject(positional[0]);
   const ids = positional.slice(1);
