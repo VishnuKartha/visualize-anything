@@ -1,0 +1,23 @@
+{
+  "name": "visualize-anything",
+  "owner": {
+    "name": "Vishnu Kartha"
+  },
+  "metadata": {
+    "description": "Narrated code explainer videos, routed across Remotion, Archify, and Manim",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "visualize-anything",
+      "source": "./",
+      "description": "Router skill that turns code into a narrated explainer video: edge-tts narration, with each scene routed to syntax-highlighted code, an Archify diagram, or a Manim animation, composed with Remotion.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Vishnu Kartha"
+      },
+      "category": "video",
+      "tags": ["video", "explainer", "remotion", "manim", "archify", "visualization"]
+    }
+  ]
+}
