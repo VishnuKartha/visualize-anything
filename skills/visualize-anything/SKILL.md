@@ -1,6 +1,6 @@
 ---
 name: visualize-anything
-description: Turn code (or any technical topic) into a narrated explainer video. Writes a narration, synthesizes it with edge-tts, routes each part of the story to the visualization that explains it best — real syntax-highlighted code, a Manim animation for algorithms and data structures, or an Archify diagram for how a system's components relate — and stitches the scenes into one MP4 with Remotion. Use when the user asks for a code explainer, code walkthrough video, "explain this repo/file/function as a video", an animated explanation of an algorithm or system, or a narrated technical video.
+description: Turn code, a paper, or any technical topic into a narrated explainer video. Writes a narration, synthesizes it with edge-tts, routes each part of the story to the visualization that explains it best — real syntax-highlighted code, a Manim animation for algorithms and data structures, an Archify diagram for how a system's components relate, or the source's own numbers, charts, quotes, and figures — and stitches the scenes into one MP4 with Remotion. Use when the user asks for a code explainer, code walkthrough video, a paper explainer, "explain this repo/file/function/paper as a video", an animated explanation of an algorithm or system, or a narrated technical video.
 ---
 
 # visualize-anything
@@ -12,6 +12,7 @@ Three renderers produce pictures. Remotion is the glue that times, layers, and r
 | Renderer | Scene kind | It answers |
 |---|---|---|
 | Remotion (native) | `title`, `bullets`, `credit` | Why should I watch this? What should I remember? What was this, and where do I find it? |
+| Remotion (native) | `stat`, `compare`, `chart`, `quote`, `figure` | What did the source measure, claim, and draw? Its number counted up, its alternatives side by side, its results as bars or a line, its words, its own figure. |
 | Manim | `manim` | How does the algorithm or data structure behave? What happens to the data, step by step and branch by branch? What does the math say? |
 | Remotion + Manim | `trace` | What does the code say, and what does it do? The lines with a moving highlight, beside the data they change. |
 | HyperFrames | `hyperframes` | What changed between two versions of the code? How do these numbers compare? |
@@ -21,7 +22,7 @@ The house rules, in [references/taste.md](references/taste.md), shape every vide
 
 - **Code is never shown alone.** Whenever code is on screen, a picture of what it does is beside it (a `trace` scene). The router rejects a scene that is only a code block.
 - **An algorithm is animated, not flowcharted.** Keep one evolving picture of the data for the whole behaviour. Reach for Archify only when the subject is a system made of separate parts.
-- **Open on the picture, with the hook said over it.** The hook is the core of the problem, or the most interesting thing about the answer, and it is agreed before anything is written. No title card, no introduction, no link at the start.
+- **Open on an animation, with the hook said over it.** The first scene is always a Manim scene that shows the hook happening; the router rejects any other opening. The hook is the core of the problem, or the most interesting thing about the answer, and it is agreed before anything is written. No title card, no introduction, no link at the start.
 - **Every scene follows on from the one before.** None starts over with "now let's look at".
 - **End on the picture.** No slide of bullets. The recap shows each takeaway beside the moment that proved it, and its last line returns to the hook. The name of what was explained comes after that, in a short `credit` scene.
 - **One picture, carried through.** Scenes that share a picture are marked `continues` and do not fade between each other.
@@ -37,7 +38,7 @@ You do not pick renderers directly. You declare what each scene's viewer needs t
 - The storyboard's narration is the clock. Never write a visual before `va tts` has told you how long each beat lasts.
 - Every factual claim in the narration must come from code you actually read. Quote real lines with `file` + `range`; do not retype code from memory.
 - Every number comes from running that code. `va facts` must pass before anything is built; when a fact differs, the code is right and the sentence changes.
-- The hook is settled with the user before the storyboard, and the video opens on the picture that shows it: no title card, no introduction, no pointer to the source. The thumbnail is a hook frame you write (`thumbnail`), and the source is named in the last scene. Read [references/opening.md](references/opening.md) before the brief.
+- The hook is settled with the user before the storyboard, and the video opens on a Manim animation that shows it happening: no title card, no introduction, no pointer to the source. The thumbnail is a hook frame you write (`thumbnail`), and the source is named in the last scene. Read [references/opening.md](references/opening.md) before the brief.
 - Report honestly: say which checks you ran and which stills you looked at.
 
 ## Setup
@@ -48,7 +49,7 @@ You do not pick renderers directly. You declare what each scene's viewer needs t
 node <skill>/runtime/va.mjs doctor
 ```
 
-If anything is marked `MISS`, run `va setup` once. It installs the Remotion runtime, a pinned copy of Archify under `~/.visualize-anything/`, and Manim with Typst through `uv`. Typst typesets formulas in Manim scenes, so no LaTeX installation is needed: write `Math("O(log n)")` instead of `MathTex`.
+If anything is marked `MISS`, run `va setup` once. It installs the Remotion runtime, a pinned copy of Archify under `~/.visualize-anything/`, and a pinned Manim with Typst through `uv`. Typst typesets formulas in Manim scenes, so no LaTeX installation is needed: write `Math("O(log n)")` instead of `MathTex`.
 
 ## Workflow: Brief → Understand → Facts → Storyboard → Plan review → TTS → Visuals → Review → Render → Independent review
 
@@ -128,6 +129,8 @@ Synthesizes one clip per beat with edge-tts and writes `timeline.json`. It print
 
 `title`, `bullets`, and `credit` scenes need nothing more: they render from the storyboard.
 
+**Evidence scenes** (`number`, `contrast`, `chart`, `quote`, `figure`) also render from the storyboard: read [references/scene-evidence.md](references/scene-evidence.md) for their fields. A `figure` needs its image in the project. When the subject is a paper, use them for what the paper reports and keep the animation for the idea; [references/routing.md](references/routing.md) says where each belongs.
+
 **HyperFrames scenes** — read [references/scene-hyperframes.md](references/scene-hyperframes.md). A `change` scene needs only its `versions` in the storyboard; a `data` scene needs a composition at `html/<scene-id>.html`. Then:
 
 ```bash
@@ -142,7 +145,7 @@ VA diagram <project> [scene-id...]
 
 This runs Archify's `finalize` gates, then bakes the result for video. It prints the node and edge ids; use them in each beat's `focus`. A non-zero exit is never success: repair the candidate from the printed diagnostics and rerun.
 
-**Manim and trace scenes** — read [references/scene-manim.md](references/scene-manim.md), starting with "What to draw", write `manim/<scene-id>.py`, then:
+**Manim and trace scenes** — read [references/scene-manim.md](references/scene-manim.md), starting with "What to draw" and "Start from the kit". Compose the scene from the ready-made pictures in `va_manim` (`Cells`, `Tally`, `Flow`, `Track`, `Net`, and the rest); draw from Manim's own shapes only the one object the kit does not have. Write `manim/<scene-id>.py`, then:
 
 ```bash
 VA manim <project> [scene-id...]
@@ -191,7 +194,7 @@ Every step is cached by content, so change the source and rerun only what it aff
 | Narration wording | change `script.md` first and reread the lines either side, then the storyboard; `tts`, then `manim` (budgets moved), then `render` |
 | A number, or the code the video is about | `facts`; then the sentence and the picture that carry it, as above |
 | The `music` file or its levels | `render` (no scene is rendered again; only the sound) |
-| A trace scene's `range`, `lines`, `note`, or `cues`; a title's `text` | `render` (only that scene is rendered again) |
+| A trace scene's `range`, `lines`, `note`, or `cues`; a title's `text`; any field of an evidence scene | `render` (only that scene is rendered again) |
 | The `thumbnail` | `render` (no scene is rendered again; only the thumbnail) |
 | A diagram candidate, or a beat's `focus` | `diagram <id>`, `render` |
 | A Manim script | `manim <id>`, `render` |
@@ -211,6 +214,7 @@ When feedback names a moment ("at 0:42 the label overlaps"), run `VA stills <pro
 ├── diagrams/<id>.json     # authored: Archify candidates
 ├── manim/<id>.py          # authored: Manim scenes
 ├── html/<id>.html         # authored: HyperFrames compositions (only for scenes that need one)
+├── figures/<name>.png     # authored: the source's own figures, for figure scenes
 ├── timeline.json          # generated by tts: frame-exact beat windows
 ├── public/                # generated: audio/, assets/ (what Remotion reads)
 ├── .cache/                # generated: TTS clips, Archify HTML, Manim media

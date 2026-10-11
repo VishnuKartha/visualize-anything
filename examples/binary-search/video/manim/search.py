@@ -16,8 +16,8 @@ class Race(VAScene):
             label = Text(name, font=SANS, font_size=32, color=MUTED).next_to(row, LEFT, buff=0.5)
             return row, label
 
-        def tally(row, n):
-            return Text(f"{n} look{'s' if n != 1 else ''}", font=MONO, font_size=32, color=TEXT).next_to(row, RIGHT, buff=0.5)
+        def tally(row):
+            return Tally(0, end=len(VALUES), unit=("look", "looks"), font_size=32).next_to(row, RIGHT, buff=0.5)
 
         scan, scan_label = lane("scan", SAFE_CENTER_Y + 1.25)
         halve, halve_label = lane("halve", SAFE_CENTER_Y - 1.25)
@@ -38,13 +38,10 @@ class Race(VAScene):
         # Beat 1 — the scan looks at every item until it reaches the target.
         with self.beat(1) as beat:
             beat.until("check every item")
-            count = None
+            count = tally(scan)
             for i in range(found + 1):
                 self.play(scan.mark(i, CURRENT), run_time=0.22)
-                if count:
-                    self.remove(count)
-                count = tally(scan, i + 1)
-                self.add(count)
+                self.add(count.set(i + 1))
                 if i < found:
                     self.play(scan.mark(i, DISCARDED, 0.06), scan.labels[i].animate.set_opacity(0.3), run_time=0.18)
             beat.until("six looks")
@@ -54,15 +51,13 @@ class Race(VAScene):
         with self.beat(2) as beat:
             beat.until("checks the middle")
             self.play(halve.mark(3, CURRENT), run_time=0.4)
-            count = tally(halve, 1)
+            count = tally(halve).set(1)
             self.add(count)
             beat.until("throws half")
             self.play(*halve.mark_all(range(0, 4), DISCARDED, 0.06), *[halve.labels[i].animate.set_opacity(0.3) for i in range(4)], run_time=0.7)
             beat.until("gets there")
             self.play(halve.mark(found, CURRENT), run_time=0.35)
-            self.remove(count)
-            count = tally(halve, 2)
-            self.add(count)
+            count.set(2)
             self.play(halve.mark(found, SETTLED, 0.3), count.animate.set_color(SETTLED), run_time=0.5)
 
 

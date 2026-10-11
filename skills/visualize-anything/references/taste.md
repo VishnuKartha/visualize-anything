@@ -6,7 +6,7 @@ These are decisions about taste. Most came from watching a video this skill prod
 |---|---|---|
 | Code is never shown alone | A block of code is text to read, not an explanation | `va route` (blocks) |
 | An algorithm is animated, not flowcharted | The branch is part of the behaviour; show it acting on the data | `va route` (blocks) |
-| Open on the picture, with the hook said over it | The first ten seconds decide whether the rest is watched, and words on a card are not the subject | `va route` |
+| Open on a Manim animation, with the hook said over it | The first ten seconds decide whether the rest is watched, and a card, a chart, or a block of code is not the hook happening | `va route` (blocks) |
 | The hook is agreed before the storyboard | It is the core of the problem or the most interesting part; everything else is arranged around it | `va route` (it is in the brief, said in the opening, returned to at the end) |
 | The narration is written whole, then split | Lines written a scene at a time do not follow on from each other | `va route` (the storyboard says `script.md`, in order, and nothing else) |
 | Every scene follows on from the one before | A hook followed by a video that starts again is two videos | `va route` (scenes that start over), the reviewer |

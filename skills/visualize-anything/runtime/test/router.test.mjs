@@ -43,7 +43,7 @@ const LRU = [
 
 test('every need routes to a known renderer', () => {
   for (const [need, spec] of Object.entries(NEEDS)) {
-    assert.ok(['title', 'code', 'trace', 'hyperframes', 'manim', 'diagram', 'bullets', 'credit'].includes(spec.kind), need);
+    assert.ok(['title', 'code', 'trace', 'hyperframes', 'manim', 'diagram', 'bullets', 'credit', 'stat', 'compare', 'chart', 'quote', 'figure'].includes(spec.kind), need);
     assert.equal(spec.kind === 'diagram', Boolean(spec.type), `${need}: only diagrams carry a type`);
   }
 });
@@ -116,7 +116,7 @@ test('narration that contradicts the declared need is flagged for review', () =>
 test('a system video routes conversations and structure to diagrams', () => {
   const report = analyzeRouting(
     board('system', [
-      scene('intro', 'question', ['What happens between a click and a rendered dashboard?'], {beats: [{say: 'What happens between a click and a rendered dashboard?', caption: '', text: 'One *click*. Then what?'}]}),
+      scene('intro', 'motion', ['One click, and the same dashboard takes two seconds to appear, or twenty milliseconds.']),
       scene('parts', 'structure', ['Four pieces: the browser, the API server, the cache, and the database.']),
       scene('path', 'conversation', ['The API asks the cache, then sends a request to the database, which responds.']),
       scene('handler', 'trace', ['The read-through is these six lines, stepping through the handler line by line.'], {file: 'api.ts', class: 'Handler'}),
@@ -132,7 +132,7 @@ test('sequence rules: opener, closer, slideshow runs, missing renderer', () => {
   const code = (id) => scene(id, 'source', ['Here is the function.'], {file: 'x.py', override: 'These lines are configuration with nothing to animate.'});
   const report = analyzeRouting(board('algorithm', [code('a'), code('b'), code('c'), scene('m', 'motion', ['The entries shift over time.'])]));
   const notes = texts(report.notes);
-  assert.match(notes, /opens on a code scene/);
+  assert.match(texts(row(report, 'a').reasons), /Opens on bare code rather than an animation/);
   assert.match(notes, /ends on a manim scene/);
   assert.match(notes, /Three code scenes in a row/);
   const flat = analyzeRouting(board('algorithm', [LRU[0], code('only'), LRU[4]]));
@@ -160,14 +160,15 @@ test('beats that change nothing on screen are flagged', () => {
 });
 
 test('undeclared needs and subject are suggested from position and narration', () => {
-  assert.equal(suggestNeed({beats: [{say: 'Anything.'}]}, 0, 4).need, 'question');
+  assert.equal(suggestNeed({beats: [{say: 'Anything.'}]}, 0, 4).need, 'motion');
   assert.equal(suggestNeed({beats: [{say: 'So, three things to remember.'}]}, 3, 4).need, 'recap');
   assert.equal(suggestNeed({file: 'x.py', beats: [{say: 'This check matters.'}]}, 1, 4).need, 'trace');
   assert.equal(suggestNeed({beats: [{say: 'The entries shift and the oldest is evicted from the list.'}]}, 1, 4).need, 'motion');
   assert.equal(suggestNeed({beats: [{say: 'The client sends a request and the server responds.'}]}, 1, 4).need, 'conversation');
   const bare = analyzeRouting({scenes: LRU.map(({need, ...rest}) => rest)});
   assert.equal(bare.subject, 'algorithm');
-  assert.ok(bare.rows.every((entry) => entry.status === 'review'));
+  assert.ok(bare.rows.slice(1).every((entry) => entry.status === 'review'));
+  assert.match(texts(bare.rows[0].reasons), /Suggested: "motion"/);
 });
 
 test('cue matching is whole-word and case-insensitive', () => {
@@ -186,7 +187,7 @@ test('a trace scene counts as both the code and the animation', () => {
     class: 'Search',
   });
   assert.equal(trace.kind, 'trace');
-  const report = analyzeRouting(board('algorithm', [LRU[0], trace, LRU[4]]));
+  const report = analyzeRouting(board('algorithm', [OPEN, trace, LRU[4]]));
   assert.equal(report.errors, 0);
   assert.doesNotMatch(texts(report.notes), /No code scene|no Manim or trace scene/);
 });
@@ -201,7 +202,7 @@ test('a video far from the length its brief asked for is flagged', () => {
 test('code that changes is routed to HyperFrames and counts as showing code', () => {
   const change = scene('refactor', 'change', ['The loop is replaced: instead of scanning every item, the new version halves the range each time.']);
   assert.equal(change.kind, 'hyperframes');
-  const report = analyzeRouting(board('algorithm', [LRU[0], change, LRU[2], LRU[4]]));
+  const report = analyzeRouting(board('algorithm', [OPEN, change, LRU[2], LRU[4]]));
   assert.equal(report.errors, 0);
   assert.doesNotMatch(texts(report.notes), /No code scene/);
   assert.equal(resolveRoute({need: 'data'}).kind, 'hyperframes');
@@ -251,11 +252,12 @@ test('weak titles and announcing openings are flagged; strong ones pass', () => 
   assert.match(reasons, /No word in the hook text is starred/);
 });
 
-test('a video may open cold on a picture with no title scene at all, but not on bullets or an announcement', () => {
+test('a video opens cold on an animation with no title scene at all, and not on a list or an announcement', () => {
   const cold = analyzeRouting(board('algorithm', [LRU[2], LRU[1], LRU[3], LRU[4]]));
   assert.doesNotMatch(texts(cold.notes), /no title|opens on/i);
   const slide = analyzeRouting(board('algorithm', [LRU[4], LRU[1], LRU[2], LRU[4]]));
-  assert.match(texts(slide.notes), /opens on a bullets scene/);
+  assert.equal(slide.rows[0].status, 'error');
+  assert.match(texts(slide.rows[0].reasons), /opens on a list\. The opening is always an animation/);
   const announced = {...LRU[2], beats: [{...LRU[2].beats[0], say: 'In this video we will look at how reading a key counts as a use.'}, ...LRU[2].beats.slice(1)]};
   assert.match(texts(row(analyzeRouting(board('algorithm', [announced, LRU[1], LRU[3], LRU[4]])), announced.id).reasons), /announcing the video/);
   const listed = {...LRU[2], beats: [{...LRU[2].beats[0], say: 'Here are three things every cache has to get right when it fills up.'}, ...LRU[2].beats.slice(1)]};
@@ -343,12 +345,15 @@ test('the hook is agreed first, said in the opening, and returned to at the end'
   assert.match(notes([OPEN, LRU[1], LRU[3], flat], HOOK), /closing scene never comes back/);
 });
 
-test('opening on words is the fallback, and says why', () => {
+test('the opening is always an animation; opening on anything else is an error that needs a reason', () => {
   const reasons = (intro) => row(analyzeRouting(board('algorithm', [intro, ...LRU.slice(1)])), 'intro');
-  assert.match(texts(reasons(LRU[0]).reasons), /opens on words/);
+  assert.equal(reasons(LRU[0]).status, 'error');
+  assert.match(texts(reasons(LRU[0]).reasons), /opens on words\. The opening is always an animation/);
+  // Code beside its animation is still not the hook shown happening: a trace scene comes second.
+  assert.match(texts(row(analyzeRouting(board('algorithm', [LRU[1], LRU[2], LRU[4]])), 'state').reasons), /opens on code/);
   const excused = reasons({...LRU[0], override: 'A naming convention: there is nothing to show until the names are on screen.'});
   assert.equal(excused.status, 'ok');
-  assert.match(texts(excused.reasons), /Opens on a statement rather than a picture/);
+  assert.match(texts(excused.reasons), /Opens on words rather than an animation/);
   // Second, after a cold open, a statement is not the opening.
   assert.doesNotMatch(texts(row(analyzeRouting(board('algorithm', [OPEN, LRU[0], LRU[1], LRU[4]])), 'intro').reasons), /opens on words/);
 });
@@ -443,4 +448,38 @@ test('a video of any length is asked for one prediction pause, and no scene for 
   const ask = (say) => ({say, caption: '', predict: true});
   const eager = {...OPEN, beats: [ask('Which entry goes?'), OPEN.beats[0], ask('And then which?'), OPEN.beats[1], ask('And after that?'), OPEN.beats[1]]};
   assert.match(texts(row(analyzeRouting(board('algorithm', [eager, ...long.slice(1)])), 'open').reasons), /3 prediction pauses in one scene/);
+});
+
+test('what a source reports is routed to the scene that shows it: its number, its contrast, its chart, its words, its figure', () => {
+  assert.deepEqual(['number', 'contrast', 'chart', 'quote', 'figure'].map((need) => resolveRoute({need}).kind), ['stat', 'compare', 'chart', 'quote', 'figure']);
+  // A designed one-off is still a composition you write.
+  assert.equal(resolveRoute({need: 'data'}).kind, 'hyperframes');
+  const count = scene('count', 'number', ['A shelter took about a million episodes then, and a handful of rounds now.'], {metrics: [{value: '1,000,000', label: 'then'}]});
+  const jobs = scene('jobs', 'contrast', ['A simulator remembers, but each new scene has to be drawn by hand.', 'A video model looks real, and forgets.']);
+  const report = analyzeRouting(board('mixed', [OPEN, count, jobs, LRU[1], LRU[4]]));
+  assert.equal(report.errors, 0);
+  assert.equal(row(report, 'jobs').status, 'ok');
+  // They come after the hook: a number card is not the hook shown happening, so it does not open the video.
+  assert.match(texts(row(analyzeRouting(board('mixed', [count, jobs, LRU[1], LRU[4]])), 'count').reasons), /opens on a number card/);
+});
+
+test('an evidence scene whose beats leave the same thing on screen is told so', () => {
+  const beats = (second) => [{say: 'A simulator remembers exactly what happened in the world.', caption: '', show: 2}, {say: 'A video model looks real, and that is all it does.', caption: '', ...second}];
+  const stuck = scene('jobs', 'contrast', [], {beats: beats({show: 2})});
+  assert.match(texts(row(analyzeRouting(board('mixed', [OPEN, stuck, LRU[1], LRU[4]])), 'jobs').reasons), /Beats 1 and 2 show the same thing/);
+  for (const moved of [{show: 4}, {show: 2, note: 'and it cannot be corrected'}, {show: 2, cues: [{at: 'looks real', show: 3}]}, {}]) {
+    const fine = scene('jobs', 'contrast', [], {beats: beats(moved)});
+    assert.doesNotMatch(texts(row(analyzeRouting(board('mixed', [OPEN, fine, LRU[1], LRU[4]])), 'jobs').reasons), /show the same thing/);
+  }
+  const long = scene('words', 'quote', ['The authors put the whole idea in one long sentence of their abstract.'], {quote: Array.from({length: 50}, () => 'word').join(' ')});
+  assert.match(texts(row(analyzeRouting(board('mixed', [OPEN, long, LRU[1], LRU[4]])), 'words').reasons), /quote is 50 words/);
+});
+
+test('numbers an evidence scene puts on screen are held to the ledger; a chart\'s axis labels are not', () => {
+  const chart = scene('bridge', 'chart', ['The crossing gets quicker with every round the agents play.'], {labels: ['Round 1', 'Round 4'], series: [{label: null, values: [71, 41]}], unit: 's'});
+  const stat = scene('speed', 'number', ['The renderer keeps pace with the agent on a single card.'], {metrics: [{value: '36', unit: 'fps', label: 'frames a second', detail: null, delta: null}]});
+  const loose = texts(analyzeRouting(board('mixed', [OPEN, chart, stat, LRU[1], LRU[4]], {facts: [{id: 'fields', value: 2}, {id: 'takeaways', value: 3}]})).notes);
+  assert.match(loose, /3 number\(s\) are said or shown but are not in "facts": "71" \(bridge, on screen\), "41" \(bridge, on screen\), "36" \(speed, on screen\)/);
+  const backed = board('mixed', [OPEN, chart, stat, LRU[1], LRU[4]], {facts: [{id: 'fields', value: 2}, {id: 'takeaways', value: 3}, {id: 'first', value: 71}, {id: 'last', value: 41}, {id: 'fps', value: 36}]});
+  assert.doesNotMatch(texts(analyzeRouting(backed).notes), /not in "facts"/);
 });

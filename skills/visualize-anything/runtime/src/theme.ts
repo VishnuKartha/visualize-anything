@@ -18,6 +18,15 @@ export const ramp = (frame: number, start: number, length: number) =>
     easing: EASE,
   });
 
+const SOFT = Easing.inOut(Easing.quad);
+
+/**
+ * 0→1 like `ramp`, but easing in as well as out. For something large or bright: a sharp start
+ * moves so much of the picture in its first frame that it reads, and measures, as a cut.
+ */
+export const glide = (frame: number, start: number, length: number) =>
+  interpolate(frame, [start, start + length], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: SOFT});
+
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** Index of the beat whose visual window contains `frame`. */

@@ -20,7 +20,9 @@ export const MANIM_PYTHON = process.env.VA_MANIM_PYTHON || '3.12';
 
 // Everything a Manim scene runs with. Typst typesets formulas, so no TeX installation is needed.
 export const TYPST_SPEC = process.env.VA_TYPST_SPEC || 'typst==0.15.*';
-export const MANIM_UV_ARGS = ['--python', MANIM_PYTHON, '--with', 'manim', '--with', TYPST_SPEC];
+// Pinned to the release the helper's primitives were built and checked against.
+export const MANIM_SPEC = process.env.VA_MANIM_SPEC || 'manim==0.22.*';
+export const MANIM_UV_ARGS = ['--python', MANIM_PYTHON, '--with', MANIM_SPEC, '--with', TYPST_SPEC];
 export const manimEnv = (extra = {}) => ({
   VA_THEME: path.join(RUNTIME_DIR, 'theme.json'),
   PYTHONPATH: [path.join(RUNTIME_DIR, 'python'), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),

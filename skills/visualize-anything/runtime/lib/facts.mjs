@@ -137,6 +137,25 @@ export const compareFacts = (facts, computed) =>
     return {...fact, status: sameValue(fact.value, computed[fact.id]) ? 'ok' : 'differs', computed: computed[fact.id]};
   });
 
+/**
+ * What an evidence scene puts on screen: its numbers, its panels, its chart's values, its quote.
+ * A chart's axis labels are left out: "Round 1" names a position, it does not measure anything.
+ */
+const evidenceText = (scene) => {
+  if (!['stat', 'compare', 'chart', 'quote', 'figure'].includes(scene.kind)) return [];
+  const panels = scene.panels || [scene.left, scene.right].filter(Boolean);
+  const series = scene.series || (scene.values ? [{values: scene.values}] : []);
+  return [
+    scene.title,
+    ...(scene.metrics || []).flatMap((metric) => [`${metric?.value ?? ''} ${metric?.unit ?? ''}`, metric?.label, metric?.detail, metric?.delta]),
+    ...panels.flatMap((panel) => [panel?.label, ...(panel?.points || []).map((point) => (typeof point === 'string' ? point : point?.text))]),
+    ...series.flatMap((entry) => entry?.values || []),
+    scene.quote,
+    scene.caption,
+    ...(scene.callouts || []).map((callout) => callout?.label),
+  ].filter((shown) => shown !== undefined && shown !== null && String(shown).trim());
+};
+
 /** Everything a storyboard says or shows as text, each with where it is. */
 export const authoredText = (storyboard) => {
   const out = [];
@@ -153,6 +172,7 @@ export const authoredText = (storyboard) => {
       const shown = typeof item === 'string' ? item : item?.text;
       if (shown) out.push({where: `${scene.id}, on screen`, text: shown});
     }
+    for (const shown of evidenceText(scene)) out.push({where: `${scene.id}, on screen`, text: String(shown)});
   }
   return out;
 };

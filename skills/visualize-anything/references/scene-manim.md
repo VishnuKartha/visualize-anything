@@ -12,7 +12,7 @@ Timing and layout are handled for you; what goes on screen is the part that deci
 - **Keep the object, change its state.** The viewer builds a picture of the data in the first animation. Every later scene should start from that picture, not a new one.
 - **Show the invariant.** If the algorithm works because "everything left of `lo` is ruled out", colour that region and keep it coloured.
 - **Numbers before formulas.** Show `4 > 3` on the actual values, then the rule. Show the range halving, then `log₂ n`.
-- **Keep the count on screen.** When the narration claims a cost (looks, steps, moves, bytes), put a running count beside the data and tick it as each step happens. Its last value is the number the voice says, and it lands on that word. `Race` in `examples/binary-search/video/manim/search.py` does this with its `tally`.
+- **Keep the count on screen.** When the narration claims a cost (looks, steps, moves, bytes), put a `Tally` beside the data and tick it as each step happens. Its last value is the number the voice says, and it lands on that word. `Race` in `examples/binary-search/video/manim/search.py` does this, one `Tally` per lane.
 - **Label the thing, on the thing.** A name sits next to the object it names, in that object's colour when it has one. No legend in a corner: the viewer should not have to look away from the data to learn what it is.
 - **Nothing moves without a reason.** An object moves when the data it stands for moves and changes colour when its state changes. Otherwise it stays put. See [story.md](story.md).
 
@@ -20,10 +20,12 @@ Timing and layout are handled for you; what goes on screen is the part that deci
 |---|---|---|
 | An array, list, queue, or cache | `Cells([...])`, a row of labelled boxes | `mark()` cells with state colours; `pointer()` for indices such as `lo`, `mid`, `hi` |
 | A loop running on data | A `trace` scene: `Cells` beside the code | The code cursor and the animation advance on the same words |
-| Divide and conquer, recursion | A tree that grows downward, then resolves upward | Children appear under their parent; results light up leaf to root |
-| A graph or tree traversal | Nodes and edges, coloured by visited / in the queue / done | Keep the queue or stack on screen as a second `Cells` row |
-| Cost and growth | Axes with one curve per complexity class, or a bar that shrinks or grows | Annotate one concrete size (n = 1,000,000 → 20 steps) |
-| Two approaches compared | The same input run twice, side by side | Same data, same colours, different step counts |
+| Divide and conquer, recursion | `Net(..., root=...)`: a tree that grows downward, then resolves upward | Children appear under their parent; results light up leaf to root with `mark` |
+| A graph or tree traversal | `Net`, coloured by visited / in the queue / done | Keep the queue or stack on screen as a second `Cells` row |
+| Cost and growth | `axes` with one `curve` per complexity class, or a `bar_chart` that shrinks or grows | Annotate one concrete size (n = 1,000,000 → 20 steps) |
+| Two approaches compared | The same input run twice, on `lanes(2)` or in `halves()`, each with its `Tally` | Same data, same colours, different step counts |
+| Components and what passes between them | `Flow`, with `send` on the words that name each hand-off | An arrow the design leaves out is a dashed `Link`, shown and then taken away |
+| Rounds or repeated attempts | `Track`, with `reach(i)` as each one finishes | Put the measure that changes beside it as a `Tally` |
 
 State colours from `va_manim`:
 
@@ -49,6 +51,78 @@ row.cell(5)                                              # the box and its label
 ```
 
 A shape for the story, when the topic allows a choice: a result that looks wrong and then the reason it is right; simple pieces that combine into something surprising; or one thing seen two ways that turn out to be the same.
+
+## Start from the kit
+
+Do not draw from scratch. `va_manim` has the pictures an explainer keeps needing already made, sized for this frame and coloured from this palette. Writing a scene is choosing from this table and saying what happens on which words.
+
+| The sentence is about | Use | It gives you |
+|---|---|---|
+| A list, array, queue, cache, or window | `Cells([...], indices=True)` | `mark(i, colour)`, `mark_all(...)`, `pointer(i, "lo")`, `move_pointer(...)`, `move(i, j)` (one cell jumps to a new place and the rest close up), `swap(i, j)`, `span(i, j, "ruled out")`, `cell(i)` |
+| A number said aloud | `Tally(end=n, unit="episodes", owner="2019 · from scratch")` | `to(n)` counts to it, `set(n)` ticks it by hand. The count never changes width and the unit never shifts; `unit=("look", "looks")` writes the singular at one |
+| Parts and what passes between them: a pipeline, a request path, a loop | `Flow(["agent", "engine", "renderer"], notes=[...], on=["action", "geometry", "frame"], loop=True)` | `send(i)` runs a dot along arrow i, `mark(i, colour)`, `node(i)`, `link(i)` |
+| One named thing, or an arrow you place yourself | `Node("engine", note="keeps the state")`, `Link(a, b, "frame", dashed=True)` | `mark(colour)`, `Link.send()` |
+| Rounds, passes, epochs, versions | `Track(4, names=["round 1", "2", "3", "4"])` | `reach(i)` lights step i and those before it |
+| Recursion, a hierarchy, a traversal, a dependency graph | `Net(vertices, edges, root=8)` (a tree), `Net(vertices, edges)` (a network) | `mark(v, colour)`, `walk(u, v)`; it is Manim's `Graph` underneath |
+| How a cost grows | `ax = axes([0, 8, 2], [0, 64, 16])`, then `curve(ax, lambda n: n * n, "n²", color=ROSE)` | Manim's `Axes` and a plotted, named curve |
+| A few measured values | `bar_chart(values, names, y_range=[0, 80, 20])` | Manim's `BarChart`; grow it with `chart.animate.change_bar_values(...)` |
+| A range, a group, an invariant | `span(target, "never dropped")`, `row.span(0, 4, "kept")` | A brace with its word |
+| The name of something | `tag(target, "the world they practise in", DOWN, color=ACCENT)` | A label placed beside the thing it names |
+| The hook's own words | `claim("*1,000,000* items.\n*20* looks.")` | Large text with the starred words in the accent |
+| This works, that does not | `verdict(True)`, `verdict(False)` | A tick or a cross in a ring |
+| A formula | `Math("O(log n)")` | Typeset by Typst; see Formulas |
+| Where things go | `fit(group)`, `halves()`, `lanes(2)` | Centre and shrink into the safe area; the two sides of a comparison; rows for the same data run more than once |
+
+The rules that make this opinionated:
+
+- **Kit first.** If a row above fits, use it. Do not rebuild a counter out of `Text`, a pipeline out of rectangles and arrows, or a tree out of circles and lines; the hand-built one will be a different size, a different colour, and wrong at the edges of the frame.
+- **Everything returns animations.** `row.mark(2, CURRENT)`, `flow.send(0)`, `tally.to(20)`, `track.reach(1)`: each is something to hand to `self.play(...)`, so a beat reads as a list of what happens.
+- **End every layout with `fit(...)`.** It centres the picture clear of the heading and the captions and shrinks it only if it has to. If it has to shrink much, there is too much on screen.
+- **Drop to Manim only for the subject's own object.** A cache is `Cells`; a hide-and-seek arena with panels in it is not in the kit, so that one thing is drawn from Manim's shapes (next section) and everything around it still comes from the kit: the two numbers counted beside it are `Tally`s, and its caption is a `tag`.
+- **Never another drawing library, never LaTeX.**
+- **`va manim` holds you to it.** After each render it warns when a scene's script uses nothing from the kit, and when it calls a Manim class that typesets with LaTeX (`Integer`, `DecimalNumber`, `BarChart`, `MathTex`, numbered axes), naming the kit piece to use instead.
+
+`runtime/python/va_gallery.py` draws every one of these on two stills. Render it (the command is at the top of the file) to see what you are choosing from, and after changing the kit.
+
+## Manim's own primitives
+
+For the one object the kit has no shape for, build it from what [Manim Community](https://github.com/ManimCommunity/manim) provides: its mobjects for what is on screen and its animations for how it changes. `from manim import *` brings all of them in, and its [reference](https://docs.manim.community/en/stable/reference.html) documents each. The kit is made of the same pieces: `Cells` is a `VGroup` of `RoundedRectangle` and `Text`, `Tally` is a `DecimalNumber`, `Net` is a `Graph`. The skill pins Manim to the release these were checked against (`manim==0.22.*`; override with `VA_MANIM_SPEC`).
+
+| To show | Use | Notes |
+|---|---|---|
+| A thing | `Circle`, `Dot`, `Square`, `Rectangle`, `RoundedRectangle`, `Polygon`, `Triangle`, `Star`, `Ellipse`, `Arc`, `Annulus`, `Sector` | Colour and fill say what state it is in |
+| A connection or a direction | `Line`, `DashedLine`, `Arrow`, `CurvedArrow` | An arrow that is deliberately absent is drawn as a `DashedLine` and then removed, not left out |
+| Things that belong together | `VGroup(...)`, then `.arrange(RIGHT, buff=...)`, `.arrange_in_grid(...)` | Move and fade the group; recolour a member in a separate `play()` |
+| Words and names | `Text`, `MarkupText`, `Paragraph` | `font=MONO` for identifiers and values, `font=SANS` for prose |
+| A formula | `Math(...)` from `va_manim` | Never `MathTex` or `Tex` |
+| Emphasis on something already there | `SurroundingRectangle`, `Underline`, `Cross`, `Brace` with `BraceText`, `BackgroundRectangle` | Add it, say the sentence, take it away |
+| A measured quantity along a scale | `NumberLine(..., label_constructor=label)` | |
+| A value tied to something moving | `ValueTracker` with `always_redraw(lambda: ...)` | For a plain count, `Tally` |
+| A directed graph | `DiGraph(vertices, edges, labels={v: Text(...)})` | For a tree or an undirected graph, `Net` |
+| A grid of values | `Table`, `IntegerTable`, `MobjectTable` | `table.get_cell((row, col))` to highlight one |
+| The path something took | `TracedPath(dot.get_center)` | |
+
+And for how it changes:
+
+| To do | Use |
+|---|---|
+| Bring something in | `FadeIn(m, shift=UP * 0.2)`, `Create` (outlines), `Write` (text and formulas), `GrowFromCenter`, `GrowArrow`, `DrawBorderThenFill` |
+| Take it away | `FadeOut`, `Uncreate`, `ShrinkToCenter` |
+| Move it or change its state | `m.animate.shift(...)`, `.move_to(...)`, `.set_color(...)`, `.set_opacity(...)`; `MoveAlongPath` to follow a route |
+| Turn one thing into another | `Transform` (keep using the first name), `ReplacementTransform` (keep using the second), `TransformFromCopy` (the original stays), `FadeTransform` |
+| Point at it | `Indicate`, `Circumscribe`, `Flash`, `Wiggle`, `FocusOn`, `ShowPassingFlash` |
+| Do several things | `AnimationGroup` (together), `LaggedStart(..., lag_ratio=0.15)` (one after another, overlapping), `Succession` (strictly in turn) |
+
+What needs LaTeX, which is not installed here, and what to use in its place:
+
+| Fails | Use |
+|---|---|
+| `MathTex`, `Tex` | `Math(...)`, `Text(...)` |
+| `DecimalNumber(...)`, `Integer(...)`, `Variable` | `Count(...)`, or pass `mob_class=Text` |
+| `BarChart(...)` | `bar_chart(...)`, or pass `x_axis_config` and `y_axis_config` with `"label_constructor": label` |
+| `NumberLine(include_numbers=True)`, `Axes` with numbered axes, `ax.get_axis_labels("n", "t")` | `axes(...)`; `label_constructor=label`; pass `label(...)` or `Text` objects, never strings |
+| `Graph(..., labels=True)` | `labels={vertex: Text(...)}` |
+| `Matrix`, `MobjectMatrix`, `BraceLabel` | `MobjectTable`; `BraceText` |
 
 ## The shape of a script
 
@@ -167,6 +241,8 @@ In Typst math, adjacent letters form one name: write `n k` or `n dot k` for a pr
 | `MONO`, `SANS` | Font names: `MONO` for identifiers and values, `SANS` for prose labels |
 | `Math`, `Typst` | Formulas and other typeset material (see Formulas below) |
 | `Cells` | A row of labelled boxes with state colours and pointers (see What to draw) |
+| `Tally`, `Flow`, `Node`, `Link`, `Track`, `Net`, `span`, `tag`, `claim`, `verdict`, `fit`, `halves`, `lanes` | The rest of the kit (see Start from the kit) |
+| `Count`, `label`, `axes`, `curve`, `bar_chart` | Manim's `DecimalNumber`, `Text`, `Axes`, and `BarChart`, set in the video's typeface and palette with no LaTeX |
 | `UNVISITED`, `FRONTIER`, `CURRENT`, `SETTLED`, `DISCARDED` | State colours |
 | `SAFE_LEFT`, `SAFE_RIGHT`, `FRAME_WIDTH`, `TRACE` | Horizontal bounds, frame width, and whether this is a trace panel |
 | `SAFE_TOP`, `SAFE_BOTTOM`, `SAFE_CENTER_Y` | Vertical bounds for content |
@@ -180,7 +256,7 @@ Layout rules:
 
 ## Things that go wrong
 
-- **`MathTex` and `Tex`.** They need a LaTeX installation that most machines here do not have, and they fail at render time. Use `Math(...)` for formulas, `Text(..., font=MONO)` for identifiers and code, and `DecimalNumber` or `Integer` for values that count.
+- **`MathTex` and `Tex`.** They need a LaTeX installation that most machines here do not have, and they fail at render time. Use `Math(...)` for formulas, `Text(..., font=MONO)` for identifiers and code, and `Tally` (or a bare `Count`) for values that count. Plain `DecimalNumber`, `Integer`, `BarChart`, and numbered axes fail the same way, because they typeset their digits with LaTeX; the table under Manim's own primitives has the replacement for each.
 - **A Typst error.** `va manim` prints Typst's message with the offending formula. It is nearly always LaTeX syntax in a Typst string: fix the syntax using the table above, or add `latex=True`.
 - **Animating a group and its member in one `play()`.** `self.play(g.animate.move_to(p), g[0].animate.set_color(c))` leaves `g[0]` behind, because both animations target the same mobject. Do the move, then the recolour, in separate `play()` calls.
 - **Waiting by hand.** Do not add `self.wait()` at the end of a beat to pad it out; the `beat` block does that. Use `self.wait()` only for a pause between two animations inside a beat.

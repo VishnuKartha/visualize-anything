@@ -1,4 +1,4 @@
-import {existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
+import {copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {bakeDiagram} from './bake-diagram.mjs';
 import {withRenderer} from './remotion-api.mjs';
@@ -8,7 +8,7 @@ import {HYPERFRAMES_VERSION, planCodeChange, renderComposition, writeAuthored, w
 import {BED, brightIn, concatVideos, firstBright, frameChanges, frameSimilarity, frozenStretches, loudness, mixBed, mixNarration, mux, probeStreams, silences, subtitleFiles} from './media.mjs';
 import {findSeams} from './seams.mjs';
 import {VIEWERS, planBrief, viewerContracts} from './viewers.mjs';
-import {HAS_PICTURE, buildSteps, buildTimeline, captionPhrases, loadStoryboard, loadTimeline, resolveCode, resolveVersions, speakable, withAutoCues} from './storyboard.mjs';
+import {EVIDENCE, HAS_PICTURE, SETTLED, buildSteps, buildTimeline, captionPhrases, loadStoryboard, loadTimeline, resolveCode, resolveVersions, speakable, withAutoCues} from './storyboard.mjs';
 import {
   ARCHIFY_BIN, MANIM_UV_ARGS, RUNTIME_DIR, TYPST_SPEC, fail, ffprobeDuration, fmtSeconds, manimEnv, readJson, run, sha, writeJson,
 } from './util.mjs';
@@ -43,13 +43,16 @@ const load = (paths, {gate = true} = {}) => {
 };
 
 /** The settled end of a beat of a scene: the frame a recap, or the thumbnail, freezes it on. */
-const shotOf = (timeline, id, beatNumber) => {
+const shotOf = (timeline, storyboard, id, beatNumber) => {
   const target = timeline.scenes.find((entry) => entry.id === id);
   if (!target) return null;
   const beat = target.beats[beatNumber ? beatNumber - 1 : target.beats.length - 1];
   // When its animation has settled, and before the scene fades.
-  return {scene: id, frame: Math.max(0, Math.min(beat.cue + beat.cueFrames - 3, target.frames - 10))};
+  return {scene: id, frame: Math.max(0, Math.min(beat.cue + beat.cueFrames - 3, target.frames - lastLook(storyboard.scenes.find((entry) => entry.id === id))))};
 };
+
+/** How many frames before its end a scene is last seen whole: an evidence scene lets its picture go early. */
+const lastLook = (scene) => (EVIDENCE.includes(scene?.kind) ? SETTLED : 10);
 
 // A trace scene puts its animation beside the code, in a 4:3 panel on the right of the stage.
 // The code gets nearly half the width: it has to be read, and a narrow panel shrinks its text.
@@ -272,8 +275,20 @@ const manimAsset = (paths, scene) => path.join(paths.assets, `${scene.id}.mp4`);
 // Colours Manim defines that are not in the video's palette. ORANGE is absent: va_manim redefines it.
 const OFF_PALETTE = /\b(?:PURE_)?(?:BLUE|RED|GREEN|YELLOW|PURPLE|PINK|TEAL|GOLD|MAROON|WHITE|BLACK|GR[AE]Y)(?:_[A-E])?\b/g;
 
-/** Things a script does that will look out of place next to the other scenes. */
-const manimTaste = (source, beside, className) => {
+// Manim classes that typeset with LaTeX unless told otherwise, and what the kit has in their place.
+const NEEDS_LATEX = [
+  [/\b(?:MathTex|Tex|SingleStringMathTex)\s*\(/, 'MathTex/Tex', 'Math(...) for a formula, Text(...) for words'],
+  [/\b(?:DecimalNumber|Integer|Variable)\s*\((?![^)]*mob_class)/, 'DecimalNumber/Integer', 'Tally(...) or Count(...)'],
+  [/\bBarChart\s*\((?![^)]*label_constructor)/, 'BarChart', 'bar_chart(...)'],
+  [/\bGraph\s*\([^)]*labels\s*=\s*True/, 'Graph(labels=True)', 'Net(...)'],
+  [/\b(?:Matrix|MobjectMatrix|BraceLabel)\s*\(/, 'Matrix/BraceLabel', 'MobjectTable(...), span(...)'],
+  [/include_numbers["']?\s*[:=]\s*True(?![\s\S]{0,160}label_constructor)/, 'numbered axes', 'axes(...), or label_constructor=label'],
+];
+// The ready-made pictures. A script that uses none of them has drawn everything by hand.
+const KIT = /\b(?:Cells|Tally|Count|Flow|Node|Link|Track|Net|span|tag|claim|verdict|bar_chart|axes|curve|fit|halves|lanes)\s*\(/;
+
+/** Things a script does that will look out of place next to the other scenes, or fail outright. */
+export const manimTaste = (source, beside, className) => {
   const notes = [];
   // Judge the scene being rendered and the helpers above the classes, not its neighbours in the file:
   // a full-frame scene and a trace scene can share a script and have different floors.
@@ -287,6 +302,10 @@ const manimTaste = (source, beside, className) => {
   const floor = beside ? 36 : 28;
   const small = [...new Set([...code.matchAll(/font_size\s*=\s*(\d+(?:\.\d+)?)/g)].map((match) => Number(match[1])).filter((size) => size < floor))].sort((a, b) => a - b);
   if (small.length) notes.push(`sets text at font_size ${small.join(', ')}; below ${floor} is hard to read ${beside ? 'in a trace panel' : 'at video size'}.`);
+  for (const [pattern, what, instead] of NEEDS_LATEX) {
+    if (pattern.test(code)) notes.push(`uses ${what}, which typesets with LaTeX and fails where none is installed. Use ${instead}.`);
+  }
+  if (!KIT.test(code)) notes.push('draws everything by hand. Start from the kit in va_manim (Cells, Tally, Flow, Track, Net, span, tag, fit, and the rest; see references/scene-manim.md) and keep raw Manim shapes for the one object the kit does not have.');
   return notes;
 };
 
@@ -557,7 +576,7 @@ export const buildProps = async (paths) => {
     } else if (scene.kind === 'bullets') {
       // Each takeaway is shown beside a moment from the video: the one it names, else the last picture before the recap.
       const fallback = scene.over || storyboard.scenes.slice(0, index).findLast((entry) => HAS_PICTURE.includes(entry.kind))?.id || null;
-      const shots = scene.items.map((item) => shotOf(timeline, item.from || fallback, item.from ? item.beat : null));
+      const shots = scene.items.map((item) => shotOf(timeline, storyboard, item.from || fallback, item.from ? item.beat : null));
       scenes.push({...base, title: scene.title || null, items: scene.items.map((item) => item.text), shots});
     } else if (scene.kind === 'code' || scene.kind === 'trace') {
       if (scene.kind === 'trace' && !existsSync(manimAsset(paths, scene))) {
@@ -605,6 +624,23 @@ export const buildProps = async (paths) => {
         continue;
       }
       scenes.push({...base, video: `assets/${scene.id}.mp4`});
+    } else if (scene.kind === 'stat') {
+      scenes.push({...base, title: scene.title, metrics: scene.metrics});
+    } else if (scene.kind === 'compare') {
+      scenes.push({...base, title: scene.title, versus: scene.versus, panels: scene.panels});
+    } else if (scene.kind === 'chart') {
+      scenes.push({...base, chart: scene.chart, title: scene.title, unit: scene.unit, axis: scene.axis, labels: scene.labels, series: scene.series});
+    } else if (scene.kind === 'quote') {
+      scenes.push({...base, quote: scene.quote, highlights: scene.highlights, attribution: scene.attribution});
+    } else if (scene.kind === 'figure') {
+      // The image is served under a name that carries its content, so a redrawn figure is a changed scene.
+      const source = path.resolve(paths.dir, scene.image);
+      const name = `${scene.id}-${sha(readFileSync(source).toString('base64')).slice(0, 12)}${path.extname(source).toLowerCase()}`;
+      mkdirSync(paths.assets, {recursive: true});
+      if (!existsSync(path.join(paths.assets, name))) copyFileSync(source, path.join(paths.assets, name));
+      const {width, height} = await probeStreams(source);
+      if (!width || !height) fail(`Scene "${scene.id}": could not read the size of ${source}. Is it an image?`);
+      scenes.push({...base, image: `assets/${name}`, aspect: width / height, caption: scene.caption, callouts: scene.callouts});
     }
   }
   if (missing.length) fail(`Not ready to render. Missing:\n  - ${missing.join('\n  - ')}`);
@@ -619,7 +655,7 @@ export const buildProps = async (paths) => {
   const opening = storyboard.scenes.find((scene) => scene.kind === 'title');
   const hook = opening?.beats.flatMap((beat) => [beat.text, ...beat.cues.map((cue) => cue.text)]).filter(Boolean).at(-1);
   const thumbnail = storyboard.thumbnail;
-  const cover = {text: thumbnail?.text || hook || storyboard.title, shot: thumbnail?.from ? shotOf(timeline, thumbnail.from, thumbnail.beat) : null};
+  const cover = {text: thumbnail?.text || hook || storyboard.title, shot: thumbnail?.from ? shotOf(timeline, storyboard, thumbnail.from, thumbnail.beat) : null};
 
   const props = {
     title: storyboard.title,
@@ -765,6 +801,11 @@ const STATIC_ADVICE = {
   trace: 'advance the code cursor and the animation together: a cue per line named, and `b.until("<phrase>")` in the script',
   diagram: 'shift the focus mid-sentence with a word-anchored cue ("cues": [{"at": "<phrase>", "focus": [...]}])',
   bullets: 'reveal items on the words that name them ("cues": [{"at": "<phrase>", "show": n}])',
+  stat: 'bring each number in on the words that say it ("cues": [{"at": "<phrase>", "show": n}]), or add a "note" where the sentence qualifies it',
+  compare: 'bring each point in on the words that make it ("cues": [{"at": "<phrase>", "show": n}])',
+  chart: 'grow the next bar on the words that say its value ("show"), or light the one the sentence is about ("focus": ["<label>"])',
+  quote: 'mark a phrase when the voice reaches it ("highlight", then "cues": [{"at": "<phrase>", "show": n}]), or quote less',
+  figure: 'point at the next part of the figure when the voice names it ("callouts", then "cues": [{"at": "<phrase>", "show": n}])',
 };
 
 // The part of the frame a scene's picture lives in, clear of the heading above and the captions below.
@@ -891,7 +932,7 @@ export const stills = async (paths, only = [], {at} = {}) => {
       if (only.length && !only.includes(scene.id)) return;
       scene.steps.forEach((step, stepIndex) => {
         // Late in the state: transitions have settled and this is what the viewer dwells on.
-        const local = Math.min(step.cue + Math.max(0, Math.round(step.cueFrames * 0.8) - 1), scene.frames - 10);
+        const local = Math.min(step.cue + Math.max(0, Math.round(step.cueFrames * 0.8) - 1), scene.frames - lastLook(scene));
         const frame = scene.from + Math.max(step.cue, local);
         const part = scene.steps.filter((entry, index) => entry.beat === step.beat && index <= stepIndex).length;
         const sub = part > 1 ? String.fromCharCode(96 + part) : '';
@@ -939,14 +980,14 @@ export const stills = async (paths, only = [], {at} = {}) => {
   else if (findings.length) {
     log(`layout: ${findings.reduce((sum, entry) => sum + entry.issues.length, 0)} issue(s), outlined in red on the sheets:`);
     for (const entry of findings) entry.issues.forEach((issue) => log(`  ${entry.label}: ${issue}`));
-  } else log('layout: nothing runs off the frame, collides, or is cut off in the measured scenes (title, code, bullets).');
+  } else log('layout: nothing runs off the frame, collides, or is cut off in the measured scenes (every kind drawn by Remotion: title, code, bullets, stat, compare, chart, quote, figure).');
   return {dir, findings};
 };
 
 // ---------------------------------------------------------------------------------------------
 // review
 
-const RENDERER_NAME = {title: 'opening statement', credit: 'end card', code: 'code', trace: 'code + animation', hyperframes: 'HyperFrames clip', manim: 'animation', diagram: 'diagram', bullets: 'bullets'};
+const RENDERER_NAME = {title: 'opening statement', credit: 'end card', code: 'code', trace: 'code + animation', hyperframes: 'HyperFrames clip', manim: 'animation', diagram: 'diagram', bullets: 'bullets', stat: 'number', compare: 'side-by-side panels', chart: 'chart', quote: 'quote', figure: "the source's figure"};
 
 /**
  * Everything an independent reviewer needs, in one file: what the video is for, what is said and

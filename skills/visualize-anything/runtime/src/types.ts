@@ -52,7 +52,33 @@ export type ManimScene = Base & {kind: 'manim'; video: string};
 /** A clip rendered by HyperFrames from an HTML composition. It carries its own backdrop. */
 export type HyperframesScene = Base & {kind: 'hyperframes'; video: string};
 
-export type Scene = TitleScene | CreditScene | BulletsScene | CodeScene | TraceScene | DiagramScene | ManimScene | HyperframesScene;
+// Evidence scenes: what the source itself reports, drawn from the storyboard with nothing to build.
+// Each reveals its parts by a step's `show`, lights some of them by `focus`, and may carry a `note`.
+export type Tone = 'positive' | 'negative' | 'caution' | 'neutral';
+export type Metric = {value: string; unit: string | null; label: string; detail: string | null; delta: string | null; tone: Tone};
+/** One number the claim rests on, or up to four side by side. */
+export type StatScene = Base & {kind: 'stat'; title: string | null; metrics: Metric[]};
+export type Panel = {label: string; tone: Tone; points: {text: string; tone: Tone}[]};
+/** Two or three alternatives side by side, each with what it gets right and what it costs. */
+export type CompareScene = Base & {kind: 'compare'; title: string | null; versus: boolean; panels: Panel[]};
+/** Measured values against each other: bars, or a line across an ordered axis. */
+export type ChartScene = Base & {
+  kind: 'chart';
+  chart: 'bar' | 'line';
+  title: string | null;
+  unit: string | null;
+  axis: string | null;
+  labels: string[];
+  series: {label: string | null; values: number[]}[];
+};
+/** The source's own words. `highlights` are [first, last] word indexes of the phrases to mark. */
+export type QuoteScene = Base & {kind: 'quote'; quote: string; highlights: [number, number][]; attribution: string | null};
+/** The source's own figure, with the parts worth seeing pointed out. Callout positions are percentages of the image. */
+export type FigureScene = Base & {kind: 'figure'; image: string; aspect: number; caption: string | null; callouts: {label: string; x: number; y: number; side: 'left' | 'right' | 'above' | 'below'}[]};
+
+export type Scene =
+  | TitleScene | CreditScene | BulletsScene | CodeScene | TraceScene | DiagramScene | ManimScene | HyperframesScene
+  | StatScene | CompareScene | ChartScene | QuoteScene | FigureScene;
 
 export type ExplainerProps = {
   title: string;

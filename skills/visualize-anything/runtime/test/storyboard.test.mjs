@@ -316,3 +316,69 @@ test('a music bed is a file and two distances below the voice, neither of them c
   assert.throws(() => music({file: 'bed.mp3', gap: 25}), /"gap" must be between 4 and "under"/);
   assert.throws(() => loadStoryboard(project({scenes, music: 'bed.mp3'})), /"music": file not found/);
 });
+
+const EVIDENCE_BEATS = [{say: 'A world has two jobs to do.'}, {say: 'A simulator remembers.'}, {say: 'A video model looks real.'}];
+const clockFor = (count) => ({frames: 100 * count, beats: Array.from({length: count}, (_, index) => ({cue: index * 100, from: index * 100 + 4, words: [], duration: 2}))});
+
+test('an evidence scene is checked for its own fields and comes back in one shape', () => {
+  const load = (scene) => loadStoryboard(project({scenes: [{id: 's', why: 'w', beats: [{say: 'It does one thing well.'}], ...scene}]})).storyboard.scenes[0];
+  const stat = load({need: 'number', metrics: [{value: 36, unit: 'fps', label: 'frames a second'}]});
+  assert.deepEqual(stat.metrics, [{value: '36', unit: 'fps', label: 'frames a second', detail: null, delta: null, tone: 'positive'}]);
+  // "left" and "right" are two panels; a point takes its panel's tone unless it names its own.
+  const compare = load({need: 'contrast', left: {label: 'A', tone: 'negative', points: ['slow', {text: 'exact', tone: 'positive'}]}, right: {label: 'B', points: ['fast']}});
+  assert.deepEqual(compare.panels.map((panel) => panel.points.map((point) => point.tone)), [['negative', 'positive'], ['neutral']]);
+  const chart = load({need: 'chart', labels: ['Round 1', 'Round 4'], values: [71, 41], unit: 's'});
+  assert.deepEqual([chart.chart, chart.series], ['bar', [{label: null, values: [71, 41]}]]);
+  const quote = load({need: 'quote', quote: 'A drawing mistake stays a drawing mistake.', highlight: 'stays a drawing mistake'});
+  assert.deepEqual(quote.highlights, [[3, 6]]);
+
+  const broken = (scene, pattern) => assert.throws(() => load(scene), pattern);
+  broken({need: 'number', metrics: []}, /needs "metrics"/);
+  broken({need: 'number', metrics: [{value: '36'}]}, /needs "label"/);
+  broken({need: 'contrast', left: {label: 'A', points: ['x']}}, /needs "left" and "right"/);
+  broken({need: 'contrast', left: {label: 'A', tone: 'angry', points: ['x']}, right: {label: 'B', points: ['y']}}, /"tone" must be one of/);
+  broken({need: 'chart', labels: ['a', 'b'], values: [1]}, /one number, zero or more, for each of the 2 labels/);
+  broken({need: 'chart', labels: ['a', 'b'], values: [1, 2], beats: [{say: 'The first one is the tall one.', focus: ['c']}]}, /"focus" names "c"/);
+  broken({need: 'quote', quote: 'A drawing mistake stays.', highlight: 'never said'}, /is not in the quote/);
+  broken({need: 'figure', image: 'figures/missing.png'}, /image not found/);
+  broken({need: 'figure', image: 'figures/paper.pdf'}, /Export a PDF figure to PNG/);
+  broken({need: 'number', metrics: [{value: '36', label: 'fps'}], beats: [{say: 'It does one thing well.', show: 2}]}, /asks for more than the 1 this scene has/);
+});
+
+test('evidence scenes bring in one more part per beat, and a contrast is made a panel at a time', () => {
+  const shows = (scene, count = 3) => buildSteps({...scene, beats: EVIDENCE_BEATS.slice(0, count).map((beat) => ({cues: [], ...beat}))}, clockFor(count), 30).map((step) => step.show);
+  const two = [{label: 'A', points: [{}, {}]}, {label: 'B', points: [{}, {}, {}]}];
+  // With a beat to spare, the panels stand empty first; then each beat fills one.
+  assert.deepEqual(shows({kind: 'compare', panels: two}), [0, 2, 5]);
+  assert.deepEqual(shows({kind: 'compare', panels: two}, 2), [2, 5]);
+  assert.deepEqual(shows({kind: 'stat', metrics: [{}, {}]}), [1, 2, 2]);
+  // Fewer beats than bars: the bars are shared out, and the last beat has them all.
+  assert.deepEqual(shows({kind: 'chart', labels: ['a', 'b', 'c', 'd', 'e', 'f'], series: []}), [2, 4, 6]);
+  assert.deepEqual(shows({kind: 'figure', callouts: [{}, {}]}), [0, 1, 2]);
+  assert.deepEqual(shows({kind: 'quote', highlights: []}), [0, 0, 0]);
+  // An authored count wins, and carries until the next one.
+  const authored = buildSteps({kind: 'compare', panels: two, beats: [{say: 'A world has two jobs to do.', show: 0, cues: []}, {say: 'A simulator remembers.', show: 1, cues: [{at: 'remembers', show: 2}]}]}, {frames: 200, beats: [{cue: 0, from: 4, words: [], duration: 2}, {cue: 100, from: 104, words: words('A simulator remembers.'), duration: 2}]}, 30);
+  assert.deepEqual(authored.map((step) => step.show), [0, 1, 2]);
+});
+
+test('an evidence scene holds a little longer, so its picture can leave after the voice has finished', () => {
+  const frames = (kind) => {
+    const storyboard = {fps: 30, scenes: [{id: 'a', kind, beats: [{say: 'One.'}]}]};
+    return buildTimeline(storyboard, {beats: [{file: 'a-0.mp3', key: 'k', duration: 2, words: []}]}).scenes[0].frames;
+  };
+  assert.equal(frames('chart') - frames('bullets'), 9);
+});
+
+test('a Manim script is told when it ignores the kit or reaches for a class that needs LaTeX', async () => {
+  const {manimTaste} = await import('../lib/steps.mjs');
+  const scene = (body) => `from manim import *\nfrom va_manim import *\n\nclass Open(VAScene):\n    def construct(self):\n${body.split('\n').map((line) => `        ${line}`).join('\n')}\n`;
+  const notes = (body) => manimTaste(scene(body), false, 'Open').join('\n');
+  assert.equal(notes('row = fit(Cells([3, 8, 15]))\ncount = Tally(end=20, unit="looks")'), '');
+  assert.match(notes('box = Rectangle(color=ACCENT)\nname = Text("cache", font_size=32)'), /draws everything by hand/);
+  assert.match(notes('n = Integer(3)\nrow = Cells([1])'), /uses DecimalNumber\/Integer.*Use Tally/);
+  assert.doesNotMatch(notes('n = Integer(3, mob_class=Text)\nrow = Cells([1])'), /LaTeX/);
+  assert.match(notes('chart = BarChart([1, 2])\nrow = Cells([1])'), /uses BarChart.*bar_chart/);
+  assert.match(notes('eq = MathTex("x^2")\nrow = Cells([1])'), /uses MathTex\/Tex.*Math\(/);
+  // Only the scene being rendered is judged: a neighbour in the same file does not speak for it.
+  assert.doesNotMatch(manimTaste(`${scene('row = Cells([1])')}\nclass Other(VAScene):\n    def construct(self):\n        n = Integer(3)\n`, false, 'Open').join(''), /LaTeX/);
+});

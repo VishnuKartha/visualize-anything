@@ -62,7 +62,7 @@ Write two or three candidates of different kinds and put them to the user along 
 
 ## Open on the picture
 
-The first scene is a picture scene (`motion`, `trace`, `data`), and the hook is its first sentence.
+The first scene is always an animation, drawn in Manim (`motion`, `branching`, or `math`), and the hook is its first sentence. The picture is the hook happening: the thing going wrong, the two approaches racing, the number being counted beside what it measures. A card, a chart, a panel, or code beside its animation can all come second; none of them is the hook shown happening, and `va route` treats any of them as the first scene as an error. Build it from Manim's own primitives; [scene-manim.md](scene-manim.md) lists them.
 
 ```json
 {
@@ -119,7 +119,7 @@ A strong hook followed by a video that starts again from the beginning is two vi
 
 ## When there is no picture: a statement
 
-Some subjects have nothing to show in their first seconds: a naming convention, a configuration format, a policy. Then the hook goes on screen as words: a `question` scene, with an `override` saying why the video does not open on a picture.
+Some subjects have nothing to show in their first seconds: a naming convention, a configuration format, a policy. Then the hook goes on screen as words: a `question` scene, with an `override` saying why the video does not open on an animation. Without the override this is a routing error; expect to need it rarely.
 
 ```json
 {

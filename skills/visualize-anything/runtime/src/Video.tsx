@@ -4,10 +4,15 @@ import {useContext, useMemo} from 'react';
 import {AbsoluteFill, Sequence, interpolate, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {Captions} from './Captions';
 import {BulletsView} from './scenes/Bullets';
+import {ChartView} from './scenes/Chart';
+import {CompareView} from './scenes/Compare';
 import {CreditView} from './scenes/Credit';
 import {CodeView} from './scenes/Code';
 import {DiagramView} from './scenes/Diagram';
+import {FigureView} from './scenes/Figure';
 import {HyperframesView, ManimView} from './scenes/Manim';
+import {QuoteView} from './scenes/Quote';
+import {StatView} from './scenes/Stat';
 import {TitleView} from './scenes/Title';
 import {TraceView} from './scenes/Trace';
 import {FadeContext, StageContext} from './StageContext';
@@ -49,6 +54,16 @@ export const View: React.FC<{scene: Scene}> = ({scene}) => {
       return <ManimView scene={scene} />;
     case 'hyperframes':
       return <HyperframesView scene={scene} />;
+    case 'stat':
+      return <StatView scene={scene} />;
+    case 'compare':
+      return <CompareView scene={scene} />;
+    case 'chart':
+      return <ChartView scene={scene} />;
+    case 'quote':
+      return <QuoteView scene={scene} />;
+    case 'figure':
+      return <FigureView scene={scene} />;
   }
 };
 

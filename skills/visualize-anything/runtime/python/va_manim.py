@@ -36,7 +36,14 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
-from manim import BOLD, DOWN, UP, Arrow, FadeIn, RoundedRectangle, Scene, SVGMobject, Text, VGroup, config
+from functools import partial
+
+import numpy as np
+from manim import (
+    BOLD, DOWN, LEFT, RIGHT, TAU, UP, AnimationGroup, Arrow, Axes, BarChart, Brace, ChangeDecimalToValue, Circle, CurvedArrow,
+    DashedLine, DecimalNumber, Dot, FadeIn, FadeOut, Graph, Line, MoveAlongPath, RoundedRectangle, Scene, Succession, SVGMobject,
+    Text, VGroup, VMobject, config,
+)
 
 try:
     import manimpango
@@ -240,6 +247,388 @@ class Cells(VGroup):
         """An animation that slides a pointer made by pointer() to cell i."""
         return marker.animate.set_x(self.boxes[i].get_x())
 
+    def move(self, i: int, j: int) -> list:
+        """Animations that carry cell i to position j over the others, which close up behind it:
+        a key refreshed to the newest end, an element inserted into its place. Play them together,
+        and play them before asking for the next move. Afterwards cell j is the one that moved."""
+        slots = [box.get_center() for box in self.boxes]
+        order = list(range(len(self.boxes)))
+        order.insert(j, order.pop(i))
+        moves = []
+        for now, was in enumerate(order):
+            if now == was:
+                continue
+            cell = VGroup(self.boxes[was], self.labels[was])
+            # The one that was asked to move goes over the top; the rest slide along the row.
+            arc = {"path_arc": -1.1 if j > i else 1.1} if was == i else {}
+            moves.append(cell.animate(**arc).shift(slots[now] - slots[was]))
+        self.boxes.submobjects = [self.boxes[k] for k in order]
+        self.labels.submobjects = [self.labels[k] for k in order]
+        return moves
+
+    def swap(self, i: int, j: int) -> list:
+        """Animations that exchange cells i and j, one passing over the other: a swap in a sort."""
+        a, b = VGroup(self.boxes[i], self.labels[i]), VGroup(self.boxes[j], self.labels[j])
+        gap = self.boxes[j].get_center() - self.boxes[i].get_center()
+        for group in (self.boxes, self.labels):
+            group.submobjects[i], group.submobjects[j] = group.submobjects[j], group.submobjects[i]
+        return [a.animate(path_arc=-1.1).shift(gap), b.animate(path_arc=-1.1).shift(-gap)]
+
+    def span(self, first: int, last: int, text, direction=DOWN, **kwargs) -> VGroup:
+        """A brace under (or over) cells first to last, with a word on it."""
+        over = VGroup(*self.boxes[first : last + 1])
+        if hasattr(self, "index_labels") and np.array_equal(direction, UP):
+            over.add(*self.index_labels[first : last + 1])  # clear the index numbers too
+        return span(over, text, direction, **kwargs)
+
+
+# Manim's own primitives for numbers and charts typeset their digits with LaTeX unless told otherwise,
+# and there is no LaTeX here. These hand them the video's typeface instead, and its palette, and
+# otherwise leave them as Manim made them: everything in Manim's documentation for the class applies.
+
+def label(text, **kwargs) -> Text:
+    """What Manim is given wherever it would typeset a number or a name: Text, in the video's monospace."""
+    kwargs.setdefault("font", MONO)
+    kwargs.setdefault("color", MUTED)
+    return Text(str(text), **kwargs)
+
+
+class Count(DecimalNumber):
+    """Manim's DecimalNumber for a value that counts on screen: whole, with thousands separators.
+
+        looks = Count(0, color=ACCENT, font_size=72)
+        self.play(ChangeDecimalToValue(looks, fact("scan-looks")), run_time=2)   # or looks.set_value(n)
+
+    Pass `num_decimal_places=1` for a measurement, `unit` and the rest as for DecimalNumber.
+    """
+
+    def __init__(self, number: float = 0, *, color: str = TEXT, font_size: float = 48, **kwargs):
+        kwargs.setdefault("num_decimal_places", 0)
+        kwargs.setdefault("group_with_commas", True)
+        kwargs.setdefault("mob_class", partial(Text, font=MONO, weight=BOLD))
+        super().__init__(number, color=color, font_size=font_size, **kwargs)
+
+
+def axes(x_range, y_range, **kwargs) -> Axes:
+    """Manim's Axes in the video's palette, with its numbers set as Text. `ax.plot(...)`, `ax.c2p(...)`,
+    `ax.get_axis_labels(label("n"), label("steps"))` and the rest work as documented."""
+    axis = {"color": MUTED, "stroke_width": 3, "include_tip": False, "label_constructor": label, "font_size": 30 * TEXT_SCALE}
+    kwargs["axis_config"] = {**axis, **kwargs.get("axis_config", {})}
+    return Axes(x_range=x_range, y_range=y_range, **kwargs)
+
+
+def bar_chart(values, names=None, *, colors=None, **kwargs) -> BarChart:
+    """Manim's BarChart in the video's palette, with its labels set as Text.
+
+        chart = bar_chart([71, 68, 45, 41], ["round 1", "2", "3", "4"], y_range=[0, 80, 20])
+        self.play(chart.animate.change_bar_values([71, 68, 45, 41]))   # grow bars from an all-zero chart
+        chart.get_bar_labels(label_constructor=label, color=TEXT)      # the value over each bar
+    """
+    axis = {"color": MUTED, "label_constructor": label, "font_size": 30 * TEXT_SCALE}
+    for name in ("x_axis_config", "y_axis_config"):
+        kwargs[name] = {**axis, **kwargs.get(name, {})}
+    kwargs.setdefault("bar_fill_opacity", 0.85)
+    return BarChart(values, bar_names=names, bar_colors=colors or [ACCENT], **kwargs)
+
+
+# ---------------------------------------------------------------------------------------------
+# The kit. The pictures an explainer keeps needing, already made: a named box, an arrow between two,
+# a pipeline with something travelling along it, a number that counts with its unit, steps along a
+# line, a tree, a brace over a range, a verdict. Each is built from Manim's own mobjects, sized for
+# this frame and coloured from this palette, and each hands back animations to pass to self.play().
+# Reach for these first. A scene written with them is mostly a list of what happens when.
+
+def _size(font_size, default):
+    return font_size or default * TEXT_SCALE
+
+
+def _edge(mobject, toward, buff):
+    """Where a line from the middle of `mobject` toward a point leaves its bounding box."""
+    shape = getattr(mobject, "box", mobject)
+    center = shape.get_center()
+    way = np.array(toward) - center
+    if np.linalg.norm(way[:2]) < 1e-6:
+        return center
+    reach = min(
+        (shape.width / 2 + buff) / abs(way[0]) if abs(way[0]) > 1e-6 else np.inf,
+        (shape.height / 2 + buff) / abs(way[1]) if abs(way[1]) > 1e-6 else np.inf,
+    )
+    return center + way * min(reach, 1)
+
+
+class Node(VGroup):
+    """A named thing: a box with its name in it, and optionally a line saying what it does.
+
+        engine = Node("engine", note="keeps the state", color=CYAN)
+        self.play(engine.mark(ACCENT))        # recolour it when the sentence turns to it
+    """
+
+    def __init__(self, name, *, note=None, color: str = MUTED, width: float = None, height: float = None, font_size: float = None, **kwargs):
+        super().__init__(**kwargs)
+        self.label = Text(str(name), font=SANS, font_size=_size(font_size, 34), color=TEXT, weight=BOLD)
+        words = VGroup(self.label)
+        if note:
+            self.note = Text(str(note), font=SANS, font_size=28 * TEXT_SCALE, color=MUTED)
+            words.add(self.note)
+            words.arrange(DOWN, buff=0.16)
+        self.box = RoundedRectangle(width=width or words.width + 0.9, height=height or words.height + 0.7, corner_radius=0.18,
+                                    stroke_color=color, stroke_width=3.5, fill_color=color, fill_opacity=0.12)
+        words.move_to(self.box)
+        self.add(self.box, words)
+
+    def mark(self, color: str, fill: float = 0.22):
+        """An animation that recolours the box."""
+        return self.box.animate.set_stroke(color).set_fill(color, fill)
+
+
+class Link(VGroup):
+    """An arrow from the edge of one thing to the edge of another, with an optional word on it.
+
+        call = Link(agent, engine, "action")
+        gone = Link(frame, engine, dashed=True, color=ROSE)     # the arrow the design leaves out
+        self.play(GrowArrow(call.line), FadeIn(call.label))
+    """
+
+    def __init__(self, start, end, text=None, *, color: str = MUTED, dashed: bool = False, bend: float = 0, buff: float = 0.14, font_size: float = None, **kwargs):
+        super().__init__(**kwargs)
+        a, b = _edge(start, end.get_center(), buff), _edge(end, start.get_center(), buff)
+        if bend:
+            # A bent arrow leaves and arrives by the same side of both things, and goes round.
+            side = DOWN if bend < 0 else UP
+            a, b = start.get_edge_center(side) + side * buff, end.get_edge_center(side) + side * buff
+            self.line = CurvedArrow(a, b, angle=bend, color=color, stroke_width=4, tip_length=0.24)
+        elif dashed:
+            self.line = DashedLine(a, b, color=color, stroke_width=4, dash_length=0.16).add_tip(tip_length=0.24, tip_width=0.24)
+        else:
+            self.line = Arrow(a, b, buff=0, color=color, stroke_width=4, tip_length=0.24, max_tip_length_to_length_ratio=0.5, max_stroke_width_to_length_ratio=20)
+        self.add(self.line)
+        self.label = None
+        if text:
+            flat = abs(b[0] - a[0]) >= abs(b[1] - a[1])
+            away = (DOWN if bend < 0 else UP) if flat else RIGHT
+            spot = self.line.point_from_proportion(0.5) if bend else (a + b) / 2
+            self.label = Text(str(text), font=SANS, font_size=_size(font_size, 28), color=color).next_to(spot, away, buff=0.16)
+            self.add(self.label)
+
+    def mark(self, color: str):
+        return self.animate.set_color(color)
+
+    def send(self, color: str = ACCENT, *, run_time: float = 0.8):
+        """An animation: a dot leaves the tail, travels the arrow, and is gone at the head."""
+        token = Dot(self.line.get_start(), radius=0.13, color=color)
+        return Succession(FadeIn(token, run_time=0.12), MoveAlongPath(token, self.line, run_time=run_time), FadeOut(token, run_time=0.12))
+
+
+class Flow(VGroup):
+    """Stages joined by arrows: a pipeline, a request path, a loop. The stages are `Node`s.
+
+        loop = Flow(["agent", "engine", "renderer"], notes=[None, "keeps the state", "only draws"], on=["action", "geometry", "frame"], loop=True)
+        self.play(FadeIn(loop))
+        self.play(loop.send(0))                    # a dot travels from stage 0 to stage 1
+        self.play(loop.mark(1, CYAN))              # recolour a stage
+        loop.node(2), loop.link(1)                 # the pieces, to animate yourself
+
+    `on` names the arrows, in order; with `loop=True` there is one more arrow, from the last stage
+    back to the first, and one more name for it. The flow is scaled down to fit the frame if it is too wide.
+    """
+
+    def __init__(self, names, *, notes=None, colors=None, on=None, loop: bool = False, gap: float = 1.5, **kwargs):
+        super().__init__(**kwargs)
+        names = list(names)
+        pick = lambda values, i: values[i] if values and i < len(values) else None
+        # An arrow has to be longer than the word written on it.
+        longest = max((Text(str(word), font=SANS, font_size=28 * TEXT_SCALE).width for word in (on or [])[: len(names) - 1] if word), default=0)
+        self.nodes = VGroup(*[Node(name, note=pick(notes, i), color=pick(colors, i) or MUTED) for i, name in enumerate(names)]).arrange(RIGHT, buff=max(gap, longest + 0.9))
+        self.links = VGroup(*[Link(self.nodes[i], self.nodes[i + 1], pick(on, i)) for i in range(len(names) - 1)])
+        if loop:
+            self.links.add(Link(self.nodes[-1], self.nodes[0], pick(on, len(names) - 1), bend=-TAU / 5))
+        self.add(self.nodes, self.links)
+        fit(self)
+
+    def node(self, i: int) -> Node:
+        return self.nodes[i]
+
+    def link(self, i: int) -> Link:
+        return self.links[i]
+
+    def mark(self, i: int, color: str, fill: float = 0.22):
+        return self.nodes[i].mark(color, fill)
+
+    def send(self, i: int, color: str = ACCENT, *, run_time: float = 0.8):
+        """An animation: a dot travels arrow i, from stage i to the next (the last arrow of a loop goes back to the first)."""
+        return self.links[i].send(color, run_time=run_time)
+
+
+class Tally(VGroup):
+    """A number that counts, what it counts, and whose it is: the figure the voice says, arriving on screen.
+
+        episodes = Tally(end=fact("shelter-episodes"), unit="episodes", owner="2019 · from scratch")
+        self.play(FadeIn(episodes))
+        self.play(episodes.to(fact("shelter-episodes")), run_time=3)
+
+    `unit=("look", "looks")` writes the singular while the count stands at one (with `set`; `to` runs
+    past one too quickly to matter). Give `end`, the largest value it will reach: the unit is placed clear of that, so nothing shifts
+    as the digits change, and the count starts at the smallest number with as many digits (10,000,000
+    for 25,000,000; 1 for 4) so its width never changes either. Pass `value` to start somewhere else.
+    """
+
+    def __init__(self, value: float = None, *, end: float = None, unit="", owner: str = None, color: str = TEXT, font_size: float = 72, **kwargs):
+        super().__init__(**kwargs)
+        if value is None:
+            value = 10 ** (len(str(int(abs(end)))) - 1) if end else 0
+        self.count = Count(value, color=color, font_size=font_size)
+        widest = Count(end if end is not None else value, font_size=font_size).move_to(self.count, aligned_edge=LEFT)
+        self.add(self.count)
+        # A unit given as ("look", "looks") is written in the singular while the count stands at one.
+        self._units = tuple(unit) if isinstance(unit, (tuple, list)) else (unit, unit)
+        if self._units[1]:
+            word = lambda text: Text(str(text), font=SANS, font_size=max(28 * TEXT_SCALE, font_size * 0.45), color=MUTED).next_to(widest, RIGHT, buff=0.3, aligned_edge=DOWN)
+            self._unit_forms = [word(form) for form in self._units]
+            self.unit = self._unit_forms[0 if value == 1 else 1].copy()
+            self.add(self.unit)
+        if owner:
+            self.owner = Text(str(owner), font=MONO, font_size=28 * TEXT_SCALE, color=MUTED).next_to(widest, UP, buff=0.28, aligned_edge=LEFT)
+            self.add(self.owner)
+
+    def to(self, value: float, **kwargs):
+        """An animation that counts to `value`. Give self.play() the run_time."""
+        return ChangeDecimalToValue(self.count, value, **kwargs)
+
+    def set(self, value: float):
+        """Jump to `value` between animations: one tick of a count kept by hand."""
+        self.count.set_value(value)
+        if hasattr(self, "unit") and self._units[0] != self._units[1]:
+            form = self._unit_forms[0 if value == 1 else 1]
+            self.unit.become(form.copy().move_to(self.unit, aligned_edge=LEFT).set_opacity(self.unit.get_fill_opacity()).set_color(self.unit.get_color()))
+        return self
+
+
+class Track(VGroup):
+    """Steps along a line: rounds, passes, epochs, versions. `reach(i)` lights step i and every step before it.
+
+        rounds = Track(4, names=["round 1", "2", "3", "4"])
+        self.play(FadeIn(rounds))
+        self.play(rounds.reach(0))
+    """
+
+    def __init__(self, steps, *, names=None, color: str = ACCENT, gap: float = 1.5, radius: float = 0.2, font_size: float = None, **kwargs):
+        super().__init__(**kwargs)
+        count = steps if isinstance(steps, int) else len(steps)
+        names = list(names or (steps if not isinstance(steps, int) else [str(i + 1) for i in range(count)]))
+        self.lit = color
+        self.pips = VGroup(*[Circle(radius=radius, stroke_color=DIM, stroke_width=4, fill_color=BG, fill_opacity=1) for _ in range(count)]).arrange(RIGHT, buff=gap)
+        self.rail = Line(self.pips[0].get_center(), self.pips[-1].get_center(), color=DIM, stroke_width=4)
+        self.names = VGroup(*[Text(str(name), font=MONO, font_size=_size(font_size, 28), color=MUTED).next_to(pip, DOWN, buff=0.22) for name, pip in zip(names, self.pips)])
+        self.add(self.rail, self.pips, self.names)
+
+    def reach(self, i: int):
+        """An animation that lights steps 0 to i."""
+        return AnimationGroup(*[pip.animate.set_stroke(self.lit).set_fill(self.lit, 1) for pip in self.pips[: i + 1]], self.names[i].animate.set_color(TEXT))
+
+
+class Net(Graph):
+    """Manim's Graph in the palette, with every vertex named: a tree when `root` is given, a network otherwise.
+
+        calls = Net([8, 4, 2, 1], [(8, 4), (4, 2), (2, 1)], root=8)
+        self.play(Create(calls))
+        self.play(calls.mark(4, CURRENT))            # a vertex changes state
+        self.play(calls.walk(8, 4, CURRENT))         # an edge is taken
+
+    `calls.vertices[v]` and `calls.edges[(u, v)]` are Manim's own mobjects, for anything else.
+    """
+
+    def __init__(self, vertices, edges, *, root=None, radius: float = 0.42, font_size: float = None, **kwargs):
+        vertices, edges = list(vertices), [tuple(edge) for edge in edges]
+        if root is not None:
+            kwargs.setdefault("layout", "tree")
+            kwargs.setdefault("root_vertex", root)
+            kwargs.setdefault("layout_config", {"vertex_spacing": (1.5, 1.35)})
+        names = {vertex: Text(str(vertex), font=MONO, font_size=_size(font_size, 28), color=TEXT, weight=BOLD) for vertex in vertices}
+        # One size of circle for the whole graph, large enough for its longest name.
+        radius = max(radius, max(name.width for name in names.values()) / 2 + 0.2)
+        if root is None:
+            # Evenly spaced and the same on every render, which a spring layout (random start) is not.
+            kwargs.setdefault("layout", "kamada_kawai")
+            kwargs.setdefault("layout_scale", max(2.2, radius * 1.7 * len(vertices) ** 0.5))
+        kwargs.setdefault("vertex_config", {"radius": radius, "fill_color": PANEL, "fill_opacity": 1, "stroke_color": UNVISITED, "stroke_width": 3.5})
+        kwargs.setdefault("edge_config", {"stroke_color": DIM, "stroke_width": 4})
+        super().__init__(vertices, edges, labels=names, **kwargs)
+
+    def mark(self, vertex, color: str, fill: float = 0.3):
+        """An animation that recolours one vertex and leaves its name readable."""
+        return self.vertices[vertex].animate.set_stroke(color, family=False).set_fill(color, fill, family=False)
+
+    def walk(self, start, end, color: str = ACCENT):
+        """An animation that lights the edge between two vertices."""
+        edge = self.edges[(start, end)] if (start, end) in self.edges else self.edges[(end, start)]
+        return edge.animate.set_stroke(color, width=7)
+
+
+def span(target, text, direction=DOWN, *, color: str = MUTED, font_size: float = None) -> VGroup:
+    """A brace along something with a word on it: this run of cells, these four frames, the part ruled out.
+
+        kept = span(VGroup(*row.boxes[0:5]), "never dropped", color=ACCENT)      # or row.span(0, 4, "never dropped")
+    """
+    brace = Brace(target, direction, color=color, buff=0.14)
+    words = Text(str(text), font=SANS, font_size=_size(font_size, 28), color=color).next_to(brace, direction, buff=0.12)
+    return VGroup(brace, words)
+
+
+def tag(target, text, direction=UP, *, color: str = MUTED, font_size: float = None, font: str = None, buff: float = 0.22) -> Text:
+    """A name beside the thing it names. No legend in a corner: the label goes on the thing."""
+    return Text(str(text), font=font or SANS, font_size=_size(font_size, 28), color=color).next_to(target, direction, buff=buff)
+
+
+def claim(text: str, *, font_size: float = 72, color: str = TEXT, strong: str = ACCENT) -> Text:
+    """A line set large with its *starred* words in the accent: the hook's words, on screen as they are said.
+
+        claim("*1,000,000* items.\n*20* looks.")
+    """
+    starred = re.findall(r"\*([^*]+)\*", text)
+    return Text(text.replace("*", ""), font=SANS, font_size=font_size * TEXT_SCALE, color=color, weight=BOLD, line_spacing=0.9, t2c={word: strong for word in starred})
+
+
+def verdict(ok: bool, size: float = 0.56) -> VGroup:
+    """A tick or a cross in a ring: this works, this does not."""
+    color = ACCENT if ok else ROSE
+    ring = Circle(radius=size / 2, stroke_color=color, stroke_width=3, fill_color=color, fill_opacity=0.16)
+    r = size * 0.22
+    if ok:
+        mark = VMobject(stroke_color=color, stroke_width=6).set_points_as_corners([[-r, 0, 0], [-r * 0.25, -r * 0.75, 0], [r, r * 0.8, 0]])
+    else:
+        mark = VGroup(Line([-r, -r, 0], [r, r, 0], color=color, stroke_width=6), Line([-r, r, 0], [r, -r, 0], color=color, stroke_width=6))
+    return VGroup(ring, mark)
+
+
+def curve(ax: Axes, function, name=None, *, color: str = ACCENT, x_range=None) -> VGroup:
+    """A function drawn on `axes(...)`, named at its right-hand end in its own colour."""
+    line = ax.plot(function, x_range=x_range, color=color, stroke_width=5)
+    drawn = VGroup(line)
+    if name:
+        drawn.add(Text(str(name), font=MONO, font_size=28 * TEXT_SCALE, color=color).next_to(line.get_end(), UP, buff=0.14))
+    return drawn
+
+
+def fit(mobject, *, margin: float = 0.25):
+    """Centre something in the part of the frame that is clear of the heading and the captions, shrinking
+    it if it is too big (never enlarging it). The last line of every layout."""
+    wide, tall = (SAFE_RIGHT - SAFE_LEFT) - 2 * margin, (SAFE_TOP - SAFE_BOTTOM) - 2 * margin
+    shrink = min(1, wide / max(mobject.width, 1e-6), tall / max(mobject.height, 1e-6))
+    if shrink < 1:
+        mobject.scale(shrink)
+    return mobject.move_to([(SAFE_LEFT + SAFE_RIGHT) / 2, SAFE_CENTER_Y, 0])
+
+
+def halves():
+    """The centres of the left and right halves of the frame: where two things being compared go."""
+    return np.array([SAFE_LEFT / 2, SAFE_CENTER_Y, 0]), np.array([SAFE_RIGHT / 2, SAFE_CENTER_Y, 0])
+
+
+def lanes(count: int) -> list:
+    """The heights of `count` rows stacked evenly down the frame: one per approach, run on the same data."""
+    step = (SAFE_TOP - SAFE_BOTTOM) / count
+    return [SAFE_TOP - step * (i + 0.5) for i in range(count)]
+
 
 class Beat:
     def __init__(self, index: int, duration: float, text: str, lead: float = 0.0, words=None):
@@ -340,7 +729,8 @@ class VAScene(Scene):
 
 
 __all__ = [
-    "VAScene", "Beat", "Math", "Typst", "Cells", "fact", "THEME", "TRACE", "CONTINUES", "TEXT_SCALE", "FRAME_WIDTH", "FRAME_HEIGHT", "SAFE_LEFT", "SAFE_RIGHT",
+    "VAScene", "Beat", "Math", "Typst", "Cells", "Count", "label", "axes", "bar_chart", "curve", "Node", "Link", "Flow", "Tally", "Track", "Net",
+    "span", "tag", "claim", "verdict", "fit", "halves", "lanes", "fact", "THEME", "TRACE", "CONTINUES", "TEXT_SCALE", "FRAME_WIDTH", "FRAME_HEIGHT", "SAFE_LEFT", "SAFE_RIGHT",
     "UNVISITED", "CURRENT", "FRONTIER", "SETTLED", "DISCARDED", "BG", "PANEL", "BORDER", "TEXT", "MUTED", "DIM", "ACCENT", "CYAN", "VIOLET",
     "AMBER", "ROSE", "ORANGE", "MONO", "SANS", "SAFE_TOP", "SAFE_BOTTOM", "SAFE_CENTER_Y",
 ]

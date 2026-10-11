@@ -18,9 +18,10 @@ type Issue = {kind: 'bounds' | 'overlap' | 'clip' | 'small'; text: string; rect:
 
 // Pairs that must never touch: the fixed furniture of the frame against a scene's own content.
 const MUST_NOT_OVERLAP: [string, string[]][] = [
-  ['captions', ['code', 'note', 'bullets', 'bullets-title', 'title', 'subtitle', 'kicker']],
-  ['heading', ['code', 'note', 'bullets', 'bullets-title', 'title', 'kicker']],
-  ['note', ['code']],
+  ['captions', ['code', 'note', 'bullets', 'bullets-title', 'title', 'subtitle', 'kicker', 'card', 'card-title']],
+  ['heading', ['code', 'note', 'bullets', 'bullets-title', 'title', 'kicker', 'card', 'card-title']],
+  ['note', ['code', 'card']],
+  ['card-title', ['card']],
 ];
 
 const visible = (element: Element, stop: Element) => {

@@ -1,4 +1,6 @@
 node_modules/
+# Remotion's own headless browser, downloaded on first render
+.remotion/
 __pycache__/
 .DS_Store
 # generated video projects (authored sources inside them are kept by each project's own .gitignore)

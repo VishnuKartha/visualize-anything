@@ -20,13 +20,18 @@ Ask of each scene: **what would the viewer need to see to believe this sentence?
 
 | `need` | The viewer must see | The narration sounds like | Renderer |
 |---|---|---|---|
-| `question` | The hook as a statement on screen, for a subject with nothing to show in its first seconds | "Retry at once, and you can take down the service you were waiting for." | `title` (the fallback opening; see [opening.md](opening.md)) |
+| `question` | A statement on screen: a chapter turn, or (with an `override`) the hook of a subject with nothing to animate in its first seconds | "Retry at once, and you can take down the service you were waiting for." | `title` (the fallback opening; see [opening.md](opening.md)) |
 | `motion` | Data or state changing step by step | "Watch the array", "A jumps to the end", "the tree rebalances" | `manim` |
 | `branching` | Decisions inside one procedure, acting on its data | "First it checks whether..., and if so..." | `manim` |
 | `math` | A formula, a growth rate, a plot | "Each step halves the range", "this grows quadratically" | `manim` |
 | `trace` | What the code says and what it does: the lines, beside the data they change | "This line does X", "each time around the loop...", "notice this check" | `trace` (code left, animation right) |
 | `change` | Which lines of the code were removed and which were added | "The fix is one line", "this check was added", "the pull request replaces..." | `hyperframes` (a diff) |
-| `data` | Numbers measured or compared: a chart, a count, a benchmark | "A million comparisons against twenty", "forty percent faster" | `hyperframes` (a composition you write) |
+| `number` | The one number the claim rests on, or up to four side by side, counted up as they are said | "Thirty-six frames a second", "twenty-five million episodes, or four rounds" | `stat` |
+| `contrast` | Two or three alternatives, each with what it gets right and what it costs | "A simulator remembers, but...; a video model looks real, but..." | `compare` (panels side by side) |
+| `chart` | Measured values against each other: bars, or a line across rounds | "Seventy-one seconds in round one, forty-one by round four" | `chart` |
+| `quote` | The source's own words, when the wording is the evidence | "The authors put it this way" | `quote` |
+| `figure` | The source's own figure, with the parts worth seeing pointed out | "This is the paper's own diagram of the loop" | `figure` |
+| `data` | Numbers that need a picture designed for them, which none of the four above draws | "A million comparisons against twenty", as two bars racing | `hyperframes` (a composition you write) |
 | `structure` | Separate components and what connects them | "These are the services", "the API sits between..." | `diagram` · `architecture` |
 | `conversation` | Ordered messages between components | "The client calls the API, which asks the cache, which..." | `diagram` · `sequence` |
 | `pipeline` | Data moving through stages and stores | "The event is parsed, enriched, then written to..." | `diagram` · `dataflow` |
@@ -49,7 +54,11 @@ Some needs are easy to confuse:
 
 - **`change` or `trace`?** If the viewer needs to see what is different between two versions, it is `change`. If they need to understand what one version does, it is `trace`.
 - **`change` or `motion`?** `change` is for an edit to the code. Two different approaches to the same job ("instead of scanning, it halves") differ in behaviour, not in a few lines: run both on the same data, with a count, in a `motion` scene.
-- **`data` or `math`?** A measured or counted quantity (a benchmark, a size, a before-and-after number) is `data`. A relationship or formula (halving, growth, a curve) is `math`.
+- **`chart` or `math`?** A measured or counted quantity (a benchmark, a size, a before-and-after number) is `chart`, or `number` when there are only one or two of them. A relationship or formula (halving, growth, a curve) is `math`.
+- **`chart` or `data`?** Bars or a line are `chart`: you give the values and nothing is built. `data` is for the picture those cannot draw, and costs a composition you write and render.
+- **`number` or `question`?** Both put a large number on screen. `question` is a sentence. `number` is a measurement with its unit and what it counts. Neither opens a video: when the hook is a number, the opening is a Manim scene that counts it beside the thing it measures, and a `number` scene can restate it later.
+- **`contrast` or `motion`?** If the two things differ in what they are (what each keeps, what each costs), set them side by side: `contrast`. If they differ in what they do to the same data, run both on it: `motion`.
+- **`figure` or `structure`?** When the source already drew the picture, show theirs (`figure`) and point at it. Draw your own diagram (`structure` and the other diagram needs) when there is none, or when theirs cannot be read at video size.
 
 - **`trace` or `motion`?** Use `trace` when the code should be on screen: which line does what, for a loop or short function of up to about 16 lines and 50 columns. Use `motion` when the behaviour is worth watching without the code, such as an overview before the code appears, or two approaches compared. Longer code is split into several trace scenes, one per function or block.
 - **`branching` or `process`?** Both have steps and decisions. If every step is a line of the same function, it is `branching`: animate the decisions acting on the data. If the steps belong to different actors or tools, it is `process`.
@@ -77,7 +86,7 @@ Routing: 6 scenes, subject "algorithm", 104s.
 
 Each scene gets a verdict with its reason:
 
-- **`ERROR`** stops every build step. There are four: a scene that shows code with no visual beside it, a diagram scene in an `algorithm` video, a `question` scene with no statement on screen, and a `need` that disagrees with the scene's explicit `kind` or `type`.
+- **`ERROR`** stops every build step. There are five: a video that does not open on a Manim animation, a scene that shows code with no visual beside it, a diagram scene in an `algorithm` video, a `question` scene with no statement on screen, and a `need` that disagrees with the scene's explicit `kind` or `type`.
 - **`REVIEW`** is advice with a reason attached. Act on it, or leave it when the reason does not apply to this scene.
 
 What the router checks, scene by scene:
@@ -86,7 +95,8 @@ What the router checks, scene by scene:
 |---|---|
 | The narration supports the declared need | A scene declared `source` whose narration is all "shifts", "evicted", "pointer" probably wants an animation. Cue words never choose the route; they only question it. |
 | A diagram has three to seven nodes | Two boxes and an arrow is a sentence. Past seven, labels are too small to read. |
-| Each beat changes the picture | Two beats highlighting the same lines, or focusing the same nodes, should be one beat. |
+| Each beat changes the picture | Two beats highlighting the same lines, focusing the same nodes, or leaving the same parts of a chart or a contrast on screen, should be one beat. |
+| A quote is under about forty-five words, and a chart has at most sixteen marks | Past that, one is a paragraph to read and the other a table; neither is taken in while someone is talking. |
 | A scene runs 6 to 40 seconds | Shorter and the cut is abrupt; longer and the picture goes stale. |
 | The narration explains and does not recite code or pad | "self dot items dot move to end" and "basically, just" are both noise. |
 | Scenes drawn by one script say whether they share a picture | A shared picture should not fade out and back in between scenes. |
@@ -100,7 +110,7 @@ And across the sequence:
 
 | Check | Why |
 |---|---|
-| Opens on a picture, or on a statement that says why it is not one; never on bullets or bare code. Closes on a recap or code, with at most a short `credit` after it | The subject is on screen from the first second; do not end on a new idea. The name of the source comes last. |
+| Opens on a Manim animation (`motion`, `branching`, or `math`), whatever the subject; anything else is an error unless its `override` says why. Closes on a recap or code, with at most a short `credit` after it | The hook is shown happening, from the first second; do not end on a new idea. The name of the source comes last. |
 | The brief has a hook with a starred word; the opening scene says it; the closing scene returns to it | The hook is the reason to watch. It is chosen first, delivered first, and paid off last. |
 | The storyboard's narration is `script.md`, word for word and in order | The narration is written whole and then split, so every line was written as the next sentence of the one before. |
 | No scene after the first starts over ("Now let's look at", "Next,", "Moving on") | Each scene picks up where the last stopped. See [opening.md](opening.md), "Make it flow". |
@@ -142,6 +152,19 @@ When the subject is an algorithm, every explanatory scene that is not code is Ma
 
 An algorithm video is mostly `trace` scenes, one per function or step, with a `motion` or `math` scene where the behaviour or the cost is worth seeing without the code.
 
+## A paper is explained with its own evidence
+
+A paper has already done the measuring and drawn its pictures, and the video's claims are the paper's claims. So alongside the animation that explains the idea, show what the paper itself reports:
+
+- The hook is still a Manim animation: the paper's headline numbers counted beside a picture of what they measure.
+- A result stated later is a `number`, counted up on screen as it is said. Two numbers side by side (theirs and the prior work's) is the same scene.
+- What it is compared against is a `contrast`: the alternatives as panels, each with what it gets right and what it costs.
+- A result across rounds, sizes, or baselines is a `chart`. Chart the values the sentence compares, not the whole table.
+- Its own figure is a `figure`. Do not redraw a figure the authors drew; point at theirs.
+- A sentence that makes the claim better than a paraphrase could is a `quote`. One a video is plenty.
+
+These five are drawn from the storyboard, with nothing to build or render first: see [scene-evidence.md](scene-evidence.md). The idea itself still gets an animation. A paper video made only of these is a slide deck of the paper; one with none of them asks the viewer to take every number on trust.
+
 ## Mixing renderers
 
 A video can cut between Remotion, Manim, Archify, and HyperFrames scenes freely; each scene goes to whichever renderer its need maps to, and they share one backdrop, palette, and caption style. Two things keep a mixed video from looking stitched together:
@@ -178,7 +201,7 @@ The full project is in `examples/lru-cache/` at the root of this repository.
 
 | # | Narration (summary) | `need` | Renderer |
 |---|---|---|---|
-| 1 | "The same dashboard takes two seconds to load, or twenty milliseconds" | `data` | the two load times side by side, which the rest explains |
+| 1 | "The same dashboard takes two seconds to load, or twenty milliseconds" | `motion` | `manim`: the same request run twice, each with its clock counting, which the rest explains |
 | 2 | "Four pieces: the web app, the API, Redis, and Postgres" | `structure` | `diagram` · `architecture` |
 | 3 | "The API checks the cache, misses, queries the database, writes back" | `conversation` | `diagram` · `sequence` |
 | 4 | "The read-through is these six lines in the handler" | `trace` | the handler, beside the cache filling |
@@ -187,4 +210,4 @@ The full project is in `examples/lru-cache/` at the root of this repository.
 
 ## Extending the router
 
-The vocabulary, the cue words, and every rule live in `runtime/lib/router.mjs`, with tests in `runtime/test/router.test.mjs` (`npm test` in `runtime/`). To add a renderer: add a scene `kind` in `runtime/lib/storyboard.mjs`, a prepare step in `runtime/lib/steps.mjs`, a component in `runtime/src/scenes/`, then one or more needs in `NEEDS` that route to it and a row in the table above. A test fails if a need is missing from this page.
+The vocabulary, the cue words, and every rule live in `runtime/lib/router.mjs`, with tests in `runtime/test/router.test.mjs` (`npm test` in `runtime/`). To add a renderer: add a scene `kind` in `runtime/lib/storyboard.mjs` (and to `EVIDENCE` there if it is drawn from the storyboard alone and reveals its parts by `show`), a prepare step in `runtime/lib/steps.mjs`, a component in `runtime/src/scenes/`, then one or more needs in `NEEDS` that route to it and a row in the table above. A test fails if a need is missing from this page.

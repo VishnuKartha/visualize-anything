@@ -68,6 +68,16 @@ test('numbers on screen and in the hook are held to the ledger too', () => {
   assert.deepEqual(unbackedNumbers(storyboard).map((number) => [number.value, number.where]), [[1000000, "the brief's hook"], [7, 'recap beat 1, on screen']]);
 });
 
+test('what an evidence scene shows is read for numbers, whichever way its fields were written', () => {
+  const scenes = [
+    {id: 'a', kind: 'stat', beats: [{say: 'It is quick.'}], metrics: [{value: '~25,000,000', unit: 'episodes', label: 'in 2019', delta: '+3.2'}]},
+    {id: 'b', kind: 'compare', beats: [{say: 'It is quick.'}], left: {label: 'Before', points: ['12 steps']}, right: {label: 'After', points: [{text: 'one step'}]}},
+    {id: 'c', kind: 'chart', beats: [{say: 'It is quick.'}], labels: ['Round 1', 'Round 4'], values: [71, 41]},
+  ];
+  assert.deepEqual(unbackedNumbers({scenes, facts: []}).map((number) => number.value), [25000000, 2019, 3.2, 12, 71, 41]);
+  assert.deepEqual(unbackedNumbers({scenes, facts: [25000000, 2019, 3.2, 12, 71, 41].map((value, index) => ({id: `f${index}`, value}))}), []);
+});
+
 test('absolute words are found, once each', () => {
   assert.deepEqual(absolutesIn('A key that was read is never the one evicted.'), ['never']);
   assert.deepEqual(absolutesIn('It can never take more than that, and always halves.'), ['always', 'can never']);

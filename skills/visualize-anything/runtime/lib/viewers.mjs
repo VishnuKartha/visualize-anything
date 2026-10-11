@@ -62,6 +62,9 @@ export const VIEWERS = {
 // words; then the practitioner decides which mechanisms and costs earn their seconds.
 export const PRIORITY = 'Where the three pull apart: the expert decides what is true and that is not traded away; the newcomer decides pacing and vocabulary; the practitioner decides which mechanisms and costs make the cut. A better example usually satisfies all three.';
 
+// What `show` counts in each kind of scene that reveals its parts.
+const PARTS = {stat: 'number(s)', compare: 'point(s)', chart: 'value(s)', quote: 'marked phrase(s)', figure: 'callout(s)'};
+
 /** What a beat puts on screen, as far as the storyboard says. */
 const pictureOf = (scene, beat) => {
   const parts = [];
@@ -74,7 +77,7 @@ const pictureOf = (scene, beat) => {
     if (cue.focus === 'all') out.push('lights everything');
     if (cue.text) out.push(`shows "${cue.text.replace(/\n/g, ' / ')}"`);
     if (cue.version !== undefined && cue.version !== null) out.push(`shows version ${cue.version}`);
-    if (cue.show !== undefined && cue.show !== null) out.push(`${cue.show} takeaway(s) visible`);
+    if (cue.show !== undefined && cue.show !== null) out.push(`${cue.show} ${PARTS[scene.kind] || 'takeaway(s)'} visible`);
     return out;
   };
   parts.push(...describe(beat));
@@ -85,11 +88,26 @@ const pictureOf = (scene, beat) => {
   // What an animation draws is in its script, which is written after the narration is timed.
   if (scene.kind === 'manim' || (scene.kind === 'trace' && !parts.some((part) => part.includes('highlights')))) parts.unshift('the animation (its script comes after this review)');
   if (scene.kind === 'bullets' && !parts.length) parts.push('the next takeaway appears');
+  if (PARTS[scene.kind] && !parts.some((part) => part.includes('visible'))) parts.push(`the next ${PARTS[scene.kind].replace('(s)', '')} arrives`);
   if (scene.kind === 'credit') parts.push(`the name "${scene.title}"${scene.subtitle ? ` over "${scene.subtitle}"` : ''}`);
   return parts.join('; ') || '(nothing declared)';
 };
 
-const SHOWN_AS = {title: 'a statement on screen', credit: 'the end card', code: 'code alone', trace: 'code beside an animation of what it does', hyperframes: 'a code diff or chart', manim: 'an animation', diagram: 'a diagram', bullets: 'the recap, each takeaway beside the moment that proved it'};
+const SHOWN_AS = {
+  title: 'a statement on screen', credit: 'the end card', code: 'code alone', trace: 'code beside an animation of what it does', hyperframes: 'a code diff or chart', manim: 'an animation', diagram: 'a diagram',
+  bullets: 'the recap, each takeaway beside the moment that proved it',
+  stat: 'a number counted up on screen', compare: 'panels side by side', chart: 'a chart', quote: "the source's words, quoted", figure: "the source's own figure",
+};
+
+/** What an evidence scene is made of, in words, for the plan a reviewer reads. */
+const madeOf = (scene) => {
+  if (scene.kind === 'stat') return `Numbers shown: ${scene.metrics.map((metric) => `${metric.value}${metric.unit ? ` ${metric.unit}` : ''} (${metric.label})`).join('; ')}`;
+  if (scene.kind === 'compare') return `Panels: ${scene.panels.map((panel) => `"${panel.label}": ${panel.points.map((point) => `${point.text} [${point.tone}]`).join(', ')}`).join(' | ')}`;
+  if (scene.kind === 'chart') return `A ${scene.chart} chart${scene.unit ? ` in ${scene.unit}` : ''}: ${scene.series.map((entry) => `${entry.label ? `${entry.label}: ` : ''}${scene.labels.map((label, index) => `${label} = ${entry.values[index]}`).join(', ')}`).join(' | ')}`;
+  if (scene.kind === 'quote') return `Quoted: "${scene.quote}"${scene.attribution ? ` (${scene.attribution})` : ''}`;
+  if (scene.kind === 'figure') return `Figure: ${scene.image}${scene.caption ? `, captioned "${scene.caption}"` : ''}${scene.callouts.length ? `; pointed out: ${scene.callouts.map((callout) => callout.label).join(', ')}` : ''}`;
+  return null;
+};
 
 /**
  * The page one viewer is handed before anything is recorded: the whole script, the plan scene by
@@ -116,6 +134,7 @@ export const planBrief = ({viewer, storyboard, script, routingText, ledger, sour
     out.push(`### ${index + 1}. ${scene.id}: ${SHOWN_AS[scene.kind]}`, '');
     if (scene.why) out.push(`Why this picture: ${scene.why}`, '');
     if (scene.kind === 'bullets') out.push(`Takeaways shown: ${scene.items.map((item) => `"${item.text}"${item.from ? ` (beside "${item.from}")` : ''}`).join('; ')}`, '');
+    if (madeOf(scene)) out.push(madeOf(scene), '');
     out.push('| Beat | Heard | On screen |', '|---|---|---|');
     scene.beats.forEach((beat, beatIndex) => out.push(`| ${beatIndex + 1} | ${beat.say.replace(/\|/g, '\\|')} | ${pictureOf(scene, beat).replace(/\|/g, '\\|')} |`));
     out.push('');

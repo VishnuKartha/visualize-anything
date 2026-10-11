@@ -92,7 +92,7 @@ class Forget(VAScene):
 
         # The obvious victim is the first one in. But it is also the one that was just used.
         first = under(0, "went in first")
-        read = Text("just read", font=MONO, font_size=36, color=CYAN).next_to(a, UP, buff=0.3)
+        read = tag(a, "just read", UP, color=CYAN, font_size=36, font=MONO, buff=0.3)
         with self.beat(1) as beat:
             beat.until("whichever went in first")
             self.play(FadeIn(first, shift=UP * 0.15), recolor(a, ROSE, 0.2), run_time=0.6)
@@ -160,7 +160,7 @@ class Get(VAScene):
         with self.beat(0) as beat:
             self.appear(a, b, c, oldest, newest, axis, limit)
             beat.until("Say we ask for A")
-            call = Text("get('A')", font=MONO, font_size=36, color=CYAN).next_to(a, UP, buff=0.3)
+            call = tag(a, "get('A')", UP, color=CYAN, font_size=36, font=MONO, buff=0.3)
             self.play(FadeIn(call, shift=DOWN * 0.2), recolor(a, CYAN, 0.2), run_time=0.7)
 
         with self.beat(1) as beat:
@@ -190,7 +190,7 @@ class Put(VAScene):
             self.appear(b, c, a, oldest, newest, axis, limit, got)
             self.play(FadeOut(got), run_time=0.4)
             beat.until("is this key already cached")
-            call = Text("put('B', 9)", font=MONO, font_size=36, color=CYAN).next_to(b, UP, buff=0.3)
+            call = tag(b, "put('B', 9)", UP, color=CYAN, font_size=36, font=MONO, buff=0.3)
             self.play(FadeIn(call, shift=DOWN * 0.2), recolor(b, CYAN, 0.2), run_time=0.7)
 
         # It is: refresh it, then store the value.
@@ -200,7 +200,7 @@ class Put(VAScene):
             self.play(b.animate.move_to([slot_x(2), ROW_Y + HOP, 0]), *settle([c, a], 3), run_time=1.0)
             self.play(b.animate.move_to([slot_x(2), ROW_Y, 0]), run_time=0.45)
             beat.until("the new value is stored")
-            stored = Text("value = 9", font=MONO, font_size=36, color=ACCENT).next_to(b, UP, buff=0.3)
+            stored = tag(b, "value = 9", UP, color=ACCENT, font_size=36, font=MONO, buff=0.3)
             self.play(FadeIn(stored, shift=UP * 0.15), recolor(b, ACCENT), run_time=0.6)
 
         # Decision two: over capacity? Three in a cache of three: no.
@@ -217,7 +217,7 @@ class Put(VAScene):
         over = capacity_check(4, ROSE)
         with self.beat(3) as beat:
             d.move_to([slot_x(3, 4), ROW_Y + HOP, 0])
-            call = Text("put('D', 5)", font=MONO, font_size=36, color=AMBER).next_to(d, UP, buff=0.25)
+            call = tag(d, "put('D', 5)", UP, color=AMBER, font_size=36, font=MONO, buff=0.25)
             beat.until("a key the cache has never seen")
             self.play(FadeIn(d, shift=DOWN * 0.3), FadeIn(call), FadeOut(limit), run_time=0.6)
             beat.until("grows to four")

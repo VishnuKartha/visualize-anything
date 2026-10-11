@@ -25,8 +25,8 @@ One file describes the whole video, and its narration comes from another: `scrip
 | Field | Meaning |
 |---|---|
 | `id` | Unique kebab-case name. Diagram and Manim sources are found by it. |
-| `need` | What the viewer must see: `question`, `source`, `trace`, `change`, `data`, `motion`, `branching`, `math`, `structure`, `conversation`, `pipeline`, `process`, `states`, `recap`, or `credit`. The router turns it into a renderer; see [routing.md](routing.md). |
-| `kind` | Optional. The renderer (`title`, `code`, `trace`, `hyperframes`, `diagram`, `manim`, `bullets`, `credit`), normally supplied by `need`. If you set both, they must agree. |
+| `need` | What the viewer must see: `question`, `source`, `trace`, `change`, `data`, `number`, `contrast`, `chart`, `quote`, `figure`, `motion`, `branching`, `math`, `structure`, `conversation`, `pipeline`, `process`, `states`, `recap`, or `credit`. The router turns it into a renderer; see [routing.md](routing.md). |
+| `kind` | Optional. The renderer (`title`, `code`, `trace`, `hyperframes`, `diagram`, `manim`, `bullets`, `credit`, `stat`, `compare`, `chart`, `quote`, `figure`), normally supplied by `need`. If you set both, they must agree. |
 | `why` | One sentence on why this need was chosen. Not rendered; it keeps routing reviewable. |
 | `override` | Only when you disagree with the router: the reason, as a full phrase. Turns a routing error into a recorded note. |
 | `continues` | `true` when this scene starts on the picture the previous scene ended on: the fade between them is dropped. `false` to say two scenes from one script do not share a picture. See [taste.md](taste.md). |
@@ -81,7 +81,7 @@ So write narration that names things: say `triage.ts`, not "the orchestration co
 
 ### `title`
 
-The opening statement. No scene fields of its own: it shows no title card. See [opening.md](opening.md).
+A statement on screen. A video does not open on one (the opening is a Manim scene) unless the scene's `override` says why. No scene fields of its own: it shows no title card. See [opening.md](opening.md).
 
 | Beat cue | Meaning |
 |---|---|
@@ -127,6 +127,26 @@ Scene fields: `type` (`architecture`, `workflow`, `sequence`, `dataflow`, `lifec
 ### `manim`
 
 Scene fields: `class` (required, the `VAScene` subclass to render), optional `script` (default `manim/<id>.py`; several scenes may share one script). Beats carry no cue; the script addresses beats by index. Details in [scene-manim.md](scene-manim.md).
+
+### `stat`, `compare`, `chart`, `quote`, `figure`
+
+The evidence scenes: what the source itself reports, drawn from the storyboard with nothing to build. Fields, defaults, and an example of each are in [scene-evidence.md](scene-evidence.md).
+
+| Kind | Scene fields | `show` counts |
+|---|---|---|
+| `stat` | `metrics`: one to four of `{"value", "unit", "label", "detail", "delta", "tone"}` | metrics on screen |
+| `compare` | `left` and `right`, or `panels` (two or three): each `{"label", "tone", "points"}`; `versus` | points on screen, counted across the panels in reading order |
+| `chart` | `labels` with `values`, or with `series` (one to four of `{"label", "values"}`); `chart` (`"bar"` or `"line"`), `unit`, `axis` | labels drawn so far |
+| `quote` | `quote`, `highlight` (a phrase of it, or several), `attribution` | phrases marked |
+| `figure` | `image` (a PNG, JPEG, or WebP in the project), `caption`, `callouts`: up to five of `{"label", "x", "y", "side"}` | callouts pointed out |
+
+All but `quote` and `figure` take an optional `title`, a line above the picture with its key words starred.
+
+| Beat cue | Meaning |
+|---|---|
+| `show` | How many of the scene's parts are on screen from this beat. Default: one more per beat (a panel's worth, in a `compare`), and all of them on the last beat. |
+| `focus` | In a `chart`: the labels or series this sentence is about. The rest step back. |
+| `note` | A short callout under the picture during this beat: the qualification the number needs. |
 
 ### `credit`
 

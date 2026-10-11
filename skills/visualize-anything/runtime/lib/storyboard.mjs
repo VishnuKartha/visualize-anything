@@ -5,7 +5,12 @@ import {NEEDS, SUBJECTS, resolveRoute} from './router.mjs';
 import {findRun, speakable, spokenTokens} from './speech.mjs';
 import {fail, readJson} from './util.mjs';
 
-export const KINDS = ['title', 'code', 'trace', 'hyperframes', 'diagram', 'manim', 'bullets', 'credit'];
+export const KINDS = ['title', 'code', 'trace', 'hyperframes', 'diagram', 'manim', 'bullets', 'credit', 'stat', 'compare', 'chart', 'quote', 'figure'];
+// Scenes drawn from the storyboard alone: what the source reports, with its parts arriving by `show`.
+export const EVIDENCE = ['stat', 'compare', 'chart', 'quote', 'figure'];
+const TONES = ['positive', 'negative', 'caution', 'neutral'];
+const IMAGES = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+const SIDES = ['left', 'right', 'above', 'below'];
 
 const showsCode = (scene) => scene.kind === 'code' || scene.kind === 'trace';
 const needsClip = (scene) => scene.kind === 'manim' || scene.kind === 'trace';
@@ -18,10 +23,12 @@ const TAIL = 0.7; // hold after the last word, before the cut
 const CARRY = 0.15; // either side of a join where the picture carries on: together, one pause between beats
 const ANTICIPATE = 0.15; // visuals change slightly ahead of the voice
 const LAND = 0.7; // extra silence after a beat marked `land`, so its point can sink in
+const LEAVE = 0.3; // extra hold at the end of an evidence scene: its picture is let go slowly, and only once the voice has finished
+export const SETTLED = 32; // frames before its end by which an evidence scene's picture has begun to leave
 export const PREDICT = 1.5; // extra silence after a beat marked `predict`: the question is asked, and the viewer gets to answer it first
 
 const gapAfter = (beat) => beat.pause ?? (beat.predict ? GAP + PREDICT : beat.land ? GAP + LAND : GAP);
-const HAS_PICTURE = ['manim', 'trace', 'diagram', 'hyperframes'];
+const HAS_PICTURE = ['manim', 'trace', 'diagram', 'hyperframes', 'stat', 'compare', 'chart', 'figure'];
 
 const LANG_BY_EXT = {
   '.ts': 'typescript', '.tsx': 'tsx', '.js': 'javascript', '.jsx': 'jsx', '.mjs': 'javascript', '.cjs': 'javascript',
@@ -119,6 +126,131 @@ export const resolveCode = (scene, paths, storyboard) => {
 export const resolveVersions = (scene, paths, storyboard) =>
   scene.versions.map((version, index) => resolveCode({id: `${scene.id} version ${index}`, lang: scene.lang, ...version}, paths, storyboard));
 
+const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+const toneOf = (value, fallback, where, errors) => {
+  if (value === undefined) return fallback;
+  if (!TONES.includes(value)) errors.push(`${where}: "tone" must be one of ${TONES.join(', ')}.`);
+  return TONES.includes(value) ? value : fallback;
+};
+
+/** Where a phrase sits in a quote, as [first, last] word indexes, or null. Compared by spoken words, so punctuation is free. */
+export const phraseSpan = (quote, phrase) => {
+  const words = quote.split(/\s+/).filter(Boolean);
+  const owners = words.flatMap((word, index) => spokenTokens(word).map(() => index));
+  const needle = spokenTokens(phrase);
+  const at = needle.length ? findRun(words.flatMap((word) => spokenTokens(word)), needle) : -1;
+  return at < 0 ? null : [owners[at], owners[at + needle.length - 1]];
+};
+
+/** How many parts an evidence scene reveals by `show`, and the counts a beat-by-beat reveal stops at. */
+export const revealStops = (scene) => {
+  const upTo = (count) => Array.from({length: count}, (_, index) => index + 1);
+  if (scene.kind === 'stat') return {stops: upTo(scene.metrics.length), bare: false};
+  if (scene.kind === 'chart') return {stops: upTo(scene.labels.length), bare: false};
+  if (scene.kind === 'quote') return {stops: upTo(scene.highlights.length), bare: true};
+  if (scene.kind === 'figure') return {stops: upTo(scene.callouts.length), bare: true};
+  // A contrast is made a panel at a time: each stop is one more panel's points.
+  let total = 0;
+  return {stops: scene.panels.map((panel) => (total += panel.points.length)), bare: true};
+};
+
+/** Check an evidence scene's own fields, and return them in the one shape the rest of the code reads. */
+const normalizeEvidence = (scene, beats, where, {errors, warnings, paths, strict}) => {
+  const out = {title: text(scene.title)};
+  const list = (value) => (Array.isArray(value) ? value : []);
+  if (scene.kind === 'stat') {
+    if (!Array.isArray(scene.metrics) || scene.metrics.length < 1 || scene.metrics.length > 4) errors.push(`${where}: a stat scene needs "metrics": one number to set large, or two to four to set side by side.`);
+    out.metrics = list(scene.metrics).map((metric, index) => {
+      const at = `${where} metric ${index + 1}`;
+      const value = typeof metric?.value === 'number' ? String(metric.value) : text(metric?.value);
+      if (!value) errors.push(`${at}: needs "value", the number as it should read ("36", "25,000,000", "94.3").`);
+      if (!text(metric?.label)) errors.push(`${at}: needs "label", what the number counts.`);
+      return {value: value || '', unit: text(metric?.unit), label: text(metric?.label) || '', detail: text(metric?.detail), delta: text(metric?.delta), tone: toneOf(metric?.tone, 'positive', at, errors)};
+    });
+  }
+  if (scene.kind === 'compare') {
+    const authored = Array.isArray(scene.panels) ? scene.panels : [scene.left, scene.right].filter(Boolean);
+    if (authored.length < 2 || authored.length > 3) errors.push(`${where}: a compare scene needs "left" and "right", or "panels" (two or three), each {"label", "tone", "points"}.`);
+    out.panels = authored.map((panel, index) => {
+      const at = `${where} panel ${index + 1}`;
+      if (!text(panel?.label)) errors.push(`${at}: needs "label", the name of what is being weighed.`);
+      const tone = toneOf(panel?.tone, 'neutral', at, errors);
+      if (!Array.isArray(panel?.points) || panel.points.length < 1 || panel.points.length > 4) errors.push(`${at}: needs "points", one to four short lines.`);
+      const points = list(panel?.points).map((point, pointIndex) => {
+        const line = text(typeof point === 'string' ? point : point?.text);
+        if (!line) errors.push(`${at} point ${pointIndex + 1}: must be a line of text, or {"text": "...", "tone": "..."}.`);
+        else if (line.length > 60) warnings.push(`${at} point ${pointIndex + 1}: ${line.length} characters will wrap past two lines; say it in under 60.`);
+        return {text: line || '', tone: typeof point === 'string' ? tone : toneOf(point?.tone, tone, `${at} point ${pointIndex + 1}`, errors)};
+      });
+      return {label: text(panel?.label) || '', tone, points};
+    });
+    out.versus = scene.versus === true;
+  }
+  if (scene.kind === 'chart') {
+    out.chart = scene.chart ?? 'bar';
+    if (!['bar', 'line'].includes(out.chart)) errors.push(`${where}: "chart" must be "bar" or "line".`);
+    out.labels = list(scene.labels).map((label) => String(label));
+    if (out.labels.length < 2 || out.labels.length > 12) errors.push(`${where}: a chart needs "labels", two to twelve of them, one per position along the axis.`);
+    if (new Set(out.labels).size !== out.labels.length) errors.push(`${where}: chart "labels" must be different from each other.`);
+    const authored = Array.isArray(scene.series) ? scene.series : scene.values !== undefined ? [{values: scene.values}] : [];
+    if (authored.length < 1 || authored.length > 4) errors.push(`${where}: a chart needs "values" (one number per label), or "series" (one to four of {"label", "values"}).`);
+    out.series = authored.map((entry, index) => {
+      const at = `${where} series ${index + 1}`;
+      const values = list(entry?.values);
+      if (values.length !== out.labels.length || values.some((value) => typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
+        errors.push(`${at}: "values" must be one number, zero or more, for each of the ${out.labels.length} labels.`);
+      }
+      if (authored.length > 1 && !text(entry?.label)) errors.push(`${at}: with more than one series, each needs a "label" for the legend.`);
+      return {label: text(entry?.label), values};
+    });
+    out.unit = text(scene.unit);
+    out.axis = text(scene.axis);
+    const known = new Set([...out.labels, ...out.series.map((entry) => entry.label).filter(Boolean)]);
+    beats.flatMap((beat) => [beat, ...beat.cues]).forEach((cue) => {
+      if (cue.focus === undefined || cue.focus === null) return;
+      if (!Array.isArray(cue.focus)) errors.push(`${where}: a chart's "focus" is a list of its labels or series: the ones the sentence is about.`);
+      else for (const name of cue.focus) if (!known.has(name)) errors.push(`${where}: "focus" names "${name}", which is not one of the chart's labels or series (${[...known].join(', ')}).`);
+    });
+  }
+  if (scene.kind === 'quote') {
+    out.quote = text(scene.quote) || '';
+    if (!out.quote) errors.push(`${where}: a quote scene needs "quote": the source's words, exactly as it wrote them.`);
+    out.attribution = text(scene.attribution);
+    out.highlights = [];
+    for (const phrase of scene.highlight === undefined ? [] : [scene.highlight].flat()) {
+      const span = typeof phrase === 'string' ? phraseSpan(out.quote, phrase) : null;
+      if (!span) errors.push(`${where}: "highlight" "${phrase}" is not in the quote. Mark words that are there.`);
+      else out.highlights.push(span);
+    }
+  }
+  if (scene.kind === 'figure') {
+    out.image = text(scene.image) || '';
+    if (!out.image) errors.push(`${where}: a figure scene needs "image", the path of the figure in the project.`);
+    else if (!IMAGES.includes(path.extname(out.image).toLowerCase())) errors.push(`${where}: "image" must be one of ${IMAGES.join(', ')}. Export a PDF figure to PNG first.`);
+    else if (strict && !existsSync(path.resolve(paths.dir, out.image))) errors.push(`${where}: image not found: ${path.resolve(paths.dir, out.image)}.`);
+    out.caption = text(scene.caption);
+    if (scene.callouts !== undefined && (!Array.isArray(scene.callouts) || scene.callouts.length > 5)) errors.push(`${where}: "callouts" is a list of up to five {"label", "x", "y"}.`);
+    out.callouts = list(scene.callouts).slice(0, 5).map((callout, index) => {
+      const at = `${where} callout ${index + 1}`;
+      if (!text(callout?.label)) errors.push(`${at}: needs "label", a few words naming what is pointed at.`);
+      for (const axis of ['x', 'y']) {
+        if (typeof callout?.[axis] !== 'number' || callout[axis] < 0 || callout[axis] > 100) errors.push(`${at}: "${axis}" is where it points, as a percentage of the image (0 to 100).`);
+      }
+      const side = callout?.side ?? ((callout?.x ?? 50) < 62 ? 'right' : 'left');
+      if (!SIDES.includes(side)) errors.push(`${at}: "side" is where the label stands from its point: one of ${SIDES.join(', ')}.`);
+      return {label: text(callout?.label) || '', x: callout?.x ?? 50, y: callout?.y ?? 50, side};
+    });
+  }
+  // `show` cannot ask for more parts than there are.
+  const most = errors.length ? null : revealStops({kind: scene.kind, ...out}).stops.at(-1) ?? 0;
+  if (most !== null) {
+    for (const cue of beats.flatMap((beat) => [beat, ...beat.cues])) {
+      if (Number.isInteger(cue.show) && cue.show > most) errors.push(`${where}: "show": ${cue.show} asks for more than the ${most} this scene has.`);
+    }
+  }
+  return out;
+};
+
 /** Load storyboard.json, apply defaults, and report everything wrong with it at once. */
 export const loadStoryboard = (paths, {strict = true} = {}) => {
   let raw;
@@ -203,6 +335,9 @@ export const loadStoryboard = (paths, {strict = true} = {}) => {
         if (scene.kind === 'diagram' && cue.focus !== undefined && cue.focus !== 'all' && !Array.isArray(cue.focus)) {
           errors.push(`${label}: "focus" must be a list of node/edge ids, or "all".`);
         }
+        if (EVIDENCE.includes(scene.kind) && cue.show !== undefined && (!Number.isInteger(cue.show) || cue.show < 0)) {
+          errors.push(`${label}: "show" is how many parts are on screen: a whole number, zero or more.`);
+        }
         return checked;
       };
       Object.assign(out, checkCue(beat, at));
@@ -267,6 +402,7 @@ export const loadStoryboard = (paths, {strict = true} = {}) => {
         });
       }
     }
+    if (EVIDENCE.includes(scene.kind)) Object.assign(normalized, normalizeEvidence(scene, normalized.beats, where, {errors, warnings, paths, strict}));
     if (scene.continues !== undefined) {
       const before = storyboard.scenes.at(-1);
       if (scene.continues !== true && scene.continues !== false) errors.push(`${where}: "continues" must be true or false.`);
@@ -401,7 +537,7 @@ export const buildTimeline = (storyboard, manifest) => {
       };
     });
     const last = scene.beats.at(-1);
-    const end = t - gapAfter(last) + (carriesOut ? CARRY : TAIL) + (last.land ? LAND : 0) + (scene.hold || 0);
+    const end = t - gapAfter(last) + (carriesOut ? CARRY : TAIL + (EVIDENCE.includes(scene.kind) ? LEAVE : 0)) + (last.land ? LAND : 0) + (scene.hold || 0);
     const frames = Math.ceil(end * fps);
     beats.forEach((beat, index) => {
       beat.cue = index === 0 ? 0 : Math.max(0, beat.from - Math.round(ANTICIPATE * fps));
@@ -521,6 +657,24 @@ export const buildSteps = (scene, timed, fps) => {
       if (step.show === null) {
         if (step.at === null) shown = step.beat === scene.beats.length - 1 ? scene.items.length : Math.min(scene.items.length, step.beat + 1);
       } else shown = step.show;
+      step.show = shown;
+    }
+  }
+  if (EVIDENCE.includes(scene.kind)) {
+    // Unless told otherwise, each beat brings the next part and the last beat shows everything. A
+    // contrast, a quote, and a figure start bare when there is a beat to spare, so the frame is
+    // seen whole before anything is pointed out. With fewer beats than parts, the parts are shared out.
+    const {stops, bare} = revealStops(scene);
+    const count = scene.beats.length;
+    const lead = bare && count > stops.length ? 1 : 0;
+    const paced = count - lead;
+    let shown = 0;
+    for (const step of steps) {
+      if (step.show !== null) shown = step.show;
+      else if (step.at === null && stops.length) {
+        const turn = step.beat - lead;
+        shown = step.beat === count - 1 ? stops.at(-1) : turn < 0 ? 0 : stops[Math.min(stops.length - 1, paced < stops.length ? Math.ceil((stops.length * (turn + 1)) / paced) - 1 : turn)];
+      }
       step.show = shown;
     }
   }

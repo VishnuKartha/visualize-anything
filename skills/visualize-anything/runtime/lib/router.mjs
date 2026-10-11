@@ -16,7 +16,12 @@ export const NEEDS = {
   math: {kind: 'manim', family: 'algorithm', says: 'a formula, a growth rate, a plot'},
   trace: {kind: 'trace', family: 'algorithm', says: 'the code running line by line, beside the data it changes'},
   change: {kind: 'hyperframes', family: 'code', says: 'code turning from one version into the next'},
-  data: {kind: 'hyperframes', family: 'frame', says: 'numbers measured or compared: a chart, a count, a benchmark'},
+  data: {kind: 'hyperframes', family: 'frame', says: 'numbers that need a picture designed for them: a composition you write'},
+  number: {kind: 'stat', family: 'frame', says: 'the one number the claim rests on, or a few side by side'},
+  contrast: {kind: 'compare', family: 'frame', says: 'two or three alternatives, each with what it gets right and what it costs'},
+  chart: {kind: 'chart', family: 'frame', says: 'measured values against each other: bars, or a line across rounds'},
+  quote: {kind: 'quote', family: 'frame', says: "the source's own words, when the wording is the evidence"},
+  figure: {kind: 'figure', family: 'frame', says: "the source's own figure, with the parts worth seeing pointed out"},
   structure: {kind: 'diagram', type: 'architecture', family: 'system', says: 'separate components and what connects them'},
   conversation: {kind: 'diagram', type: 'sequence', family: 'system', says: 'ordered messages between components'},
   pipeline: {kind: 'diagram', type: 'dataflow', family: 'system', says: 'data moving through stages and stores'},
@@ -109,7 +114,7 @@ export const cueHits = (text) => {
 
 /** Best guess at a need from position and narration, for scenes that did not declare one. */
 export const suggestNeed = (scene, index, count) => {
-  if (index === 0) return {need: 'question', because: 'first scene'};
+  if (index === 0) return {need: 'motion', because: 'first scene: the opening is always an animation of the hook'};
   const hits = cueHits(narrationOf(scene));
   if (index === count - 1 && (hits.recap || !Object.keys(hits).length)) return {need: 'recap', because: 'last scene'};
   if (scene.file || typeof scene.code === 'string') return {need: 'trace', because: 'the scene quotes source, and code is shown beside what it does'};
@@ -175,7 +180,11 @@ const spokenForms = (word) => {
 
 const starred = (text) => [...String(text || '').matchAll(/\*([^*]+)\*/g)].flatMap((match) => match[1].split(/\s+/)).filter(Boolean);
 
-const HAS_PICTURE = ['manim', 'trace', 'diagram', 'hyperframes'];
+const HAS_PICTURE = ['manim', 'trace', 'diagram', 'hyperframes', 'stat', 'compare', 'chart', 'figure'];
+// What a video that does not open on an animation opens on instead, in words.
+const OPENS_ON = {title: 'words', bullets: 'a list', code: 'bare code', trace: 'code', credit: 'the credit', stat: 'a number card', compare: 'panels', chart: 'a chart', quote: 'a quotation', figure: "the source's figure", diagram: 'a diagram', hyperframes: 'a rendered clip'};
+// Scenes drawn from the storyboard alone, whose parts arrive by `show`.
+const EVIDENCE = ['stat', 'compare', 'chart', 'quote', 'figure'];
 
 const IDENTIFIER = /\b[a-z]+_[a-z0-9_]+\b|\b[a-z]+[A-Z][A-Za-z0-9]*\b|\b[A-Za-z_]\w*\(\)/;
 const sameCue = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -304,6 +313,13 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
       }
     }
 
+    // The hook is shown happening, not stated: the opening is always an animation, with the hook said over it.
+    if (index === 0 && scene.kind !== 'manim') {
+      const what = OPENS_ON[scene.kind] || `a ${scene.kind} scene`;
+      if (overridden) flag('note', `Opens on ${what} rather than an animation: ${scene.override.trim()}`);
+      else flag('error', `The video opens on ${what}. The opening is always an animation: make the first scene a "motion", "branching", or "math" scene, drawn in Manim, that shows the hook happening (the problem going wrong, or the number being counted), and say the hook over it. If nothing about this subject can be animated in its first seconds, say why in "override".`);
+    }
+
     // Code on its own is text to be read, not an explanation. It always comes with a picture of what it does.
     if (scene.kind === 'code') {
       if (overridden) flag('note', `Code shown without a visual: ${scene.override.trim()}`);
@@ -380,13 +396,25 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
       });
     }
 
+    if (EVIDENCE.includes(scene.kind)) {
+      // What a beat leaves on screen is its last word on the matter: its own cue, or its final one.
+      const state = (beat) => [beat, ...(beat.cues || [])].reduce((kept, cue) => ({show: cue.show ?? kept.show, focus: cue.focus ?? kept.focus, note: cue.note ?? kept.note}), {});
+      scene.beats.forEach((beat, beatIndex) => {
+        const before = beatIndex > 0 ? state(scene.beats[beatIndex - 1]) : null;
+        if (before && beat.show !== undefined && !(beat.cues || []).length && sameCue(state(beat), before)) {
+          flag('review', `Beats ${beatIndex} and ${beatIndex + 1} show the same thing. Bring in the next part with "show", light what the sentence is about with "focus", or merge them.`);
+        }
+      });
+      if (scene.kind === 'quote' && scene.quote && scene.quote.split(/\s+/).length > 45) {
+        flag('review', `The quote is ${scene.quote.split(/\s+/).length} words. Past about forty-five it is a paragraph to read, not a line to hear: quote the sentence that carries the claim and say the rest.`);
+      }
+      if (scene.kind === 'chart' && scene.labels && scene.series && scene.labels.length * scene.series.length > 16) {
+        flag('review', `The chart has ${scene.labels.length * scene.series.length} marks. Past sixteen none of them is read; chart the ones the sentence compares and say the rest.`);
+      }
+    }
+
     if (scene.kind === 'title') {
       const hooks = scene.beats.flatMap((beat) => [beat.text, ...(beat.cues || []).map((cue) => cue.text)]).filter(Boolean);
-      // The default opening is the picture, with the hook said over it. A statement is the fallback.
-      if (index === 0 && hooks.length) {
-        if (overridden) flag('note', `Opens on a statement rather than a picture: ${scene.override.trim()}`);
-        else flag('review', 'The video opens on words. Open on the picture instead: make the first scene the one that shows the problem (a "motion" or "trace" scene) and say the hook over it. If nothing about this subject can be shown in its first seconds, keep the statement and say why in "override".');
-      }
       // A question scene shows its statement and nothing else: no title card stands in for one.
       if (!hooks.length) {
         flag('error', `This scene puts nothing on screen for about ${seconds.toFixed(0)}s while the voice talks. Give the first beat a "text": the hook as a short statement, with the *key number or word* starred. The name of what is explained goes in a closing "credit" scene.`);
@@ -418,8 +446,6 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
   // Rules about the sequence as a whole.
   const kinds = scenes.map((scene) => scene.kind);
   const seq = (level, text) => notes.push({level, text});
-  // A video opens on its hook as a statement, or cold on a picture. Text to read is neither.
-  if (kinds[0] === 'bullets' || kinds[0] === 'code') seq('review', `The video opens on a ${kinds[0]} scene. Open on the hook: a statement on screen (a "question" scene), or cold on the most striking picture.`);
   if (count > 2 && !['bullets', 'code', 'trace', 'hyperframes'].includes(kinds[closeIndex])) seq('review', `The video ends on a ${kinds[closeIndex]} scene. Close on a recap or a final look at the code, not a new idea.`);
   for (let i = 2; i < count; i += 1) {
     if (kinds[i] === kinds[i - 1] && kinds[i] === kinds[i - 2] && kinds[i] !== 'manim' && kinds[i] !== 'trace') {
