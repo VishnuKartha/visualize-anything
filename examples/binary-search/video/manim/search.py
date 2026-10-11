@@ -22,9 +22,21 @@ class Race(VAScene):
         scan, scan_label = lane("scan", SAFE_CENTER_Y + 1.25)
         halve, halve_label = lane("halve", SAFE_CENTER_Y - 1.25)
 
-        # Beat 0 — the scan looks at every item until it reaches the target.
+        # Beat 0 — the claim, large, as it is said; then it becomes the heading over the list that proves it.
+        million = Text("1,000,000 items", font=SANS, font_size=72, weight=BOLD, color=TEXT, t2c={"1,000,000": ACCENT}).move_to([0, SAFE_CENTER_Y + 0.65, 0])
+        twenty = Text("20 looks", font=SANS, font_size=72, weight=BOLD, color=TEXT, t2c={"20": ACCENT}).move_to([0, SAFE_CENTER_Y - 0.65, 0])
+        claim = VGroup(million, twenty)
         with self.beat(0) as beat:
+            self.play(FadeIn(million, shift=UP * 0.2), run_time=0.6)
+            beat.until("twenty looks")
+            self.play(FadeIn(twenty, shift=UP * 0.2), run_time=0.5)
+            beat.until("on a list of seven")
+            heading = claim.copy().arrange(RIGHT, buff=0.7, aligned_edge=UP).scale(0.5).move_to([0, SAFE_TOP - 0.3, 0])
+            self.play(Transform(claim, heading), run_time=0.8)
             self.play(FadeIn(scan), FadeIn(scan_label), FadeIn(halve), FadeIn(halve_label), run_time=0.8)
+
+        # Beat 1 — the scan looks at every item until it reaches the target.
+        with self.beat(1) as beat:
             beat.until("check every item")
             count = None
             for i in range(found + 1):
@@ -38,8 +50,8 @@ class Race(VAScene):
             beat.until("six looks")
             self.play(scan.mark(found, SETTLED, 0.3), count.animate.set_color(DISCARDED), run_time=0.5)
 
-        # Beat 1 — halving looks at the middle, drops half, and is done on the second look.
-        with self.beat(1) as beat:
+        # Beat 2 — halving looks at the middle, drops half, and is done on the second look.
+        with self.beat(2) as beat:
             beat.until("checks the middle")
             self.play(halve.mark(3, CURRENT), run_time=0.4)
             count = tally(halve, 1)

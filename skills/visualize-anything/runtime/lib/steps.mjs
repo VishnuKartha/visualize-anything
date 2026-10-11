@@ -850,7 +850,9 @@ export const review = async (paths, {verify} = {}) => {
   );
   out.push('## What the video is for', '');
   out.push(`- Subject: ${routing.subject}${storyboard.brief?.audience ? `; audience: ${storyboard.brief.audience}` : ''}${storyboard.brief?.focus ? `; focus: ${storyboard.brief.focus}` : ''}`);
-  out.push(`- Length: ${fmtSeconds(props.totalFrames / props.fps)}${storyboard.brief?.length ? ` (asked for about ${storyboard.brief.length}s)` : ''}`, '');
+  out.push(`- Length: ${fmtSeconds(props.totalFrames / props.fps)}${storyboard.brief?.length ? ` (asked for about ${storyboard.brief.length}s)` : ''}`);
+  if (storyboard.brief?.hook) out.push(`- The hook it means to open on: ${storyboard.brief.hook.replace(/\*/g, '')}`);
+  out.push('');
   out.push('| # | Starts | Scene | Viewer needs to see | Shown as | Why |', '|---|---|---|---|---|---|');
   props.scenes.forEach((scene, index) => {
     const source = authored.get(scene.id);
@@ -891,7 +893,8 @@ export const review = async (paths, {verify} = {}) => {
       '4. **Continuity.** Does the same object look the same from scene to scene? Does a colour mean one thing throughout?',
       '5. **Choice of picture.** Is each scene the right kind of picture for what the viewer needs to see? Would another kind explain it better?',
       '6. **Narration.** Any sentence that is unclear, assumes a term the audience has not been given, or claims something the picture never shows?',
-      '7. **Story.** Is the viewer shown why this exists before how it works: the obvious approach and what it costs? Where the voice claims a count or a cost, is that number on screen as it adds up? Does anything move that the narration gives no reason for?',
+      '7. **Story.** Do the first ten seconds give a reason to keep watching, in the picture and not only in the words? Is the viewer shown why this exists before how it works: the obvious approach and what it costs? Where the voice claims a count or a cost, is that number on screen as it adds up? Does anything move that the narration gives no reason for?',
+      '8. **Flow.** Read the narration as one piece. Where does it start over instead of following on: a scene that does not pick up from the one before, a term defined after it was needed, a jump the viewer has to make alone?',
       '',
     );
     out.push('## Your report', '');
@@ -935,18 +938,19 @@ export const init = (slug, {dir} = {}) => {
     title: 'Untitled explainer',
     voice: 'en-US-AndrewNeural',
     sourceRoot: path.relative(target, process.cwd()) || '.',
+    brief: {
+      audience: 'Who is watching, and what they already know.',
+      length: 90,
+      focus: 'The one question the video answers.',
+      hook: 'The core of the problem, or the most *surprising* thing about the answer, in one sentence.',
+    },
     scenes: [
       {
-        id: 'intro',
-        need: 'question',
-        why: 'Opening: the hook, on screen while it is said.',
-        beats: [
-          {
-            say: 'Replace this with the hook: the surprising number, the problem, or the failure. Then the turn that makes it a question.',
-            text: 'The hook, in *eight* words or fewer.',
-            cues: [{at: 'Then the turn', text: 'The hook, in *eight* words or fewer.\nThen the *turn*.'}],
-          },
-        ],
+        id: 'open',
+        need: 'motion',
+        why: 'Opening: the picture that shows the problem, with the hook said over it.',
+        class: 'Open',
+        beats: [{say: 'Replace this with the hook, said over the picture that shows it: the most surprising thing, or the problem with the obvious way.'}],
       },
     ],
   });

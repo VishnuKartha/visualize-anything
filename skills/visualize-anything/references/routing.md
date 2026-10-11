@@ -20,7 +20,7 @@ Ask of each scene: **what would the viewer need to see to believe this sentence?
 
 | `need` | The viewer must see | The narration sounds like | Renderer |
 |---|---|---|---|
-| `question` | The hook, as a statement on screen | "When a cache fills up, something has to go." | `title` (see [opening.md](opening.md)) |
+| `question` | The hook as a statement on screen, for a subject with nothing to show in its first seconds | "Retry at once, and you can take down the service you were waiting for." | `title` (the fallback opening; see [opening.md](opening.md)) |
 | `motion` | Data or state changing step by step | "Watch the array", "A jumps to the end", "the tree rebalances" | `manim` |
 | `branching` | Decisions inside one procedure, acting on its data | "First it checks whether..., and if so..." | `manim` |
 | `math` | A formula, a growth rate, a plot | "Each step halves the range", "this grows quadratically" | `manim` |
@@ -62,14 +62,16 @@ VA route <project>
 ```
 
 ```
-Routing: 5 scenes, subject "algorithm", 89s.
-  Brief: for programmers who have used a cache but not built one, about 95s.
-   ok     intro  question     → title                   13s
-   ok     state  trace        → trace                   16s
-   ok     read   trace        → trace                   12s
-   ok     write  trace        → trace                   29s
-   ok     recap  recap        → bullets                 18s
-  Screen time: trace 65%, bullets 20%, title 15%.
+Routing: 6 scenes, subject "algorithm", 104s.
+  Brief: for programmers who have used a cache but not built one, about 95s, focus on how it decides which key to forget.
+  Hook: A full cache has to *forget* a key, and the obvious choice is *wrong*.
+   ok     forget  motion       → manim                   20s
+   ok     state   trace        → trace                   18s
+   ok     read    trace        → trace                   12s
+   ok     write   trace        → trace                   30s
+   ok     recap   recap        → bullets                 18s
+   ok     credit  credit       → credit                   6s
+  Screen time: trace 58%, manim 19%, bullets 17%, credit 6%.
   Every route checks out.
 ```
 
@@ -95,8 +97,10 @@ And across the sequence:
 
 | Check | Why |
 |---|---|
-| Opens on a hook statement or cold on a picture, not on bullets or bare code; closes on a recap or code, with at most a short `credit` after it | Hook first; do not end on a new idea. The name of the source comes last. |
-| The opening has a statement on screen and its narration does not announce the video; the video's title promises a payoff | A static card under a talking voice loses the viewer in the first ten seconds, so the video opens on no title card. See [opening.md](opening.md). |
+| Opens on a picture, or on a statement that says why it is not one; never on bullets or bare code. Closes on a recap or code, with at most a short `credit` after it | The subject is on screen from the first second; do not end on a new idea. The name of the source comes last. |
+| The brief has a hook with a starred word; the opening scene says it; the closing scene returns to it | The hook is the reason to watch. It is chosen first, delivered first, and paid off last. |
+| No scene after the first starts over ("Now let's look at", "Next,", "Moving on") | Each scene picks up where the last stopped. See [opening.md](opening.md), "Make it flow". |
+| The opening's narration does not announce the video; the video's title promises a payoff | "In this video" gives the viewer nothing. See [opening.md](opening.md). |
 | The thumbnail has five words at most, one starred, a picture under them, and does not repeat the title | It is seen about 120 pixels wide, with the title beside it. See [opening.md](opening.md). |
 | No three scenes of the same kind in a row (Manim excepted) | Three code scenes read as a slideshow. Consecutive Manim scenes are one continuing animation. |
 | An identifier named outside a code scene has a code scene next to it | Viewers trust a claim about `move_to_end` once they have seen its line. |
@@ -154,8 +158,8 @@ Use a diagram need when the things being related are separate parts that exist a
 
 | # | Narration (summary) | `need` | Renderer |
 |---|---|---|---|
-| 1 | "When a cache fills up, something has to go" | `question` | `title`, with the hook on screen |
-| 2 | "Two pieces of state: a capacity and an ordered dict" | `trace` | the fields, beside empty slots filling into an ordered row |
+| 1 | "A full cache has to forget a key, and the obvious choice is wrong" | `motion` | the full row, a new key arriving, the first-in key marked and then spared |
+| 2 | "Keeping track of that takes two pieces of state: a capacity and an ordered dict" | `trace` | the fields, beside empty slots filling into an ordered row |
 | 3 | "Reading A: `move_to_end` sends it to the newest end" | `trace` | `get()`, beside A jumping along the row |
 | 4 | "Writing has two decisions: already cached? over capacity?" | `trace` | `put()`, beside the refresh and the eviction |
 | 5 | "Three things to remember" | `recap` | `bullets` |
@@ -167,7 +171,7 @@ The full project is in `examples/lru-cache/` at the root of this repository.
 
 | # | Narration (summary) | `need` | Renderer |
 |---|---|---|---|
-| 1 | "What happens between a click and a rendered dashboard?" | `question` | `title` |
+| 1 | "The same dashboard takes two seconds to load, or twenty milliseconds" | `data` | the two load times side by side, which the rest explains |
 | 2 | "Four pieces: the web app, the API, Redis, and Postgres" | `structure` | `diagram` · `architecture` |
 | 3 | "The API checks the cache, misses, queries the database, writes back" | `conversation` | `diagram` · `sequence` |
 | 4 | "The read-through is these six lines in the handler" | `trace` | the handler, beside the cache filling |

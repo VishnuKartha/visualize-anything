@@ -3,7 +3,9 @@
   "subject": "algorithm",
   "brief": {
     "audience": "programmers who have used a cache but not built one",
-    "length": 95
+    "length": 95,
+    "focus": "how it decides which key to forget",
+    "hook": "A full cache has to *forget* a key, and the obvious choice is *wrong*."
   },
   "voice": "en-US-AndrewNeural",
   "sourceRoot": "..",
@@ -14,22 +16,21 @@
   },
   "scenes": [
     {
-      "id": "intro",
-      "need": "question",
-      "why": "Opening: the problem every cache has, then the promise to show one answer.",
+      "id": "forget",
+      "need": "motion",
+      "why": "Opening: the problem itself. A full row, a fourth key, and the obvious key to drop shown to be the wrong one.",
+      "heading": "a full cache, and one more key",
+      "class": "Forget",
+      "script": "manim/lru.py",
       "beats": [
         {
-          "say": "A cache has limited room, so when it fills up, something has to go.",
-          "text": "A full cache has to *forget* something."
+          "say": "This cache holds three keys, and it is full. To store a fourth, it has to forget one."
         },
         {
-          "say": "A least recently used cache makes that choice in the simplest way that works. It drops whatever you touched longest ago.",
-          "cues": [
-            {
-              "at": "It drops",
-              "text": "A full cache has to *forget* something.\nLRU drops what you touched *longest ago*."
-            }
-          ]
+          "say": "The obvious one to drop is whichever went in first. That is A. But A was read a moment ago."
+        },
+        {
+          "say": "Drop it, and the next request for A misses. The key to forget is the one used longest ago, and that is B."
         }
       ]
     },
@@ -47,7 +48,7 @@
       "script": "manim/lru.py",
       "beats": [
         {
-          "say": "The whole cache is one small class with two pieces of state.",
+          "say": "Keeping track of which key that is takes one small class with two pieces of state.",
           "lines": [
             4,
             5
@@ -61,7 +62,8 @@
           "say": "And an ordered dictionary, which remembers the order its keys were last touched. Oldest at the front, newest at the back.",
           "lines": 9
         }
-      ]
+      ],
+      "continues": false
     },
     {
       "id": "read",

@@ -4,46 +4,30 @@
   "brief": {
     "audience": "programmers meeting the algorithm for the first time",
     "length": 70,
-    "focus": "why halving makes it fast"
+    "focus": "why halving makes it fast",
+    "hook": "A *million* sorted items, searched in *twenty* looks."
   },
   "voice": "en-US-AndrewNeural",
   "sourceRoot": "..",
   "thumbnail": {
     "text": "*1,000,000* items.\n*20* looks.",
     "from": "race",
-    "beat": 2
+    "beat": 3
   },
   "scenes": [
     {
-      "id": "intro",
-      "need": "question",
-      "why": "Opening: a surprising number, then the promise to explain it.",
-      "beats": [
-        {
-          "say": "Finding one value in a sorted list of a million items takes at most twenty comparisons.",
-          "text": "*1,000,000* sorted items.",
-          "cues": [
-            {
-              "at": "at most twenty",
-              "text": "*1,000,000* sorted items.\nAt most *20* comparisons."
-            }
-          ]
-        },
-        {
-          "say": "Here is how eleven lines of Python manage that."
-        }
-      ]
-    },
-    {
       "id": "race",
       "need": "motion",
-      "why": "The claim is that halving needs far fewer looks than scanning. Running both on the same list, with a count, shows it.",
+      "why": "Opening: the claim, then both ways of searching run on the same list with a count, so the claim is something seen.",
       "heading": "two ways to find 57",
       "class": "Race",
       "script": "manim/search.py",
       "beats": [
         {
-          "say": "The obvious way to search is to check every item in turn. Finding 57 here takes six looks."
+          "say": "A sorted list of a million items can be searched in twenty looks. Here is how, on a list of seven."
+        },
+        {
+          "say": "The obvious way is to check every item in turn. Finding 57 takes six looks."
         },
         {
           "say": "Binary search checks the middle, throws half the list away, and gets there in two."
@@ -65,7 +49,7 @@
       "script": "manim/search.py",
       "beats": [
         {
-          "say": "Start with two markers, lo and hi, at the two ends of the sorted list.",
+          "say": "Here is how it knows which half to throw away. Two markers, lo and hi, start at the two ends of the sorted list.",
           "lines": 2
         },
         {
@@ -115,7 +99,7 @@
       "script": "manim/search.py",
       "beats": [
         {
-          "say": "Every pass throws away half of what is left."
+          "say": "Two passes for seven items, because every pass throws away half of what is left."
         },
         {
           "say": "So a list of n items needs about log base two of n passes. For a million items, that is twenty."
@@ -131,7 +115,7 @@
         {
           "text": "The list must already be sorted",
           "from": "race",
-          "beat": 1
+          "beat": 2
         },
         {
           "text": "Each pass halves the range",

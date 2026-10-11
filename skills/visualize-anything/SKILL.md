@@ -21,7 +21,9 @@ The house rules, in [references/taste.md](references/taste.md), shape every vide
 
 - **Code is never shown alone.** Whenever code is on screen, a picture of what it does is beside it (a `trace` scene). The router rejects a scene that is only a code block.
 - **An algorithm is animated, not flowcharted.** Keep one evolving picture of the data for the whole behaviour. Reach for Archify only when the subject is a system made of separate parts.
-- **Open on a hook; end on the picture.** No title card and no link at the start, no slide of bullets at the end. The recap shows each takeaway beside the moment that proved it, and its last line returns to the hook. The name of what was explained comes after that, in a short `credit` scene.
+- **Open on the picture, with the hook said over it.** The hook is the core of the problem, or the most interesting thing about the answer, and it is agreed before anything is written. No title card, no introduction, no link at the start.
+- **Every scene follows on from the one before.** None starts over with "now let's look at".
+- **End on the picture.** No slide of bullets. The recap shows each takeaway beside the moment that proved it, and its last line returns to the hook. The name of what was explained comes after that, in a short `credit` scene.
 - **One picture, carried through.** Scenes that share a picture are marked `continues` and do not fade between each other.
 - **The voice explains.** It does not recite code or pad with filler, and it leaves a moment of quiet after the main point (`land`).
 
@@ -32,7 +34,7 @@ You do not pick renderers directly. You declare what each scene's viewer needs t
 - Continue until `out/video.mp4` exists and you have looked at its frames. If blocked, report the exact blocker.
 - The storyboard's narration is the clock. Never write a visual before `va tts` has told you how long each beat lasts.
 - Every factual claim in the narration must come from code you actually read. Quote real lines with `file` + `range`; do not retype code from memory.
-- The opening is the hook, on screen as it is said: no title card, no pointer to the source. The thumbnail is a hook frame you write (`thumbnail`), and the source is named in the last scene. Read [references/opening.md](references/opening.md) before writing the first scene.
+- The hook is settled with the user before the storyboard, and the video opens on the picture that shows it: no title card, no introduction, no pointer to the source. The thumbnail is a hook frame you write (`thumbnail`), and the source is named in the last scene. Read [references/opening.md](references/opening.md) before the brief.
 - Report honestly: say which checks you ran and which stills you looked at.
 
 ## Setup
@@ -49,7 +51,11 @@ If anything is marked `MISS`, run `va setup` once. It installs the Remotion runt
 
 ### 0. Agree the brief
 
-A full build takes several minutes of rendering, so settle what is being made before starting. From the request, work out and state back in one short message: the subject (which file, function, or system), the audience (what they already know), the length (default 60 to 120 seconds), and the focus (the one question the video answers). If the request leaves any of these open in a way that changes the video, ask; otherwise state your assumption and go on. Record the result as `brief` in the storyboard.
+A full build takes several minutes of rendering, so settle what is being made before starting. From the request, work out and state back in one short message: the subject (which file, function, paper, or system), the audience (what they already know), the length (default 60 to 120 seconds), the focus (the one question the video answers), and the hook.
+
+The hook decides the opening, so it gets more than an assumption. Read enough of the source to answer the four questions in [references/opening.md](references/opening.md) (what goes wrong without this, what someone would try first, what is most surprising about the answer, and for a paper what it made possible), write two or three candidate hooks of different kinds, test each as that file describes, and put them to the user with your recommendation first. Show the recommended one as the opening will be heard: its lines, and the first line of the scene that follows. If the user has said to go straight through, pick the strongest and say which you picked and why.
+
+For the rest: if the request leaves something open in a way that changes the video, ask; otherwise state your assumption and go on. Record the result as `brief` in the storyboard, with the chosen hook as `brief.hook`.
 
 ### 1. Understand
 
@@ -79,7 +85,7 @@ VA check <project>      # the same, plus structure, line ranges, and file paths.
 
 Read the routing report before going further. An `ERROR` blocks every later step: fix the scene, or add an `override` with the reason if the route really is right. A `REVIEW` is advice: act on it or leave it, but do not skip reading it. Rerun `va route` whenever narration or scene order changes.
 
-**Approval gate.** Before synthesizing or rendering anything, show the user the routing table and the narration, scene by scene, and wait for a go-ahead or changes. Changing a sentence now costs nothing; changing it after the render costs the render. Skip the gate only if the user has said to go straight through.
+**Approval gate.** Before synthesizing or rendering anything, read the whole narration through as one piece and fix every join where a scene starts over instead of following on. Then show the user the routing table and the narration, scene by scene, and wait for a go-ahead or changes. Changing a sentence now costs nothing; changing it after the render costs the render. Skip the gate only if the user has said to go straight through.
 
 ### 3. TTS
 

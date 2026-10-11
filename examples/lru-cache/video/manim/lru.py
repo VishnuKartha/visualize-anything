@@ -72,6 +72,48 @@ def recolor(item, color: str, fill: float = 0.14):
     return item[0].animate.set_stroke(color).set_fill(color, fill)
 
 
+class Forget(VAScene):
+    """The opening: a full cache, a fourth key, and the obvious key to drop turning out to be the wrong one."""
+
+    def construct(self):
+        a, b, c = placed("ABC")
+        limit = status("capacity = 3")
+        d = entry("D", AMBER).move_to([slot_x(2) + SLOT_W + GAP + 0.6, ROW_Y, 0])
+
+        def under(index: int, text: str):
+            return Text(text, font=SANS, font_size=36, color=ROSE).move_to([slot_x(index), RULER_Y, 0])
+
+        with self.beat(0) as beat:
+            self.play(LaggedStart(*(FadeIn(item, shift=UP * 0.3) for item in (a, b, c)), lag_ratio=0.2), FadeIn(limit), run_time=0.9)
+            beat.until("it is full")
+            self.play(limit.animate.set_color(AMBER), run_time=0.4)
+            beat.until("a fourth")
+            self.play(FadeIn(d, shift=LEFT * 0.4), run_time=0.6)
+
+        # The obvious victim is the first one in. But it is also the one that was just used.
+        first = under(0, "went in first")
+        read = Text("just read", font=MONO, font_size=36, color=CYAN).next_to(a, UP, buff=0.3)
+        with self.beat(1) as beat:
+            beat.until("whichever went in first")
+            self.play(FadeIn(first, shift=UP * 0.15), recolor(a, ROSE, 0.2), run_time=0.6)
+            beat.until("read a moment ago")
+            self.play(FadeIn(read, shift=DOWN * 0.2), recolor(a, CYAN, 0.2), first.animate.set_color(MUTED), run_time=0.6)
+
+        # Dropping it would cost a miss. The one to drop is the one nobody has touched.
+        miss = Text("get('A'): miss", font=MONO, font_size=36, color=ROSE).move_to([0, RULER_Y - 0.85, 0])
+        longest = under(1, "used longest ago")
+        with self.beat(2) as beat:
+            beat.until("misses")
+            self.play(FadeIn(miss, shift=UP * 0.15), run_time=0.5)
+            beat.until("used longest ago")
+            self.play(FadeOut(miss), FadeOut(first), FadeOut(read), recolor(a, ACCENT), run_time=0.5)
+            self.play(FadeIn(longest, shift=UP * 0.15), recolor(b, ROSE, 0.2), run_time=0.6)
+            beat.until("that is B")
+            self.play(b.animate.shift(DOWN * 0.8).set_opacity(0), FadeOut(longest), run_time=0.5)
+            self.remove(b)
+            self.play(*settle([a, c, d], 3), recolor(d, ACCENT), limit.animate.set_color(MUTED), run_time=0.8)
+
+
 class State(VAScene):
     """What the class stores: a size limit, and a row that keeps its order."""
 

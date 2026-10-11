@@ -6,7 +6,9 @@ These are decisions about taste. Each one came from watching a video this skill 
 |---|---|---|
 | Code is never shown alone | A block of code is text to read, not an explanation | `va route` (blocks) |
 | An algorithm is animated, not flowcharted | The branch is part of the behaviour; show it acting on the data | `va route` (blocks) |
-| Open on a hook; no title card, no link | The first ten seconds decide whether the rest is watched | `va route` (blocks an opening with nothing on screen) |
+| Open on the picture, with the hook said over it | The first ten seconds decide whether the rest is watched, and words on a card are not the subject | `va route` |
+| The hook is agreed before the storyboard | It is the core of the problem or the most interesting part; everything else is arranged around it | `va route` (it is in the brief, said in the opening, returned to at the end) |
+| Every scene follows on from the one before | A hook followed by a video that starts again is two videos | `va route` (scenes that start over), the reviewer |
 | The title promises a payoff | "Introduction to X" gives no reason to click | `va route` |
 | The thumbnail is five words and one picture | It is seen 120 pixels wide, beside the title | `va route`, and you: look at `thumbnail-small.png` |
 | The source is named last | The viewer who has just understood something is the one who wants its name | `va route` (placement and length) |
@@ -51,7 +53,7 @@ The recap is not a slide of text. Each takeaway is shown beside the moment that 
 
 ## Return to the hook
 
-Whatever the opening starred, the last scene says again. If the hook was `*1,000,000* items. At most *20* comparisons.`, the closing line is "And that is why a million items take only about twenty passes." The viewer was promised an explanation of that number; ending on it tells them they got one.
+Whatever the hook starred, the last scene says again. If the hook was `A *million* sorted items, searched in *twenty* looks.`, the closing line is "And that is why a million items take only about twenty passes." The viewer was promised an explanation of that number; ending on it tells them they got one.
 
 ## Name the source last
 

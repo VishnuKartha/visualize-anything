@@ -1,54 +1,146 @@
 # The opening
 
-The first ten seconds decide whether the rest is watched. A title card that fades in and sits there while a voice talks is the weakest way to spend them, so the video has none. An opening here does two things: it gives the viewer a reason to care, and it puts that reason on screen in a few large words. The opening does not say what the video is called or link to what it explains: the thumbnail and the page it is posted on do the first, and the last scene does the second.
+The first ten seconds decide whether the rest is watched. The channels people learn from spend them the same way: no title, no introduction, the subject already on screen and the most interesting thing about it already being said. An opening here does that. It finds the hook before anything is written, says it over the picture that shows it, and runs straight on into the explanation.
 
-## The shape
+## Find the hook
 
-A `question` scene is the hook, on screen as a large statement while the narration delivers it.
+The hook is the core of the problem the subject solves, or the most interesting thing about how it solves it. It is settled before the storyboard, with the user, and recorded in the brief.
 
-- Give the beat a `text`. A cue brings in a second line on the words that deliver the turn.
-- A beat without `text` leaves the statement standing. Nothing replaces it: the scene ends and the first picture begins.
-- Keep it to one or two beats, about ten seconds. The explanation starts in the next scene.
+Answer these from the source, in writing, before choosing:
+
+1. **What goes wrong without this?** The problem it exists to solve, as something concrete: what breaks, what is slow, what could not be done.
+2. **What would someone try first, and where does that lose?** The obvious approach and its cost.
+3. **What is the most surprising true thing about the answer?** A number, a reversal, something small doing something large.
+4. **For a paper: what could nobody do before it, and what one idea made it possible?**
+
+A hook is one sentence made from the strongest of those answers.
+
+| Kind | The hook | Open on |
+|---|---|---|
+| A surprising number | "A sorted list of a million items can be searched in twenty looks." | Both ways of searching, run on the same list, each with its count |
+| A problem with no obvious answer | "A full cache has to forget a key, and the obvious choice is wrong." | The full row, the new key arriving, the obvious victim marked |
+| A failure | "This function is right on every input you will try, and wrong on one you won't." | The input that breaks it, running |
+| A contrast | "The same query takes four seconds, or four milliseconds." | Both, side by side, with a clock |
+| Something the viewer relies on | "The second time you load a page, something has remembered it." | The request going out twice, and the second one stopping short |
+| What a paper made possible | "Before this, a model read a sentence one word at a time. After it, all at once." | The old way crawling along the sentence, then the new way lighting every word |
+
+Test each candidate. First, that it is sound:
+
+- **It is true, and it comes from the source.** A hook that overstates is worse than none.
+- **It is one sentence, sayable in a breath.**
+- **It can be shown.** If no picture could be on screen while it is said, it is a claim about the subject, not the subject.
+- **It is about the problem or the idea.** Not the video ("In this video..."), not the subject's name, not a definition.
+
+Then, from the seat of the viewer named in the brief. A hook fails in one of four ways:
+
+| It fails by | The test |
+|---|---|
+| Delay | Do they know what this is about within two seconds? "This is surprising..." says nothing yet; "A sorted list of a million items..." does. |
+| Confusion | Is every word one they already have? A term the video has not introduced cannot be in its first sentence. |
+| Irrelevance | Would they recognise it as theirs: a problem they have met, a thing they use, a question they have had? |
+| Indifference | Is there a turn in it: what they would expect, and then what is true instead? |
+
+A hook can pass all of that and still be weak, because the shape is right and what it carries is not. Two last checks on what it carries:
+
+- **It is specific.** "Binary search is efficient" has the shape of a claim and nothing in it. "A million items, twenty looks" is the same claim with something to picture. Prefer the number, the named failure, the particular case.
+- **The turn is real.** Not the word "but" between two things that do not conflict. A real turn is one of these: what you would expect against what happens; the visible cause against the actual one; the obvious approach against the one that works.
+
+A candidate that fails two or more of these is rewritten before it is offered.
+
+Write two or three candidates of different kinds and put them to the user along with the brief, your recommendation first. Show the recommended one as it will be heard, not as a slogan: the opening scene's lines, and the first line of the scene after it. The hand-off into the explanation is part of what is being chosen. Record the one chosen, with the word or number it turns on starred:
+
+```json
+"brief": {
+  "audience": "programmers meeting the algorithm for the first time",
+  "length": 70,
+  "focus": "why halving makes it fast",
+  "hook": "A *million* sorted items, searched in *twenty* looks."
+}
+```
+
+`va route` holds the video to it: the opening scene has to say a starred word, and the closing scene has to come back to one.
+
+## Open on the picture
+
+The first scene is a picture scene (`motion`, `trace`, `data`), and the hook is its first sentence.
+
+```json
+{
+  "id": "race",
+  "need": "motion",
+  "why": "Opening: the claim, then both ways of searching run on the same list with a count.",
+  "class": "Race",
+  "script": "manim/search.py",
+  "beats": [
+    {"say": "A sorted list of a million items can be searched in twenty looks. Here is how, on a list of seven."},
+    {"say": "The obvious way is to check every item in turn. Finding 57 takes six looks."},
+    {"say": "Binary search checks the middle, throws half the list away, and gets there in two."}
+  ]
+}
+```
+
+The first twenty seconds have four jobs, in this order:
+
+| Job | What the viewer gets | Binary search | LRU cache |
+|---|---|---|---|
+| Context | What this is about, at once | "A sorted list of a million items..." | "This cache holds three keys, and it is full." |
+| Recognition | Why it is theirs | "...can be searched in twenty looks." | "To store a fourth, it has to forget one." |
+| The turn | What they expected, against what is true | Six looks by scanning, two by halving | "The obvious one to drop is whichever went in first. But A was read a moment ago." |
+| The promise | What staying will give them | "Here is how, on a list of seven." | "The key to forget is the one used longest ago." |
+
+The promise is what the next scene's first line picks up. An opening with no promise ends, and the video has to start again.
+
+- **The hook comes first.** If it needs setting up, the setup is one sentence, in the same beat. A definition, a history, or "what is a cache" is not setup; it is the introduction this opening does not have.
+- **Something is on screen within two seconds and moving within five.** The voice does not talk over an empty frame.
+- **The hook's number or word is in the picture**, as a label or a count, when it is said.
+- **It is the video's own picture.** Same data, same drawing helpers, same colours as the scenes after it. Nothing drawn for the opening is thrown away: the list the race ran on is the list the code is traced on.
+- **Ten to twenty seconds.** It makes the claim and shows why it is worth explaining. The explaining starts in the next scene.
+- **No announcement.** "In this video we will look at...", "Today we are going to...", "Let's explore..." give the viewer nothing. The router flags these.
+
+The obvious approach losing (see [story.md](story.md)) is very often the right opening picture: it is the problem, shown.
+
+## Make it flow
+
+A strong hook followed by a video that starts again from the beginning is two videos. The opening has to run on into the explanation, and every scene into the next.
+
+- **The opening leaves one question open. The second scene's first sentence starts answering it.** Write the question down. After "a million items in twenty looks", it is "how does it know which half to throw away?", so the next scene begins there, not with "Binary search is an algorithm that...".
+- **Each scene's first sentence leans on the last sentence of the scene before.** The test is the word that would join them. "But" and "so" mean one follows from the other. If the only word that fits is "next" or "also", a reason is missing or a scene is in the wrong place.
+- **No scene starts over.** "Now let's look at...", "Next, ...", "Moving on", "First, let's..." tell the viewer a new section is beginning, which tells them the last one did not lead anywhere. The router flags these.
+- **A term arrives with the thing it names.** Say "lo and hi" as the two markers appear, not a sentence earlier. Never define something before the viewer has a reason to want the word.
+- **The picture carries over.** Where two scenes show the same thing, the second is marked `continues` and starts on the frame the first ended on ([taste.md](taste.md)).
+- **Read the whole narration aloud as one piece**, scene breaks removed, before showing it to the user. Wherever you would have to pause and say "anyway", the join is wrong.
+
+| Last line of a scene | A first line that starts over | A first line that follows on |
+|---|---|---|
+| "...and gets there in two." | "Now let's look at the code." | "Here is how it knows which half to throw away." |
+| "...and the next request for A misses." | "An LRU cache is a data structure that..." | "So the key to forget is the one used longest ago." |
+| "...moves a key to the newest end." | "Next, the put method." | "Writing does the same, and then has one more thing to check." |
+
+## When there is no picture: a statement
+
+Some subjects have nothing to show in their first seconds: a naming convention, a configuration format, a policy. Then the hook goes on screen as words: a `question` scene, with an `override` saying why the video does not open on a picture.
 
 ```json
 {
   "id": "intro",
   "need": "question",
-  "why": "Opening: a surprising number, then the promise to explain it.",
+  "why": "Opening: the failure, as a statement.",
+  "override": "The subject is a retry policy: there is nothing to draw until the first request has failed.",
   "beats": [
     {
-      "say": "Finding one value in a sorted list of a million items takes at most twenty comparisons.",
-      "text": "*1,000,000* sorted items.",
-      "cues": [{"at": "at most twenty", "text": "*1,000,000* sorted items.\nAt most *20* comparisons."}]
-    },
-    {"say": "Here is how eleven lines of Python manage that."}
+      "say": "Retry a failed request at once, and you can take down the service you were waiting for.",
+      "text": "Retry at once.",
+      "cues": [{"at": "take down", "text": "Retry at once.\nTake down the *service*."}]
+    }
   ]
 }
 ```
 
-What the scene does with that, without being asked: words rise in as they are spoken, starred numbers count up to their value, a statement that extends the previous one keeps its first line in place, the code the video is about drifts faintly behind, and the frame pushes in slowly so it is never still.
+- Give the beat a `text`: the hook as a headline, eight words a line at most, with the one thing to remember starred. Starred numbers count up.
+- A cue brings in a second line on the words that deliver the turn. A beat without `text` leaves the statement standing.
+- One or two beats, about ten seconds. A `question` scene with no `text` puts nothing on screen, which the router treats as an error.
 
-## Writing the hook
-
-The hook is the first sentence of narration and the `text` that goes with it. Pick the kind that fits the subject:
-
-| Kind | Narration | `text` |
-|---|---|---|
-| A surprising number | "Finding one value in a million takes at most twenty comparisons." | `*1,000,000* items. At most *20* comparisons.` |
-| A problem with no obvious answer | "A cache has limited room, so when it fills up, something has to go." | `A full cache has to *forget* something.` |
-| A failure | "This function is correct on every input you will try, and wrong on one you won't." | `Correct on every test. *Wrong* in production.` |
-| A contrast | "The naive version takes four seconds. This one takes four milliseconds." | `4 seconds. Then *4 milliseconds*.` |
-| A question the viewer has had | "Why does adding an index make the same query a thousand times faster?" | `Same query. *1,000×* faster. Why?` |
-| Something the viewer already relies on | "A page that took two seconds to load takes twenty milliseconds the second time, because something remembered it." | `2 seconds. Then *20 milliseconds*.` |
-
-Rules for the `text`:
-
-- **Eight words a line at most.** It is read at a glance while the voice says the full sentence. It is a headline for the narration, not a transcript of it.
-- **Star the one thing to remember**, usually the number: `*20* comparisons`. Starred words are set in the accent colour; starred numbers count up.
-- **Use a second line for the turn**, brought in by a cue on the words that deliver it: the setup lands first, the payoff second.
-- **Every number must be true and come from the code or its behaviour.** A hook that overstates is worse than none.
-
-Do not open by announcing the video. "In this video we will look at...", "Today we are going to...", "Let's explore..." give the viewer nothing. The router flags these.
+Without the `override`, the router asks why the video opens on words.
 
 ## The thumbnail
 
@@ -64,7 +156,7 @@ The thumbnail is the hook frame: a few very large words above one picture from t
 - **Do not repeat the title.** Wherever the video is listed, the title is already next to the thumbnail.
 - **Two things in the frame**: the words and the picture. There is no kicker, no subtitle, and no logo to add.
 
-Leave `thumbnail` out and the hook statement is used as it stands at the end of the opening, with no picture. That is rarely short enough, and the router says so.
+Leave `thumbnail` out and the router says so: with nothing else to go on, the thumbnail would only repeat the title.
 
 `va render` writes `out/thumbnail.png` and `out/thumbnail-small.png`. Look at the small one: it is the size viewers see. If a word cannot be read there, cut words until it can.
 
@@ -85,9 +177,3 @@ The top-level `title` is the video's name where it is posted. It is not shown in
 The name of the thing explained (the function, the file, the paper) is a different thing from the video's title. It is shown at the very end, by a `credit` scene; see [taste.md](taste.md).
 
 `va route` checks all of this: a genre title, a subject-only title, a title that is too long, a `question` scene with nothing on screen (an error), hook lines that are too long or have nothing starred, narration that opens with an announcement, and a thumbnail with too many words, nothing starred, no picture, or the title repeated.
-
-## Opening cold
-
-When the most striking thing about the subject is a picture, show it first: open on one short scene (a `motion` or `trace` scene of ten seconds or so) whose first sentence is the hook. A `question` scene can follow as the statement that names what was just seen, or be left out altogether; give the storyboard a `thumbnail` either way.
-
-Use this sparingly. It works when the picture is self-explanatory within a few seconds, such as two approaches racing on the same input. If the picture needs the narration to make sense, the hook statement is the better opening.

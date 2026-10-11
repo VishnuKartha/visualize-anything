@@ -130,7 +130,7 @@ export const resolveRoute = (scene) => {
 };
 
 // Openings that tell the viewer a video is starting instead of giving them a reason to watch it.
-const ANNOUNCEMENT = /^\s*(in this (video|tutorial|explainer)|today,? (we|i)|let'?s|welcome|hi\b|hello|hey\b|this (video|tutorial) |we(?:'re| are| will|'ll) (going to|look|explore|learn)|i(?:'m| am| will|'ll) (going to|show|explain))/i;
+const ANNOUNCEMENT = /^\s*(in this (video|tutorial|explainer)|today,? (we|i)|let'?s|welcome|hi\b|hello|hey\b|here (is|are) (some|a few|\w+ (tips|things|ways))|this (video|tutorial) |we(?:'re| are| will|'ll) (going to|look|explore|learn)|i(?:'m| am| will|'ll) (going to|show|explain))/i;
 
 /** What is weak about a title, if anything. A title should promise a specific payoff in a few words. */
 export const weakTitle = (raw) => {
@@ -148,6 +148,9 @@ export const weakTitle = (raw) => {
   if (words.length > 9) problems.push(`The title is ${words.length} words. Past nine it stops reading as a title; say less.`);
   return problems;
 };
+
+// A scene that starts over instead of following on: the words that announce a new section.
+const RESTART = /^\s*(now,?\s+(let'?s|we|that)|next,?\s|moving on|okay,?\s|alright,?\s|(so,?\s+)?(first,?\s+)?let'?s\s+(now\s+)?(look|take|see|move|turn|dive|explore|talk|walk|go|start|begin)|in this (section|part|scene)|we(?:'ll| will) now|with that (out of the way|in mind))/i;
 
 // Words that pad a sentence or talk down to the viewer. Narration is better without every one of them.
 const FILLER = [
@@ -337,6 +340,11 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
 
     if (scene.kind === 'title') {
       const hooks = scene.beats.flatMap((beat) => [beat.text, ...(beat.cues || []).map((cue) => cue.text)]).filter(Boolean);
+      // The default opening is the picture, with the hook said over it. A statement is the fallback.
+      if (index === 0 && hooks.length) {
+        if (overridden) flag('note', `Opens on a statement rather than a picture: ${scene.override.trim()}`);
+        else flag('review', 'The video opens on words. Open on the picture instead: make the first scene the one that shows the problem (a "motion" or "trace" scene) and say the hook over it. If nothing about this subject can be shown in its first seconds, keep the statement and say why in "override".');
+      }
       // A question scene shows its statement and nothing else: no title card stands in for one.
       if (!hooks.length) {
         flag('error', `This scene puts nothing on screen for about ${seconds.toFixed(0)}s while the voice talks. Give the first beat a "text": the hook as a short statement, with the *key number or word* starred. The name of what is explained goes in a closing "credit" scene.`);
@@ -353,6 +361,9 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
     }
     // However the video opens, on a statement or cold on a picture, its first words are the hook.
     const firstWords = scene.beats[0]?.say || '';
+    if (index > 0 && scene.kind !== 'credit' && RESTART.test(firstWords)) {
+      flag('review', `This scene starts over ("${firstWords.split(/\s+/).slice(0, 4).join(' ')}..."). It should pick up where "${scenes[index - 1].id}" stopped: answer the question that scene left open, or turn on "but" or "so".`);
+    }
     if (index === 0 && ANNOUNCEMENT.test(firstWords)) {
       flag('review', `The narration opens by announcing the video ("${firstWords.split(/\s+/).slice(0, 5).join(' ')}..."). Open on the hook itself: the surprising number, the failure, or the question.`);
     }
@@ -384,15 +395,25 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
   if (subject === 'system' && !kinds.includes('diagram')) seq('review', 'A system video with no diagram never shows how the parts connect. Add an architecture or sequence scene.');
   if (!kinds.includes('code') && !kinds.includes('trace') && !scenes.some((scene) => scene.need === 'change')) seq('review', 'No code scene. An explainer about code should show the real lines at least once.');
 
+  // The hook is settled before the storyboard: the core of the problem, or the most interesting thing about the answer.
+  const agreedHook = typeof storyboard.brief?.hook === 'string' ? storyboard.brief.hook.trim() : '';
+  const spokenIn = (scene) => new Set(scene.beats.flatMap((beat) => beat.say.toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ')));
+  const saysAny = (scene, words) => words.some((word) => spokenForms(word).some((form) => spokenIn(scene).has(form)));
+  const quoted = (words) => [...new Set(words)].map((word) => `"${word}"`).join(', ');
+  if (count > 2 && !agreedHook) {
+    seq('review', 'No hook in the brief. Before writing scenes, settle the one sentence that makes someone want the answer: the core of the problem this solves, or the most surprising thing about how it solves it. Record it as "brief": {"hook": "...", with the *key word or number* starred}.');
+  } else if (agreedHook) {
+    if (!starred(agreedHook).length) seq('review', 'No word in the brief\'s hook is starred. Star the number or word it turns on: the opening has to say it and the ending has to come back to it.');
+    else if (!saysAny(scenes[0], starred(agreedHook))) {
+      seq('review', `The opening scene never says the hook: none of ${quoted(starred(agreedHook))} is spoken in "${scenes[0].id}". The first sentences are for the hook; the setup comes after it.`);
+    }
+  }
+
   // The ending should cash in what the opening promised.
   const opening = scenes.find((scene) => scene.kind === 'title');
-  if (opening && count > 2) {
-    const promised = opening.beats.flatMap((beat) => [beat.text, ...(beat.cues || []).map((cue) => cue.text)]).flatMap(starred);
-    const closing = new Set(scenes[closeIndex].beats.flatMap((beat) => beat.say.toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ')));
-    const paid = promised.some((word) => spokenForms(word).some((form) => closing.has(form)));
-    if (promised.length && !paid) {
-      seq('review', `The opening stars ${[...new Set(promised)].map((word) => `"${word}"`).join(', ')}, but the closing scene never comes back to it. End by returning to the hook: the same number, the same word.`);
-    }
+  const promised = [...(opening ? opening.beats.flatMap((beat) => [beat.text, ...(beat.cues || []).map((cue) => cue.text)]).flatMap(starred) : []), ...starred(agreedHook)];
+  if (promised.length && count > 2 && !saysAny(scenes[closeIndex], promised)) {
+    seq('review', `The hook stars ${quoted(promised)}, but the closing scene never comes back to it. End by returning to the hook: the same number, the same word.`);
   }
   if (count > 2 && !scenes.some((scene) => scene.beats.some((beat) => beat.land))) {
     seq('review', 'No beat is marked to land. Find the moment the main point resolves and give that beat "land": true; the voice waits a moment longer there so it can sink in.');
@@ -406,6 +427,9 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
   const thumbnail = storyboard.thumbnail || null;
   const hookText = opening?.beats.flatMap((beat) => [beat.text, ...(beat.cues || []).map((cue) => cue.text)]).filter(Boolean).at(-1);
   const coverText = thumbnail?.text || hookText;
+  if (!coverText && count > 2) {
+    seq('review', 'No thumbnail. Give the storyboard a "thumbnail": {"text": "five words at most, *one* starred", "from": "<the scene with the most striking picture>"}; without one the thumbnail only repeats the title.');
+  }
   if (coverText && plainWords(coverText).length > 5) {
     seq('review', thumbnail?.text
       ? `The thumbnail text is ${plainWords(coverText).length} words. At the size a thumbnail is seen, five is the most that can be read: keep the number or the word that makes the claim, and drop the rest.`
@@ -435,8 +459,9 @@ export const formatRouting = (report) => {
   const mark = {ok: ' ok   ', review: 'REVIEW', error: 'ERROR '};
   lines.push(`Routing: ${report.rows.length} scenes, subject "${report.subject}"${report.declaredSubject ? '' : ' (guessed)'}, ${report.timed ? '' : 'about '}${report.total.toFixed(0)}s.`);
   if (report.brief) {
-    const {audience, length, focus} = report.brief;
+    const {audience, length, focus, hook} = report.brief;
     lines.push(`  Brief: ${[audience && `for ${audience}`, length && `about ${length}s`, focus && `focus on ${focus}`].filter(Boolean).join(', ') || '(empty)'}.`);
+    if (hook) lines.push(`  Hook: ${hook}`);
   }
   const width = Math.max(...report.rows.map((row) => row.id.length));
   for (const row of report.rows) {

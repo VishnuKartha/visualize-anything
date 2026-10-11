@@ -58,8 +58,14 @@ test('need supplies kind and diagram type; explicit fields win', () => {
 const THUMBNAIL = {text: 'A full cache *forgets*.', from: 'order'};
 const CREDIT = scene('credit', 'credit', ['That is LRUCache, in lru.py.'], {title: 'LRUCache', subtitle: 'lru.py'});
 
+// The default shape: the picture first with the hook said over it, the code after, the name last.
+const OPEN = scene('open', 'motion', ['A full cache has to forget a key, and the entry that went in first is the wrong one to drop.', 'The entry used longest ago shifts out instead.']);
+const HOOK = {hook: 'A full cache has to *forget* a key, and the obvious choice is *wrong*.'};
+
 test('a well-routed algorithm video has no errors and nothing to review', () => {
-  const report = analyzeRouting(board('algorithm', [...LRU, CREDIT], {title: 'How an LRU cache decides what to forget', thumbnail: THUMBNAIL}));
+  const report = analyzeRouting(
+    board('algorithm', [OPEN, LRU[1], LRU[3], LRU[4], CREDIT], {title: 'How an LRU cache decides what to forget', brief: HOOK, thumbnail: {...THUMBNAIL, from: 'open'}}),
+  );
   assert.equal(report.errors, 0, texts(report.rows.flatMap((entry) => entry.reasons)));
   assert.equal(report.reviews, 0, texts([...report.rows.flatMap((entry) => entry.reasons), ...report.notes]));
 });
@@ -235,11 +241,13 @@ test('weak titles and announcing openings are flagged; strong ones pass', () => 
 
 test('a video may open cold on a picture with no title scene at all, but not on bullets or an announcement', () => {
   const cold = analyzeRouting(board('algorithm', [LRU[2], LRU[1], LRU[3], LRU[4]]));
-  assert.doesNotMatch(texts(cold.notes), /title|opens on/i);
+  assert.doesNotMatch(texts(cold.notes), /no title|opens on/i);
   const slide = analyzeRouting(board('algorithm', [LRU[4], LRU[1], LRU[2], LRU[4]]));
   assert.match(texts(slide.notes), /opens on a bullets scene/);
   const announced = {...LRU[2], beats: [{...LRU[2].beats[0], say: 'In this video we will look at how reading a key counts as a use.'}, ...LRU[2].beats.slice(1)]};
   assert.match(texts(row(analyzeRouting(board('algorithm', [announced, LRU[1], LRU[3], LRU[4]])), announced.id).reasons), /announcing the video/);
+  const listed = {...LRU[2], beats: [{...LRU[2].beats[0], say: 'Here are three things every cache has to get right when it fills up.'}, ...LRU[2].beats.slice(1)]};
+  assert.match(texts(row(analyzeRouting(board('algorithm', [listed, LRU[1], LRU[3], LRU[4]])), listed.id).reasons), /announcing the video/);
 });
 
 test('narration that recites code or pads is flagged', () => {
@@ -308,4 +316,38 @@ test('a recap is asked to show the moment behind each takeaway', () => {
   assert.match(texts(row(plain, 'recap').reasons), /show the moment that proved it/);
   const shown = analyzeRouting(board('algorithm', [LRU[0], LRU[1], LRU[2], LRU[3], recap([{text: 'Order lives in one dictionary', from: 'state'}, 'Reads move a key to the end'])]));
   assert.doesNotMatch(texts(row(shown, 'recap').reasons), /show the moment that proved it/);
+});
+
+test('the hook is agreed first, said in the opening, and returned to at the end', () => {
+  const notes = (scenes, brief) => texts(analyzeRouting(board('algorithm', scenes, brief ? {brief} : {})).notes);
+  const cold = [OPEN, LRU[1], LRU[3], LRU[4]];
+  assert.match(notes(cold), /No hook in the brief/);
+  assert.match(notes(cold, {hook: 'A full cache has to forget a key.'}), /No word in the brief's hook is starred/);
+  assert.doesNotMatch(notes(cold, HOOK), /hook/i);
+  // An opening that sets up before it hooks.
+  assert.match(notes([LRU[2], LRU[1], LRU[3], LRU[4]], HOOK), /opening scene never says the hook: none of "forget", "wrong" is spoken in "order"/);
+  // An ending that does not come back.
+  const flat = scene('recap', 'recap', ['So, three things to remember about this cache.', 'Every read moves a key to the newest end.']);
+  assert.match(notes([OPEN, LRU[1], LRU[3], flat], HOOK), /closing scene never comes back/);
+});
+
+test('opening on words is the fallback, and says why', () => {
+  const reasons = (intro) => row(analyzeRouting(board('algorithm', [intro, ...LRU.slice(1)])), 'intro');
+  assert.match(texts(reasons(LRU[0]).reasons), /opens on words/);
+  const excused = reasons({...LRU[0], override: 'A naming convention: there is nothing to show until the names are on screen.'});
+  assert.equal(excused.status, 'ok');
+  assert.match(texts(excused.reasons), /Opens on a statement rather than a picture/);
+  // Second, after a cold open, a statement is not the opening.
+  assert.doesNotMatch(texts(row(analyzeRouting(board('algorithm', [OPEN, LRU[0], LRU[1], LRU[4]])), 'intro').reasons), /opens on words/);
+});
+
+test('a scene that starts over instead of following on is flagged', () => {
+  const restart = (say) => {
+    const next = scene('get', 'trace', [say, 'A hit calls move to end, the line behind the jump.'], {file: 'lru.py', class: 'Read'});
+    return texts(row(analyzeRouting(board('algorithm', [OPEN, next, LRU[4]])), 'get').reasons);
+  };
+  assert.match(restart("Now let's look at how a read works in the code."), /starts over .* pick up where "open" stopped/);
+  assert.match(restart('Next, the read path and what it returns for a missing key.'), /starts over/);
+  assert.doesNotMatch(restart('But a read has to count as a use, and one line makes it so.'), /starts over/);
+  assert.doesNotMatch(restart('So the cache needs to know which key was used longest ago.'), /starts over/);
 });

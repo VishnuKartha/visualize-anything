@@ -9,7 +9,7 @@ One file describes the whole video. Scenes play in order. Each scene has beats; 
 | `title` | `"Untitled"` | The video's name where it is posted. Not shown in the video. See [opening.md](opening.md). |
 | `thumbnail` | the hook | `{"text": "...", "from": "<scene id>", "beat": n}`: five words at most, one starred, above the named scene frozen at the end of that beat. See [opening.md](opening.md). |
 | `subject` | guessed | `algorithm`, `system`, or `mixed`. Decides which renderers belong in the video; see [routing.md](routing.md). |
-| `brief` | none | What was agreed with the user: `{"audience": "...", "length": 90, "focus": "..."}`. `length` is in seconds; the router compares the video against it. |
+| `brief` | none | What was agreed with the user: `{"audience": "...", "length": 90, "focus": "...", "hook": "..."}`. `length` is in seconds; the router compares the video against it. `hook` is the one sentence the video opens on, with the word or number it turns on starred; the router checks that the opening says it and the ending returns to it. See [opening.md](opening.md). |
 | `voice` | `"en-US-AndrewNeural"` | Any edge-tts voice. List them with `uv run --with edge-tts edge-tts --list-voices`. |
 | `rate`, `pitch` | `"+0%"`, `"+0Hz"` | edge-tts prosody, e.g. `"+8%"` for a brisker read. |
 | `sourceRoot` | `"."` | Base for code `file` paths, relative to the project directory. `va init` sets it to the directory you ran it from. |
