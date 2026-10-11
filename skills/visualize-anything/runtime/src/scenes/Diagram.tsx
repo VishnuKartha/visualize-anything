@@ -40,7 +40,7 @@ const planStates = (scene: DiagramScene): State[] => {
   const seenNodes = new Set<string>(scene.build ? [] : nodeIds);
   const seenEdges = new Set<string>(scene.build ? [] : edgeIds);
 
-  return scene.beats.map((beat) => {
+  return scene.steps.map((beat) => {
     const focus = beat.focus;
     let litNodes: Set<string>;
     let litEdges: Set<string>;
@@ -149,7 +149,7 @@ export const DiagramView: React.FC<{scene: DiagramScene}> = ({scene}) => {
     const found = handles.current;
     if (!found || states.length === 0) return;
 
-    const index = beatAt(scene.beats, frame);
+    const index = beatAt(scene.steps, frame);
     const to = states[index];
     // Before the first beat nothing has been introduced yet; the scene builds from empty.
     const from: State =
@@ -160,7 +160,7 @@ export const DiagramView: React.FC<{scene: DiagramScene}> = ({scene}) => {
             nodes: Object.fromEntries(Object.keys(to.nodes).map((id) => [id, {vis: 0, lit: to.nodes[id].lit}])),
             edges: Object.fromEntries(Object.keys(to.edges).map((id) => [id, {vis: 0, lit: to.edges[id].lit}])),
           };
-    const start = scene.beats[index].cue;
+    const start = scene.steps[index].cue;
     const p = ramp(frame, start, 18);
     const camera = ramp(frame, start, 26);
     const opacityOf = (a: Level, b: Level) => lerp(a.vis, b.vis, p) * lerp(DIM, 1, lerp(a.lit, b.lit, p));

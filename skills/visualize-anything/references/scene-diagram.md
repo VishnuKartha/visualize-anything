@@ -64,6 +64,10 @@ Each beat's `focus` is a list of node ids and edge ids:
 
 A newly introduced solid edge draws itself from source to target. Dashed edges fade in.
 
+A beat with no `focus` of its own follows the narration: each node is lit when its label is spoken, and nodes named later in the same sentence join it. Name nodes by their exact labels and most beats need no `focus` at all (`va stills` prints what was derived).
+
+To set the focus by hand while a sentence is still being spoken, add `cues` to the beat (`{"at": "then the database", "focus": ["db"]}`); see [storyboard.md](storyboard.md).
+
 Pacing: each beat's window is printed by `va tts`. A focus change needs about a second to settle, so a beat shorter than 2.5 seconds should not introduce more than one or two new parts.
 
 ## Example

@@ -1,0 +1,63 @@
+<!--
+  Starter for an authored HyperFrames scene. Copy it to <project>/html/<scene-id>.html and point
+  the scene's "composition" at it. `va hyperframes` puts gsap.min.js, va.css, va.js, and the
+  fonts beside it, sets the root's data-duration to the scene's length, and defines window.__VA.
+
+  Rules the renderer depends on:
+    - One root element with data-composition-id, data-start="0", data-width, data-height.
+    - One GSAP timeline, created paused, handed over with VA.register(tl). Nothing else may move:
+      no CSS transitions or animations, no setTimeout, no requestAnimationFrame, no Math.random.
+    - Times are seconds from the start of the scene. Take them from the narration:
+      VA.beats[i].start (the beat's window opens), VA.beats[i].speech (its first word),
+      VA.at("a spoken phrase").
+    - Keep content between y = 110 and y = 900. The scene heading sits above and captions below.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <link rel="stylesheet" href="va.css" />
+    <script src="gsap.min.js"></script>
+    <script src="va.js"></script>
+    <style>
+      #root { position: relative; width: 1920px; height: 1080px; font-family: var(--va-sans); color: var(--va-text); }
+      .row { position: absolute; left: 260px; display: flex; align-items: center; gap: 28px; }
+      .label { width: 320px; font-size: 40px; font-weight: 600; text-align: right; color: var(--va-muted); }
+      .bar { height: 70px; border-radius: 12px; transform-origin: left center; }
+      .value { font-family: var(--va-mono); font-size: 40px; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="comparison" data-start="0" data-width="1920" data-height="1080">
+      <div class="va-backdrop" data-layout-ignore></div>
+      <div class="row" id="first" style="top: 360px" data-layout-ignore>
+        <div class="label">linear scan</div>
+        <div class="bar" id="first-bar" style="width: 1000px; background: var(--va-rose)"></div>
+        <div class="value" id="first-value">0</div>
+      </div>
+      <div class="row" id="second" style="top: 540px" data-layout-ignore>
+        <div class="label">binary search</div>
+        <div class="bar" id="second-bar" style="width: 20px; background: var(--va-accent)"></div>
+        <div class="value" id="second-value">0</div>
+      </div>
+    </div>
+    <script>
+      var tl = gsap.timeline({ paused: true });
+      var counts = { first: 0, second: 0 };
+      var show = function () {
+        document.getElementById("first-value").textContent = Math.round(counts.first).toLocaleString("en-US");
+        document.getElementById("second-value").textContent = Math.round(counts.second).toLocaleString("en-US");
+      };
+      // Each row arrives on the words that name its number.
+      var first = VA.at("a million"), second = VA.at("twenty");
+      tl.from("#first", { opacity: 0, duration: 0.4 }, VA.beats[0].start);
+      tl.from("#first-bar", { scaleX: 0, duration: 1.2, ease: "power2.out" }, first);
+      tl.to(counts, { first: 1000000, duration: 1.2, ease: "power2.out", onUpdate: show }, first);
+      tl.from("#second", { opacity: 0, duration: 0.4 }, VA.beats[1].start);
+      tl.from("#second-bar", { scaleX: 0, duration: 0.5, ease: "power2.out" }, second);
+      tl.to(counts, { second: 20, duration: 0.5, ease: "power2.out", onUpdate: show }, second);
+      VA.register(tl);
+    </script>
+  </body>
+</html>

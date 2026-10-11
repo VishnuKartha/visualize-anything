@@ -1,0 +1,290 @@
+<!--
+  Code-change scene for visualize-anything, rendered by HyperFrames.
+
+  One version of a piece of code turns into the next, either token by token ("morph") or line by
+  line ("diff"), at moments chosen by the narration. Everything that varies arrives in
+  window.__VA, written into this file by `va hyperframes`.
+
+  The technique follows the code-animation engine of the HyperFrames registry (Apache-2.0,
+  https://github.com/heygen-com/hyperframes) and Shiki Magic Move (MIT): tokens carry keys that
+  persist across versions, positions are measured once after fonts load, and the motion is a
+  paused GSAP timeline that the renderer seeks frame by frame.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Code change</title>
+    <script src="gsap.min.js"></script>
+    <script>
+      window.__VA = /*__VA__*/ null;
+    </script>
+    <style>
+      @font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url("fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 500; src: url("fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 600; src: url("fonts/jetbrains-mono-latin-600-normal.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 700; src: url("fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2"); }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; }
+      #root { position: relative; width: 1920px; height: 1080px; font-family: "JetBrains Mono", monospace; }
+      /* The same backdrop the Remotion scenes sit on, so the cut between renderers does not show. */
+      .backdrop { position: absolute; inset: 0; }
+      .panel { position: absolute; border-radius: 22px; overflow: hidden; box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55); }
+      .header { height: 58px; display: flex; align-items: center; gap: 12px; padding: 0 26px; background: #0e172a; }
+      .dot { width: 14px; height: 14px; border-radius: 7px; opacity: 0.85; }
+      .name { margin-left: 18px; font-size: 22px; font-weight: 500; }
+      .lang { margin-left: auto; font-size: 18px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+      .surface { position: absolute; left: 0; right: 0; top: 58px; bottom: 0; }
+      .layer { position: absolute; left: 0; right: 0; top: 26px; bottom: 26px; }
+      .code { position: relative; }
+      .line { white-space: pre; padding-left: 34px; }
+      /* Only a diff clips its lines (they open and close); a morph's tokens must be free to leave theirs. */
+      .line.clipped { overflow: hidden; }
+      .tok { display: inline-block; white-space: pre; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="__VA_ID__" data-start="0" data-duration="__VA_DURATION__" data-width="1920" data-height="1080">
+      <div class="backdrop" id="backdrop" data-layout-ignore></div>
+      <div class="panel" id="panel" data-layout-ignore>
+        <div class="header" id="header">
+          <span class="dot" id="dot-r"></span><span class="dot" id="dot-y"></span><span class="dot" id="dot-g"></span>
+          <span class="name" id="name"></span>
+          <span class="lang" id="lang"></span>
+        </div>
+        <div class="surface" id="surface"></div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        "use strict";
+        var VA = window.__VA;
+        var theme = VA.theme;
+
+        // ---- static look -------------------------------------------------------------------
+        var GRID = 64;
+        var backdrop = document.getElementById("backdrop");
+        backdrop.style.backgroundColor = theme.bg;
+        backdrop.style.backgroundImage = [
+          "radial-gradient(1200px 700px at 12% -10%, " + theme.accent + "14, transparent 70%)",
+          "radial-gradient(1000px 700px at 100% 110%, " + theme.violet + "12, transparent 70%)",
+          "linear-gradient(" + theme.grid + " 1px, transparent 1px)",
+          "linear-gradient(90deg, " + theme.grid + " 1px, transparent 1px)",
+        ].join(",");
+        backdrop.style.backgroundSize = "100% 100%, 100% 100%, " + GRID + "px " + GRID + "px, " + GRID + "px " + GRID + "px";
+
+        var panel = document.getElementById("panel");
+        panel.style.left = VA.panel.x + "px";
+        panel.style.top = VA.panel.y + "px";
+        panel.style.width = VA.panel.w + "px";
+        panel.style.height = VA.panel.h + "px";
+        panel.style.background = theme.panel;
+        panel.style.border = "1px solid " + theme.panelBorder;
+        document.getElementById("header").style.borderBottom = "1px solid " + theme.panelBorder;
+        document.getElementById("dot-r").style.background = theme.rose;
+        document.getElementById("dot-y").style.background = theme.amber;
+        document.getElementById("dot-g").style.background = theme.accent;
+        var name = document.getElementById("name");
+        name.textContent = VA.title;
+        name.style.color = theme.muted;
+        var lang = document.getElementById("lang");
+        lang.textContent = VA.lang;
+        lang.style.color = theme.dim;
+
+        var surface = document.getElementById("surface");
+        var LINE = VA.lineHeight;
+
+        // ---- building blocks ---------------------------------------------------------------
+        function makeLayer() {
+          var layer = document.createElement("div");
+          layer.className = "layer";
+          var code = document.createElement("div");
+          code.className = "code";
+          code.style.fontSize = VA.fontSize + "px";
+          code.style.lineHeight = LINE + "px";
+          layer.appendChild(code);
+          surface.appendChild(layer);
+          return { layer: layer, code: code };
+        }
+
+        function lineDiv() {
+          var line = document.createElement("div");
+          line.className = "line";
+          line.style.height = LINE + "px";
+          return line;
+        }
+
+        function tokenSpan(token) {
+          var span = document.createElement("span");
+          span.className = "tok";
+          span.textContent = token.content;
+          span.style.color = token.color || theme.text;
+          if (token.fontStyle & 1) span.style.fontStyle = "italic";
+          if (token.fontStyle & 2) span.style.fontWeight = "700";
+          return span;
+        }
+
+        // Lay one version out as lines of token spans; returns each keyed token's element.
+        function renderState(code, tokens) {
+          code.textContent = "";
+          var byKey = new Map();
+          var line = lineDiv();
+          code.appendChild(line);
+          for (var i = 0; i < tokens.length; i++) {
+            var token = tokens[i];
+            if (token.content === "\n") {
+              line = lineDiv();
+              code.appendChild(line);
+              continue;
+            }
+            var span = tokenSpan(token);
+            line.appendChild(span);
+            byKey.set(token.key, span);
+          }
+          return byKey;
+        }
+
+        function positions(byKey) {
+          var out = new Map();
+          byKey.forEach(function (element, key) {
+            var rect = element.getBoundingClientRect();
+            out.set(key, { left: rect.left, top: rect.top });
+          });
+          return out;
+        }
+
+        function splitLines(tokens) {
+          var lines = [{ text: "", tokens: [] }];
+          for (var i = 0; i < tokens.length; i++) {
+            if (tokens[i].content === "\n") {
+              lines.push({ text: "", tokens: [] });
+              continue;
+            }
+            lines[lines.length - 1].tokens.push(tokens[i]);
+            lines[lines.length - 1].text += tokens[i].content;
+          }
+          while (lines.length > 1 && lines[lines.length - 1].tokens.length === 0) lines.pop();
+          return lines;
+        }
+
+        // Longest-common-subsequence line diff: which lines stay, go, and arrive.
+        function lineDiff(a, b) {
+          var n = a.length, m = b.length, table = [], i, j;
+          for (i = 0; i <= n; i++) table.push(new Array(m + 1).fill(0));
+          for (i = n - 1; i >= 0; i--) {
+            for (j = m - 1; j >= 0; j--) {
+              table[i][j] = a[i].text === b[j].text ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+            }
+          }
+          var ops = [];
+          i = 0; j = 0;
+          while (i < n && j < m) {
+            if (a[i].text === b[j].text) { ops.push({ type: "same", line: b[j] }); i++; j++; }
+            else if (table[i + 1][j] >= table[i][j + 1]) { ops.push({ type: "del", line: a[i] }); i++; }
+            else { ops.push({ type: "add", line: b[j] }); j++; }
+          }
+          while (i < n) ops.push({ type: "del", line: a[i++] });
+          while (j < m) ops.push({ type: "add", line: b[j++] });
+          return ops;
+        }
+
+        // ---- the two effects ---------------------------------------------------------------
+        // Morph: tokens that survive glide to their new place; the rest fade out or in.
+        function morph(code, change, span) {
+          var seg = gsap.timeline();
+          var fromEls = renderState(code, change.from);
+          var fromAt = positions(fromEls);
+          var toEls = renderState(code, change.to);
+          var toAt = positions(toEls);
+          var origin = code.getBoundingClientRect();
+          toEls.forEach(function (element, key) {
+            var was = fromAt.get(key), is = toAt.get(key);
+            if (was) {
+              seg.fromTo(element, { x: was.left - is.left, y: was.top - is.top }, { x: 0, y: 0, duration: span, ease: "power2.inOut" }, 0);
+            } else {
+              seg.fromTo(element, { opacity: 0 }, { opacity: 1, duration: span * 0.5, ease: "power1.out" }, span * 0.45);
+            }
+          });
+          for (var i = 0; i < change.from.length; i++) {
+            var token = change.from[i];
+            if (token.content === "\n" || toEls.has(token.key) || !fromAt.has(token.key)) continue;
+            var at = fromAt.get(token.key);
+            var ghost = tokenSpan(token);
+            ghost.style.position = "absolute";
+            ghost.style.left = at.left - origin.left + "px";
+            ghost.style.top = at.top - origin.top + "px";
+            code.appendChild(ghost);
+            seg.fromTo(ghost, { opacity: 1 }, { opacity: 0, duration: span * 0.5, ease: "power1.in" }, 0);
+          }
+          return seg;
+        }
+
+        // Diff: removed lines are marked, then close up; added lines open in their place.
+        function diff(code, change, span) {
+          var seg = gsap.timeline();
+          var ops = lineDiff(splitLines(change.from), splitLines(change.to));
+          var mark = span * 0.3, move = span * 0.45;
+          code.textContent = "";
+          ops.forEach(function (op) {
+            var line = lineDiv();
+            line.className = "line clipped";
+            op.line.tokens.forEach(function (token) { line.appendChild(tokenSpan(token)); });
+            code.appendChild(line);
+            if (op.type === "del") {
+              seg.fromTo(line, { backgroundColor: theme.rose + "00", boxShadow: "inset 5px 0 0 " + theme.rose + "00" },
+                { backgroundColor: theme.rose + "2e", boxShadow: "inset 5px 0 0 " + theme.rose, duration: mark, ease: "power1.out" }, 0);
+              seg.to(line, { height: 0, opacity: 0, duration: move, ease: "power2.inOut" }, mark + span * 0.1);
+            } else if (op.type === "add") {
+              seg.fromTo(line, { height: 0, opacity: 0, backgroundColor: theme.accent + "2e", boxShadow: "inset 5px 0 0 " + theme.accent },
+                { height: LINE, opacity: 1, duration: move, ease: "power2.inOut" }, mark + span * 0.1);
+              // The tint lingers so the eye can find what is new, then lets go.
+              seg.to(line, { backgroundColor: theme.accent + "00", boxShadow: "inset 5px 0 0 " + theme.accent + "00", duration: 0.5, ease: "power1.in" }, span + 0.9);
+            }
+          });
+          return seg;
+        }
+
+        // ---- assemble ----------------------------------------------------------------------
+        function build(tl) {
+          if (!VA.changes.length) {
+            renderState(makeLayer().code, VA.initial);
+            return;
+          }
+          // One layer per change. A layer rests in its "before" state until its moment, so the
+          // hand-over from the previous layer (which has just reached that same state) is invisible.
+          var previous = null;
+          VA.changes.forEach(function (change, index) {
+            var made = makeLayer();
+            var next = VA.changes[index + 1];
+            var room = (next ? next.at : VA.duration) - change.at;
+            var span = Math.max(0.35, Math.min(VA.effect === "diff" ? 1.3 : 1.1, room * 0.8));
+            var seg = VA.effect === "diff" ? diff(made.code, change, span) : morph(made.code, change, span);
+            tl.set(made.layer, { autoAlpha: index === 0 ? 1 : 0 }, 0);
+            if (previous) {
+              tl.set(previous, { autoAlpha: 0 }, change.at);
+              tl.set(made.layer, { autoAlpha: 1 }, change.at);
+            }
+            tl.add(seg, change.at);
+            previous = made.layer;
+          });
+        }
+
+        function go() {
+          window.__timelines = window.__timelines || {};
+          var tl = gsap.timeline({ paused: true });
+          // Positions are only final once the fonts are in; register the timeline after it is built.
+          document.fonts.ready.then(function () {
+            build(tl);
+            tl.to({}, { duration: VA.duration }, 0);
+            window.__timelines[VA.id] = tl;
+            if (typeof window.__hfForceTimelineRebind === "function") window.__hfForceTimelineRebind();
+          });
+        }
+
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go);
+        else go();
+      })();
+    </script>
+  </body>
+</html>

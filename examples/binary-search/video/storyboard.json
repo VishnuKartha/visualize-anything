@@ -1,0 +1,172 @@
+{
+  "title": "Why binary search needs so few steps",
+  "subject": "algorithm",
+  "brief": {
+    "audience": "programmers meeting the algorithm for the first time",
+    "length": 70,
+    "focus": "why halving makes it fast"
+  },
+  "voice": "en-US-AndrewNeural",
+  "sourceRoot": "..",
+  "thumbnail": {
+    "text": "*1,000,000* items.\n*20* looks.",
+    "from": "race",
+    "beat": 2
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "need": "question",
+      "why": "Opening: a surprising number, then the promise to explain it.",
+      "beats": [
+        {
+          "say": "Finding one value in a sorted list of a million items takes at most twenty comparisons.",
+          "text": "*1,000,000* sorted items.",
+          "cues": [
+            {
+              "at": "at most twenty",
+              "text": "*1,000,000* sorted items.\nAt most *20* comparisons."
+            }
+          ]
+        },
+        {
+          "say": "Here is how eleven lines of Python manage that."
+        }
+      ]
+    },
+    {
+      "id": "race",
+      "need": "motion",
+      "why": "The claim is that halving needs far fewer looks than scanning. Running both on the same list, with a count, shows it.",
+      "heading": "two ways to find 57",
+      "class": "Race",
+      "script": "manim/search.py",
+      "beats": [
+        {
+          "say": "The obvious way to search is to check every item in turn. Finding 57 here takes six looks."
+        },
+        {
+          "say": "Binary search checks the middle, throws half the list away, and gets there in two."
+        }
+      ]
+    },
+    {
+      "id": "walk",
+      "need": "trace",
+      "why": "The loop is the algorithm: show each line next to what it does to the search range.",
+      "continues": false,
+      "heading": "binary_search.py · one search, line by line",
+      "file": "src/binary_search.py",
+      "range": [
+        1,
+        11
+      ],
+      "class": "Search",
+      "script": "manim/search.py",
+      "beats": [
+        {
+          "say": "Start with two markers, lo and hi, at the two ends of the sorted list.",
+          "lines": 2
+        },
+        {
+          "say": "Each time around the loop, look at the middle item.",
+          "lines": 3,
+          "cues": [
+            {
+              "at": "look at the middle",
+              "lines": 4
+            }
+          ]
+        },
+        {
+          "say": "23 is less than 57, so everything from the middle down is ruled out, and lo jumps past it.",
+          "lines": 7,
+          "cues": [
+            {
+              "at": "lo jumps",
+              "lines": 8
+            }
+          ]
+        },
+        {
+          "say": "Second pass. The middle is now 57, which is the target, so we return its index.",
+          "lines": 4,
+          "cues": [
+            {
+              "at": "which is the target",
+              "lines": 5
+            },
+            {
+              "at": "return its index",
+              "lines": 6
+            }
+          ],
+          "land": true
+        }
+      ]
+    },
+    {
+      "id": "cost",
+      "need": "math",
+      "why": "The speed claim is a formula; show the halving that produces it.",
+      "continues": false,
+      "heading": "why it is fast",
+      "class": "Halving",
+      "script": "manim/search.py",
+      "beats": [
+        {
+          "say": "Every pass throws away half of what is left."
+        },
+        {
+          "say": "So a list of n items needs about log base two of n passes. For a million items, that is twenty."
+        }
+      ]
+    },
+    {
+      "id": "recap",
+      "need": "recap",
+      "why": "Recap: the precondition, the mechanism, the cost.",
+      "title": "What to remember",
+      "items": [
+        {
+          "text": "The list must already be sorted",
+          "from": "race",
+          "beat": 1
+        },
+        {
+          "text": "Each pass halves the range",
+          "from": "walk",
+          "beat": 3
+        },
+        {
+          "text": "About log₂ n passes: twenty for a million items",
+          "from": "cost"
+        }
+      ],
+      "beats": [
+        {
+          "say": "Three things to remember. The list has to be sorted first."
+        },
+        {
+          "say": "Each pass halves the range."
+        },
+        {
+          "say": "And that is why a million items take only about twenty passes."
+        }
+      ]
+    },
+    {
+      "id": "credit",
+      "need": "credit",
+      "why": "Close: name the function and the file, for anyone who wants to read it.",
+      "kicker": "The code",
+      "title": "binary_search",
+      "subtitle": "binary_search.py · eleven lines of Python",
+      "beats": [
+        {
+          "say": "That is binary_search: eleven lines of Python."
+        }
+      ]
+    }
+  ]
+}

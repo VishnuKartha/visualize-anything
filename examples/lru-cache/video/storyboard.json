@@ -1,35 +1,50 @@
 {
   "title": "How an LRU cache decides what to forget",
   "subject": "algorithm",
+  "brief": {
+    "audience": "programmers who have used a cache but not built one",
+    "length": 95
+  },
   "voice": "en-US-AndrewNeural",
   "sourceRoot": "..",
+  "thumbnail": {
+    "text": "Cache full.\nWhat gets *forgotten*?",
+    "from": "write",
+    "beat": 4
+  },
   "scenes": [
     {
       "id": "intro",
       "need": "question",
-      "why": "Opening: state the question before showing any code.",
-      "kicker": "Code explainer",
-      "title": "How an LRU cache decides what to forget",
-      "subtitle": "Twenty lines of Python and one ordered dictionary.",
+      "why": "Opening: the problem every cache has, then the promise to show one answer.",
       "beats": [
         {
-          "say": "A cache has limited room, so when it fills up, something has to go."
+          "say": "A cache has limited room, so when it fills up, something has to go.",
+          "text": "A full cache has to *forget* something."
         },
         {
-          "say": "A least recently used cache makes that choice in the simplest way that works. It drops whatever you touched longest ago."
+          "say": "A least recently used cache makes that choice in the simplest way that works. It drops whatever you touched longest ago.",
+          "cues": [
+            {
+              "at": "It drops",
+              "text": "A full cache has to *forget* something.\nLRU drops what you touched *longest ago*."
+            }
+          ]
         }
       ]
     },
     {
       "id": "state",
-      "need": "source",
-      "why": "The claim is about what the code literally stores, so show the real lines.",
-      "heading": "lru_cache.py · state",
+      "need": "trace",
+      "why": "The two fields only mean something once you see them: a size limit, and a row that keeps its order.",
+      "heading": "lru_cache.py · what it stores",
       "file": "src/lru_cache.py",
       "range": [
         4,
         9
       ],
+      "class": "State",
+      "script": "manim/lru.py",
       "beats": [
         {
           "say": "The whole cache is one small class with two pieces of state.",
@@ -40,114 +55,86 @@
         },
         {
           "say": "A capacity, which is how many entries it may hold.",
-          "lines": 8,
-          "note": "how many entries fit"
+          "lines": 8
         },
         {
           "say": "And an ordered dictionary, which remembers the order its keys were last touched. Oldest at the front, newest at the back.",
-          "lines": 9,
-          "note": "order of use is the whole trick"
+          "lines": 9
         }
       ]
     },
     {
-      "id": "order",
-      "need": "motion",
-      "why": "Entries change position over time; motion shows reordering and eviction better than any still.",
-      "heading": "what the ordered dict is doing",
-      "class": "Reorder",
-      "beats": [
-        {
-          "say": "Picture that dictionary as a row of slots. The left end is the oldest entry, and the right end is the newest."
-        },
-        {
-          "say": "Reading a key, say A, counts as a use. So A jumps to the newest end, and the others shift down."
-        },
-        {
-          "say": "Now we add a fourth entry, D. It goes in at the newest end, and the cache is over capacity."
-        },
-        {
-          "say": "So the entry at the oldest end, B, is evicted. Not the first one we inserted, but the one we have ignored the longest."
-        }
-      ],
-      "script": "manim/lru.py"
-    },
-    {
-      "id": "get",
-      "need": "source",
-      "why": "Tie the animation back to the exact line that causes the jump.",
+      "id": "read",
+      "need": "trace",
+      "why": "One line of get() reorders the row; showing the line and the jump together makes the link.",
+      "continues": true,
       "heading": "lru_cache.py · get",
       "file": "src/lru_cache.py",
       "range": [
         11,
         15
       ],
+      "class": "Get",
+      "script": "manim/lru.py",
       "beats": [
         {
-          "say": "Here is that read in code. A missing key just returns nothing.",
-          "lines": [
-            12,
-            13
-          ]
+          "say": "Reading a key counts as a use. Say we ask for A.",
+          "lines": 11
         },
         {
-          "say": "A hit calls move to end. That one line is the jump you just saw.",
-          "caption": "A hit calls move_to_end. That one line is the jump you just saw.",
-          "lines": 14,
-          "note": "the jump to the newest end"
+          "say": "A is cached, so move_to_end sends it to the newest end, and the others shift down."
+        },
+        {
+          "say": "Then its value is returned.",
+          "lines": 15
         }
       ]
     },
     {
       "id": "write",
-      "need": "branching",
-      "why": "put() is still the algorithm at work: the same row of slots, now driven by two decisions. Continuing the animation keeps one picture for the whole behaviour.",
-      "heading": "what put() does",
-      "script": "manim/lru.py",
-      "class": "WritePath",
-      "beats": [
-        {
-          "say": "Writing has two decisions in it. First, is this key already cached?"
-        },
-        {
-          "say": "A is, so we mark it as newest, exactly like a read, and store the new value."
-        },
-        {
-          "say": "Second decision. Did that push us over capacity? Three entries, capacity three, so nothing is evicted."
-        },
-        {
-          "say": "But write a key the cache has never seen, and the row grows to four."
-        },
-        {
-          "say": "Now the check fails, so we pop the oldest end, and we are back within our limit."
-        }
-      ]
-    },
-    {
-      "id": "put",
-      "need": "source",
-      "why": "Close the loop: the two decisions in the animation are these two if-statements.",
+      "need": "trace",
+      "why": "put() is two decisions; each one is a line of code and a visible effect on the same row.",
+      "continues": true,
       "heading": "lru_cache.py · put",
       "file": "src/lru_cache.py",
       "range": [
         17,
-        22
+        23
       ],
+      "class": "Put",
+      "script": "manim/lru.py",
       "beats": [
         {
-          "say": "And here are those same two decisions as code. Refresh the key if we already have it.",
-          "lines": [
-            18,
-            19
+          "say": "Writing has two decisions in it. First, is this key already cached?",
+          "lines": 18
+        },
+        {
+          "say": "B is, so it is refreshed, exactly like a read, and the new value is stored.",
+          "lines": 19,
+          "cues": [
+            {
+              "at": "the new value is stored",
+              "lines": 20
+            }
           ]
         },
         {
-          "say": "Then store, check the size, and evict from the front.",
-          "lines": [
-            20,
-            22
-          ],
-          "note": "last=False means the oldest end"
+          "say": "Second decision. Did that push us over capacity? Three entries, capacity three, so nothing is evicted.",
+          "lines": 21
+        },
+        {
+          "say": "But write a key the cache has never seen, and the row grows to four.",
+          "lines": 20,
+          "cues": [
+            {
+              "at": "grows to four",
+              "lines": 21
+            }
+          ]
+        },
+        {
+          "say": "Now the check fails, so popitem drops the oldest end, and we are back within our limit.",
+          "land": true
         }
       ]
     },
@@ -157,9 +144,24 @@
       "why": "Recap: three claims the viewer should leave with.",
       "title": "What to remember",
       "items": [
-        "Order of use lives in one ordered dictionary",
-        "Every read and write moves a key to the newest end",
-        "Over capacity? Drop the oldest end"
+        {
+          "text": "Order of use lives in one ordered dictionary",
+          "from": "state"
+        },
+        {
+          "text": "Every read and write moves a key to the newest end",
+          "from": "read",
+          "beat": 2
+        },
+        {
+          "text": "Over capacity? Drop the oldest end",
+          "from": "write",
+          "beat": 4
+        },
+        {
+          "text": "That is how it decides what to forget",
+          "from": "write"
+        }
       ],
       "beats": [
         {
@@ -169,7 +171,27 @@
           "say": "Every read and every write moves a key to the newest end."
         },
         {
-          "say": "And when the cache is over capacity, it drops the oldest end. That is all least recently used means."
+          "say": "And when the cache is over capacity, it drops the oldest end. That is how it decides what to forget.",
+          "show": 3,
+          "cues": [
+            {
+              "at": "That is how",
+              "show": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "credit",
+      "need": "credit",
+      "why": "Close: name the class and the file, for anyone who wants to read it.",
+      "kicker": "The code",
+      "title": "LRUCache",
+      "subtitle": "lru_cache.py · twenty lines of Python",
+      "beats": [
+        {
+          "say": "That is LRUCache: twenty lines, in lru_cache.py."
         }
       ]
     }

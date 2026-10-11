@@ -1,12 +1,16 @@
 import {Audio} from '@remotion/media';
 import type React from 'react';
+import {useMemo} from 'react';
 import {AbsoluteFill, Sequence, interpolate, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {Captions} from './Captions';
 import {BulletsView} from './scenes/Bullets';
+import {CreditView} from './scenes/Credit';
 import {CodeView} from './scenes/Code';
 import {DiagramView} from './scenes/Diagram';
-import {ManimView} from './scenes/Manim';
+import {HyperframesView, ManimView} from './scenes/Manim';
 import {TitleView} from './scenes/Title';
+import {TraceView} from './scenes/Trace';
+import {StageContext} from './StageContext';
 import {MONO, STAGE, theme} from './theme';
 import type {ExplainerProps, Scene} from './types';
 
@@ -27,33 +31,41 @@ const Backdrop: React.FC = () => (
   />
 );
 
-const View: React.FC<{scene: Scene}> = ({scene}) => {
+export const View: React.FC<{scene: Scene}> = ({scene}) => {
   switch (scene.kind) {
     case 'title':
       return <TitleView scene={scene} />;
+    case 'credit':
+      return <CreditView scene={scene} />;
     case 'bullets':
       return <BulletsView scene={scene} />;
     case 'code':
       return <CodeView scene={scene} />;
+    case 'trace':
+      return <TraceView scene={scene} />;
     case 'diagram':
       return <DiagramView scene={scene} />;
     case 'manim':
       return <ManimView scene={scene} />;
+    case 'hyperframes':
+      return <HyperframesView scene={scene} />;
   }
 };
 
 /** Everything a scene needs besides its picture: the cut in and out, its heading, voice, and captions. */
 const SceneShell: React.FC<{scene: Scene; captions: boolean}> = ({scene, captions}) => {
   const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 9, scene.frames - 7, scene.frames - 1], [0, 1, 1, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
+  // Fade through the backdrop between scenes, except where the next scene carries the same picture on.
+  const fadeIn = scene.fadeIn === false ? 1 : interpolate(frame, [0, 9], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
+  const fadeOut = scene.fadeOut === false ? 1 : interpolate(frame, [scene.frames - 7, scene.frames - 1], [1, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
+  const opacity = fadeIn * fadeOut;
   return (
     <AbsoluteFill style={{opacity}}>
       <View scene={scene} />
       {scene.heading ? (
         <div
+          data-va-text="heading"
+          data-va-box="heading"
           style={{
             position: 'absolute',
             left: 80,
@@ -62,7 +74,7 @@ const SceneShell: React.FC<{scene: Scene; captions: boolean}> = ({scene, caption
             alignItems: 'center',
             gap: 14,
             fontFamily: MONO,
-            fontSize: 22,
+            fontSize: 24,
             fontWeight: 500,
             letterSpacing: '0.04em',
             color: theme.muted,
@@ -91,26 +103,36 @@ const Progress: React.FC<{total: number}> = ({total}) => {
   );
 };
 
+/** The whole video on its 1920×1080 stage, unscaled. `chrome` adds what belongs to playback, not the picture. */
+export const Stage: React.FC<{scenes: Scene[]; captions: boolean; totalFrames: number; chrome?: boolean}> = ({
+  scenes,
+  captions,
+  totalFrames,
+  chrome = true,
+}) => {
+  const {fps} = useVideoConfig();
+  const shared = useMemo(() => ({scenes, render: (scene: Scene) => <View scene={scene} />}), [scenes]);
+  return (
+    <StageContext.Provider value={shared}>
+    <div style={{position: 'absolute', left: 0, top: 0, width: STAGE.width, height: STAGE.height, overflow: 'hidden'}}>
+      <Backdrop />
+      {scenes.map((scene) => (
+        <Sequence key={scene.id} name={`${scene.kind}: ${scene.id}`} from={scene.from} durationInFrames={scene.frames} premountFor={fps}>
+          <SceneShell scene={scene} captions={captions} />
+        </Sequence>
+      ))}
+      {chrome ? <Progress total={totalFrames} /> : null}
+    </div>
+    </StageContext.Provider>
+  );
+};
+
 export const Video: React.FC<ExplainerProps> = ({scenes, captions, totalFrames}) => {
-  const {fps, width} = useVideoConfig();
+  const {width} = useVideoConfig();
   return (
     <AbsoluteFill style={{backgroundColor: theme.bg}}>
-      <div
-        style={{
-          position: 'absolute',
-          width: STAGE.width,
-          height: STAGE.height,
-          transformOrigin: '0 0',
-          scale: String(width / STAGE.width),
-        }}
-      >
-        <Backdrop />
-        {scenes.map((scene) => (
-          <Sequence key={scene.id} name={`${scene.kind}: ${scene.id}`} from={scene.from} durationInFrames={scene.frames} premountFor={fps}>
-            <SceneShell scene={scene} captions={captions} />
-          </Sequence>
-        ))}
-        <Progress total={totalFrames} />
+      <div style={{position: 'absolute', transformOrigin: '0 0', scale: String(width / STAGE.width)}}>
+        <Stage scenes={scenes} captions={captions} totalFrames={totalFrames} />
       </div>
     </AbsoluteFill>
   );

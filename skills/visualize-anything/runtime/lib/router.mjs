@@ -4,20 +4,25 @@
 // reason, and a scene can disagree with the router by saying why in `override`.
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
+import {speakable} from './speech.mjs';
 
 /** What the viewer needs to see → which renderer shows it. The single source of routing truth. */
 export const NEEDS = {
   question: {kind: 'title', family: 'frame', says: 'the opening question, or a chapter turn'},
-  source: {kind: 'code', family: 'code', says: 'what the code literally says'},
+  source: {kind: 'code', family: 'code', says: 'what the code literally says, with nothing beside it (needs an override; prefer trace)'},
   motion: {kind: 'manim', family: 'algorithm', says: 'data or state changing step by step'},
   branching: {kind: 'manim', family: 'algorithm', says: 'decisions inside one procedure, acting on its data'},
   math: {kind: 'manim', family: 'algorithm', says: 'a formula, a growth rate, a plot'},
+  trace: {kind: 'trace', family: 'algorithm', says: 'the code running line by line, beside the data it changes'},
+  change: {kind: 'hyperframes', family: 'code', says: 'code turning from one version into the next'},
+  data: {kind: 'hyperframes', family: 'frame', says: 'numbers measured or compared: a chart, a count, a benchmark'},
   structure: {kind: 'diagram', type: 'architecture', family: 'system', says: 'separate components and what connects them'},
   conversation: {kind: 'diagram', type: 'sequence', family: 'system', says: 'ordered messages between components'},
   pipeline: {kind: 'diagram', type: 'dataflow', family: 'system', says: 'data moving through stages and stores'},
   process: {kind: 'diagram', type: 'workflow', family: 'system', says: 'a process across several actors, with gates'},
   states: {kind: 'diagram', type: 'lifecycle', family: 'system', says: 'named states of an object and its transitions'},
   recap: {kind: 'bullets', family: 'frame', says: 'the claims to remember; nothing new'},
+  credit: {kind: 'credit', family: 'frame', says: 'the name of what was explained and where to find it; the last scene'},
 };
 
 export const SUBJECTS = ['algorithm', 'system', 'mixed'];
@@ -40,6 +45,18 @@ const CUES = {
   branching: [
     'decision', 'decisions', 'if it is', 'if so', 'if not', 'otherwise', 'either way', 'check fails', 'check passes',
     'first decision', 'second decision', 'branch', 'branches', 'in that case', 'whether',
+  ],
+  change: [
+    'refactor', 'refactored', 'rewrite', 'rewritten', 'becomes', 'turns into', 'instead of', 'replace', 'replaces', 'replaced',
+    'the fix', 'fixed by', 'before and after', 'the old version', 'the new version', 'first version', 'changed to', 'diff',
+  ],
+  data: [
+    'percent', 'benchmark', 'benchmarks', 'milliseconds', 'requests per second', 'throughput', 'latency', 'times faster',
+    'times slower', 'compared with', 'on average', 'chart', 'measured',
+  ],
+  trace: [
+    'line by line', 'step through', 'stepping through', 'trace', 'as it runs', 'each iteration', 'iteration', 'the loop runs',
+    'first pass', 'second pass', 'this time around', 'on the next pass',
   ],
   math: [
     'big o', 'o of', 'logarithmic', 'logarithm', 'quadratic', 'linear', 'exponential', 'exponentially', 'constant time',
@@ -94,7 +111,7 @@ export const suggestNeed = (scene, index, count) => {
   if (index === 0) return {need: 'question', because: 'first scene'};
   const hits = cueHits(narrationOf(scene));
   if (index === count - 1 && (hits.recap || !Object.keys(hits).length)) return {need: 'recap', because: 'last scene'};
-  if (scene.file || typeof scene.code === 'string') return {need: 'source', because: 'the scene quotes source'};
+  if (scene.file || typeof scene.code === 'string') return {need: 'trace', because: 'the scene quotes source, and code is shown beside what it does'};
   const ranked = Object.entries(hits)
     .filter(([need]) => need !== 'recap')
     .sort((a, b) => b[1].length - a[1].length);
@@ -111,6 +128,50 @@ export const resolveRoute = (scene) => {
     type: scene.type || (spec?.kind === 'diagram' ? spec.type : undefined),
   };
 };
+
+// Openings that tell the viewer a video is starting instead of giving them a reason to watch it.
+const ANNOUNCEMENT = /^\s*(in this (video|tutorial|explainer)|today,? (we|i)|let'?s|welcome|hi\b|hello|hey\b|this (video|tutorial) |we(?:'re| are| will|'ll) (going to|look|explore|learn)|i(?:'m| am| will|'ll) (going to|show|explain))/i;
+
+/** What is weak about a title, if anything. A title should promise a specific payoff in a few words. */
+export const weakTitle = (raw) => {
+  const title = raw.replace(/\*/g, '').trim();
+  const words = title.split(/\s+/).filter(Boolean);
+  const problems = [];
+  if (!words.length) return problems;
+  if (/^(an? )?(introduction|intro|overview|guide|tutorial|walkthrough|primer|deep dive)\b|^(understanding|explaining|exploring|learning|learn|all about)\b/i.test(title)) {
+    problems.push(`The title "${title}" names a genre, not a payoff. Say what the viewer will find out ("Why binary search needs so few steps"), not that an explanation follows.`);
+  } else if (/^how (does )?.{1,40} works?\??$/i.test(title)) {
+    problems.push(`The title "${title}" could sit on any video about the subject. Put the surprising or specific part in it: what it avoids, how few steps, what it decides.`);
+  } else if (words.length <= 2) {
+    problems.push(`The title "${title}" is only the subject's name. Add the claim or question the video answers.`);
+  }
+  if (words.length > 9) problems.push(`The title is ${words.length} words. Past nine it stops reading as a title; say less.`);
+  return problems;
+};
+
+// Words that pad a sentence or talk down to the viewer. Narration is better without every one of them.
+const FILLER = [
+  'simply', 'basically', 'obviously', 'clearly', 'of course', 'essentially', 'actually', 'really', 'very', 'just',
+  'kind of', 'sort of', 'as you can see', 'as we can see', 'take a look', 'it is worth noting', "it's worth noting", 'in order to',
+  'needless to say', 'at the end of the day', "here's the thing", "let's dive in", "here's the kicker", 'the wild part',
+].map((phrase) => [phrase, new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')]);
+
+const SMALL_NUMBERS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+  'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+const TENS = {30: 'thirty', 40: 'forty', 50: 'fifty', 60: 'sixty', 70: 'seventy', 80: 'eighty', 90: 'ninety', 100: 'hundred', 1000: 'thousand', 1000000: 'million', 1000000000: 'billion'};
+
+/** The words a starred hook word could be spoken as: itself, and for a number, its name. */
+const spokenForms = (word) => {
+  const plain = word.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!plain) return [];
+  const value = /^\d+$/.test(plain) ? Number(plain) : null;
+  if (value === null) return [plain];
+  return [plain, SMALL_NUMBERS[value], TENS[value]].filter(Boolean);
+};
+
+const starred = (text) => [...String(text || '').matchAll(/\*([^*]+)\*/g)].flatMap((match) => match[1].split(/\s+/)).filter(Boolean);
+
+const HAS_PICTURE = ['manim', 'trace', 'diagram', 'hyperframes'];
 
 const IDENTIFIER = /\b[a-z]+_[a-z0-9_]+\b|\b[a-z]+[A-Z][A-Za-z0-9]*\b|\b[A-Za-z_]\w*\(\)/;
 const sameCue = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -161,6 +222,9 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
     });
   }
 
+  // A credit comes after the close: the scene before it is the one that has to end the explanation.
+  const closeIndex = count > 1 && scenes[count - 1].kind === 'credit' ? count - 2 : count - 1;
+
   const rows = scenes.map((scene, index) => {
     const reasons = [];
     let status = 'ok';
@@ -196,14 +260,23 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
       // The narration should sound like the need. Only speak up when it clearly sounds like something else.
       const own = hits[scene.need]?.length || 0;
       const rival = Object.entries(hits)
-        .filter(([need]) => need !== scene.need && need !== 'recap' && NEEDS[need].kind !== spec.kind)
+        // `source` is never proposed: code on its own is not something to route a scene to.
+        .filter(([need]) => need !== scene.need && need !== 'recap' && need !== 'source' && NEEDS[need].kind !== spec.kind)
         .sort((a, b) => b[1].length - a[1].length)[0];
-      if (rival && rival[1].length >= 3 && own === 0 && spec.family !== 'frame' && !overridden) {
+      // A trace scene is code beside its animation, so narration about the data moving supports it.
+      const supported = scene.need === 'trace' && rival && ['motion', 'branching', 'math'].includes(rival[0]);
+      if (rival && rival[1].length >= 3 && own === 0 && spec.family !== 'frame' && !overridden && !supported) {
         flag(
           'review',
           `Declared "${scene.need}", but the narration reads like "${rival[0]}" (${rival[1].slice(0, 4).map((word) => `"${word}"`).join(', ')}) and has no cue for "${scene.need}". Re-read the scene: what must the viewer see?`,
         );
       }
+    }
+
+    // Code on its own is text to be read, not an explanation. It always comes with a picture of what it does.
+    if (scene.kind === 'code') {
+      if (overridden) flag('note', `Code shown without a visual: ${scene.override.trim()}`);
+      else flag('error', 'A code block is never shown on its own. Use a trace scene ("need": "trace"): the same lines on the left, and what they do to the data animated on the right. If this code truly has nothing to draw, add "override": "<reason>".');
     }
 
     // An algorithm is animated end to end; its branches are not a flowchart.
@@ -220,8 +293,34 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
 
     if (!scene.why) flag('review', 'No "why". Record the reason for this route in one sentence so it can be reviewed.');
 
-    if (scene.kind === 'code' && scene.beats.length > 1) {
-      if (scene.beats.every((beat) => !beat.lines)) flag('review', 'No beat highlights any lines, so nothing changes on screen while the voice moves on. Give each beat "lines".');
+    // The voice explains; it does not recite. And it does not pad.
+    scene.beats.forEach((beat, beatIndex) => {
+      const spoken = speakable(beat.say);
+      const dots = (spoken.match(/\bdot\b/g) || []).length;
+      if (dots >= 2 || /[()[\]{}=<>]/.test(spoken)) {
+        flag('review', `Beat ${beatIndex + 1} reads code aloud ("${spoken.length > 70 ? `${spoken.slice(0, 67)}...` : spoken}"). Say what the line does; the line itself is on screen.`);
+      }
+      const padding = FILLER.filter(([, pattern]) => pattern.test(beat.say)).map(([phrase]) => `"${phrase}"`);
+      if (padding.length) flag('review', `Beat ${beatIndex + 1} has filler: ${padding.join(', ')}. Cut it; the sentence is stronger without.`);
+    });
+
+    // Two scenes drawn by the same script usually share one picture, and should not blink between them.
+    const before = scenes[index - 1];
+    if (before && scene.script && scene.script === before.script && scene.continues === undefined && HAS_PICTURE.includes(scene.kind) && HAS_PICTURE.includes(before.kind)) {
+      flag('review', `This scene and "${before.id}" are drawn by the same script. If it starts on the picture that scene ended on, set "continues": true so the picture is not faded out and back in between them; if it starts fresh, set "continues": false.`);
+    }
+
+    if (scene.kind === 'bullets' && index === closeIndex) {
+      const pictured = scenes.slice(0, index).filter((entry) => HAS_PICTURE.includes(entry.kind));
+      const items = scene.items || [];
+      if (pictured.length >= 2 && items.length >= 2 && !items.some((item) => item && typeof item === 'object' && item.from)) {
+        flag('review', `The recap lists ${items.length} takeaways beside one picture. Let each show the moment that proved it: {"text": "...", "from": "<scene id>", "beat": n}.`);
+      }
+    }
+
+    if ((scene.kind === 'code' || scene.kind === 'trace') && scene.beats.length > 1) {
+      const cued = (beat) => beat.lines || (beat.cues || []).some((cue) => cue.lines);
+      if (scene.kind === 'code' && scene.auto === false && scene.beats.every((beat) => !cued(beat))) flag('review', 'No beat highlights any lines, so nothing changes on screen while the voice moves on. Give each beat "lines".');
       scene.beats.forEach((beat, beatIndex) => {
         if (beatIndex > 0 && beat.lines && sameCue(beat.lines, scene.beats[beatIndex - 1].lines) && !beat.note) {
           flag('review', `Beats ${beatIndex} and ${beatIndex + 1} highlight the same lines. Merge them, or move the highlight.`);
@@ -236,7 +335,28 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
       });
     }
 
-    if (scene.kind !== 'title' && seconds < 6) flag('review', `About ${seconds.toFixed(0)}s is a short scene; the cut will feel abrupt. Merge it into a neighbour or give it another beat.`);
+    if (scene.kind === 'title') {
+      const hooks = scene.beats.flatMap((beat) => [beat.text, ...(beat.cues || []).map((cue) => cue.text)]).filter(Boolean);
+      // A question scene shows its statement and nothing else: no title card stands in for one.
+      if (!hooks.length) {
+        flag('error', `This scene puts nothing on screen for about ${seconds.toFixed(0)}s while the voice talks. Give the first beat a "text": the hook as a short statement, with the *key number or word* starred. The name of what is explained goes in a closing "credit" scene.`);
+      }
+      for (const hook of hooks) {
+        const longest = Math.max(...hook.split('\n').map((line) => line.replace(/\*/g, '').split(/\s+/).filter(Boolean).length));
+        if (longest > 8) flag('review', `Hook text "${hook.replace(/\n/g, ' / ')}" has a ${longest}-word line. A hook is read at a glance: eight words a line at most, the rest belongs to the voice.`);
+      }
+      if (hooks.length && !hooks.some((hook) => hook.includes('*'))) flag('review', 'No word in the hook text is starred. Star the one number or word the viewer should remember (*20* comparisons).');
+    }
+    if (scene.kind === 'credit') {
+      if (index !== count - 1) flag('review', 'A credit names what was explained and where to find it. It goes last, after the recap.');
+      if (seconds > 8) flag('review', `The credit runs about ${seconds.toFixed(0)}s. The explanation is over: one short line that says the name is enough.`);
+    }
+    // However the video opens, on a statement or cold on a picture, its first words are the hook.
+    const firstWords = scene.beats[0]?.say || '';
+    if (index === 0 && ANNOUNCEMENT.test(firstWords)) {
+      flag('review', `The narration opens by announcing the video ("${firstWords.split(/\s+/).slice(0, 5).join(' ')}..."). Open on the hook itself: the surprising number, the failure, or the question.`);
+    }
+    if (scene.kind !== 'title' && scene.kind !== 'credit' && seconds < 6) flag('review', `About ${seconds.toFixed(0)}s is a short scene; the cut will feel abrupt. Merge it into a neighbour or give it another beat.`);
     if (seconds > 40) flag('review', `About ${seconds.toFixed(0)}s is a long time on one picture. Split it at a turn in the narration.`);
 
     return {id: scene.id, index, need: scene.need || null, kind: scene.kind, type: scene.type, seconds, status, reasons, hits};
@@ -245,30 +365,68 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
   // Rules about the sequence as a whole.
   const kinds = scenes.map((scene) => scene.kind);
   const seq = (level, text) => notes.push({level, text});
-  if (kinds[0] !== 'title') seq('review', `The video opens on a ${kinds[0]} scene. Open with a title that states the question it answers.`);
-  if (count > 2 && !['bullets', 'code'].includes(kinds.at(-1))) seq('review', `The video ends on a ${kinds.at(-1)} scene. Close on a recap or a final look at the code, not a new idea.`);
+  // A video opens on its hook as a statement, or cold on a picture. Text to read is neither.
+  if (kinds[0] === 'bullets' || kinds[0] === 'code') seq('review', `The video opens on a ${kinds[0]} scene. Open on the hook: a statement on screen (a "question" scene), or cold on the most striking picture.`);
+  if (count > 2 && !['bullets', 'code', 'trace', 'hyperframes'].includes(kinds[closeIndex])) seq('review', `The video ends on a ${kinds[closeIndex]} scene. Close on a recap or a final look at the code, not a new idea.`);
   for (let i = 2; i < count; i += 1) {
-    if (kinds[i] === kinds[i - 1] && kinds[i] === kinds[i - 2] && kinds[i] !== 'manim') {
+    if (kinds[i] === kinds[i - 1] && kinds[i] === kinds[i - 2] && kinds[i] !== 'manim' && kinds[i] !== 'trace') {
       seq('review', `Three ${kinds[i]} scenes in a row (${scenes[i - 2].id}, ${scenes[i - 1].id}, ${scenes[i].id}) read as a slideshow. Put a different kind of picture between them.`);
       break;
     }
   }
   scenes.forEach((scene, index) => {
-    if (scene.kind === 'code' || scene.kind === 'title' || scene.kind === 'bullets') return;
+    if (['code', 'trace', 'hyperframes', 'title', 'bullets', 'credit'].includes(scene.kind)) return;
     const named = scene.beats.map((beat) => beat.caption || beat.say).join(' ').match(IDENTIFIER);
-    const near = [kinds[index - 1], kinds[index + 1]].includes('code');
+    const near = [kinds[index - 1], kinds[index + 1]].some((kind) => kind === 'code' || kind === 'trace' || kind === 'hyperframes');
     if (named && !near) seq('review', `"${scene.id}" names ${named[0]} but no code scene is next to it. Viewers trust a claim about an identifier once they have seen its line.`);
   });
-  if (subject === 'algorithm' && !kinds.includes('manim')) seq('review', 'An algorithm video with no Manim scene only shows text. Animate the behaviour at least once.');
+  if (subject === 'algorithm' && !kinds.includes('manim') && !kinds.includes('trace')) seq('review', 'An algorithm video with no Manim or trace scene only shows text. Animate the behaviour at least once.');
   if (subject === 'system' && !kinds.includes('diagram')) seq('review', 'A system video with no diagram never shows how the parts connect. Add an architecture or sequence scene.');
-  if (!kinds.includes('code')) seq('review', 'No code scene. An explainer about code should show the real lines at least once.');
+  if (!kinds.includes('code') && !kinds.includes('trace') && !scenes.some((scene) => scene.need === 'change')) seq('review', 'No code scene. An explainer about code should show the real lines at least once.');
+
+  // The ending should cash in what the opening promised.
+  const opening = scenes.find((scene) => scene.kind === 'title');
+  if (opening && count > 2) {
+    const promised = opening.beats.flatMap((beat) => [beat.text, ...(beat.cues || []).map((cue) => cue.text)]).flatMap(starred);
+    const closing = new Set(scenes[closeIndex].beats.flatMap((beat) => beat.say.toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ')));
+    const paid = promised.some((word) => spokenForms(word).some((form) => closing.has(form)));
+    if (promised.length && !paid) {
+      seq('review', `The opening stars ${[...new Set(promised)].map((word) => `"${word}"`).join(', ')}, but the closing scene never comes back to it. End by returning to the hook: the same number, the same word.`);
+    }
+  }
+  if (count > 2 && !scenes.some((scene) => scene.beats.some((beat) => beat.land))) {
+    seq('review', 'No beat is marked to land. Find the moment the main point resolves and give that beat "land": true; the voice waits a moment longer there so it can sink in.');
+  }
+
+  // The video's title is read where it is posted, beside the thumbnail; it is not shown in the video.
+  if (storyboard.title && storyboard.title !== 'Untitled') for (const problem of weakTitle(storyboard.title)) seq('review', problem);
+
+  // The thumbnail is met about 120 pixels wide. It holds a few words and one picture.
+  const plainWords = (text) => String(text || '').replace(/\*/g, '').split(/\s+/).filter(Boolean);
+  const thumbnail = storyboard.thumbnail || null;
+  const hookText = opening?.beats.flatMap((beat) => [beat.text, ...(beat.cues || []).map((cue) => cue.text)]).filter(Boolean).at(-1);
+  const coverText = thumbnail?.text || hookText;
+  if (coverText && plainWords(coverText).length > 5) {
+    seq('review', thumbnail?.text
+      ? `The thumbnail text is ${plainWords(coverText).length} words. At the size a thumbnail is seen, five is the most that can be read: keep the number or the word that makes the claim, and drop the rest.`
+      : `The thumbnail will carry the hook as it stands (${plainWords(coverText).length} words), which cannot be read at the size a thumbnail is seen. Give the storyboard a "thumbnail": {"text": "five words at most, *one* starred", "from": "<the scene with the most striking picture>"}.`);
+  }
+  if (thumbnail?.text && !thumbnail.text.includes('*')) seq('review', 'No word in the thumbnail text is starred. Star the number or word that carries the claim.');
+  if (thumbnail && !thumbnail.from && scenes.some((scene) => HAS_PICTURE.includes(scene.kind))) seq('review', 'The thumbnail is words alone. Put the video\'s most striking moment under them: "from": "<scene id>", and "beat" for which moment.');
+  if (thumbnail?.text && storyboard.title && plainWords(thumbnail.text).join(' ').toLowerCase().replace(/[^a-z0-9 ]/g, '') === plainWords(storyboard.title).join(' ').toLowerCase().replace(/[^a-z0-9 ]/g, '')) {
+    seq('review', 'The thumbnail repeats the title, which already sits beside it wherever the video is listed. Use the hook instead: the number, the failure, the question.');
+  }
 
   const total = rows.reduce((sum, row) => sum + row.seconds, 0);
+  const target = Number(storyboard.brief?.length);
+  if (Number.isFinite(target) && target > 0 && Math.abs(total - target) / target > 0.2) {
+    seq('review', `The brief asks for about ${target}s; this runs ${timeline ? '' : 'about '}${total.toFixed(0)}s. ${total > target ? 'Cut a scene or tighten the narration' : 'There is room for another idea, or say so and shorten the brief'}.`);
+  }
   const share = {};
   rows.forEach((row) => (share[row.kind] = (share[row.kind] || 0) + row.seconds));
   const errors = rows.filter((row) => row.status === 'error').length;
   const reviews = rows.filter((row) => row.status === 'review').length + notes.filter((note) => note.level === 'review').length;
-  return {subject, declaredSubject: Boolean(storyboard.subject), rows, notes, total, share, errors, reviews, timed: Boolean(timeline)};
+  return {subject, declaredSubject: Boolean(storyboard.subject), brief: storyboard.brief || null, rows, notes, total, share, errors, reviews, timed: Boolean(timeline)};
 };
 
 /** The routing report as text: one line per scene, then whatever needs attention. */
@@ -276,6 +434,10 @@ export const formatRouting = (report) => {
   const lines = [];
   const mark = {ok: ' ok   ', review: 'REVIEW', error: 'ERROR '};
   lines.push(`Routing: ${report.rows.length} scenes, subject "${report.subject}"${report.declaredSubject ? '' : ' (guessed)'}, ${report.timed ? '' : 'about '}${report.total.toFixed(0)}s.`);
+  if (report.brief) {
+    const {audience, length, focus} = report.brief;
+    lines.push(`  Brief: ${[audience && `for ${audience}`, length && `about ${length}s`, focus && `focus on ${focus}`].filter(Boolean).join(', ') || '(empty)'}.`);
+  }
   const width = Math.max(...report.rows.map((row) => row.id.length));
   for (const row of report.rows) {
     const route = row.kind === 'diagram' ? `diagram · ${row.type}` : row.kind;

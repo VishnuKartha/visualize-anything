@@ -15,6 +15,9 @@ export const Captions: React.FC<{beats: Beat[]}> = ({beats}) => {
   return (
     <div style={{position: 'absolute', left: 0, width: STAGE.width, bottom: 44, display: 'flex', justifyContent: 'center'}}>
       <div
+        data-va-text="captions"
+        data-va-box="captions"
+        data-va-clip="captions"
         style={{
           maxWidth: 1500,
           padding: '14px 30px',

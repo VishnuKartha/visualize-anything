@@ -1,7 +1,9 @@
 import type React from 'react';
 import {useCurrentFrame} from 'remotion';
 import {MONO, SANS, beatAt, lerp, ramp, theme} from '../theme';
-import type {Beat, CodeScene} from '../types';
+import type {CodeScene, Step, TraceScene} from '../types';
+
+type Region = {x: number; y: number; w: number; h: number};
 
 // The region a code scene may occupy; the panel shrinks to its content and centres inside it.
 const REGION = {x: 150, y: 112, w: 1620, h: 790};
@@ -15,7 +17,7 @@ const DIM = 0.32;
 const inRanges = (line: number, ranges: [number, number][]) => ranges.some(([a, b]) => line >= a && line <= b);
 
 /** Where a beat wants the code scrolled, or null when it has no opinion. */
-const scrollFor = (beat: Beat | undefined, startLine: number, lineHeight: number, viewHeight: number, contentHeight: number) => {
+const scrollFor = (beat: Step | undefined, startLine: number, lineHeight: number, viewHeight: number, contentHeight: number) => {
   if (!beat?.lines?.length || contentHeight <= viewHeight) return null;
   const first = Math.min(...beat.lines.map(([a]) => a)) - startLine;
   const last = Math.max(...beat.lines.map(([, b]) => b)) - startLine;
@@ -23,22 +25,30 @@ const scrollFor = (beat: Beat | undefined, startLine: number, lineHeight: number
   return Math.min(Math.max(0, centre - viewHeight / 2), contentHeight - viewHeight);
 };
 
-export const CodeView: React.FC<{scene: CodeScene}> = ({scene}) => {
+export const CodeView: React.FC<{scene: CodeScene}> = ({scene}) => <CodePanel scene={scene} region={REGION} />;
+
+/** A code panel that fits itself into `region`: as large as the code allows, centred, never wider than needed. */
+export const CodePanel: React.FC<{scene: CodeScene | TraceScene; region: Region; minWidth?: number; minFont?: number}> = ({
+  scene,
+  region: REGION,
+  minWidth = 1100,
+  minFont = 24,
+}) => {
   const frame = useCurrentFrame();
   const lineCount = scene.code.length;
   const widest = Math.max(1, ...scene.code.map((line) => line.reduce((n, token) => n + token.text.length, 0)));
   const gutterChars = String(scene.startLine + lineCount - 1).length + 3;
-  const hasNotes = scene.beats.some((candidate) => candidate.note);
+  const hasNotes = scene.steps.some((candidate) => candidate.note);
   const maxPanelHeight = REGION.h - (hasNotes ? NOTE_ROW : 0);
   const maxViewHeight = maxPanelHeight - HEADER - PAD_Y * 2;
   const fitWidth = (REGION.w - PAD_X * 2) / ((widest + gutterChars) * CHAR);
   const fitHeight = maxViewHeight / (lineCount * 1.6);
-  const fontSize = Math.min(40, Math.max(22, Math.min(fitWidth, fitHeight)));
+  const fontSize = Math.min(40, Math.max(minFont, Math.min(fitWidth, fitHeight)));
   const lineHeight = fontSize * 1.6;
   const contentHeight = lineCount * lineHeight;
   const viewHeight = Math.min(maxViewHeight, contentHeight);
   const PANEL = {
-    w: Math.min(REGION.w, Math.max(1100, (widest + gutterChars) * CHAR * fontSize + PAD_X * 2 + 40)),
+    w: Math.min(REGION.w, Math.max(minWidth, (widest + gutterChars) * CHAR * fontSize + PAD_X * 2 + 40)),
     h: viewHeight + HEADER + PAD_Y * 2,
     x: 0,
     y: 0,
@@ -46,19 +56,19 @@ export const CodeView: React.FC<{scene: CodeScene}> = ({scene}) => {
   PANEL.x = REGION.x + (REGION.w - PANEL.w) / 2;
   PANEL.y = REGION.y + (maxPanelHeight - PANEL.h) / 2;
 
-  const current = beatAt(scene.beats, frame);
-  const beat = scene.beats[current];
-  const previous = current > 0 ? scene.beats[current - 1] : undefined;
+  const current = beatAt(scene.steps, frame);
+  const beat = scene.steps[current];
+  const previous = current > 0 ? scene.steps[current - 1] : undefined;
   const p = beat ? ramp(frame, beat.cue, 14) : 1;
 
   // Scroll carries over from the last beat that asked for one.
   const scrollTargets: number[] = [];
-  scene.beats.forEach((candidate, index) => {
+  scene.steps.forEach((candidate, index) => {
     scrollTargets[index] = scrollFor(candidate, scene.startLine, lineHeight, viewHeight, contentHeight) ?? scrollTargets[index - 1] ?? 0;
   });
   const scroll = lerp(scrollTargets[current - 1] ?? scrollTargets[0] ?? 0, scrollTargets[current] ?? 0, p);
 
-  const weight = (target: Beat | undefined, line: number) => {
+  const weight = (target: Step | undefined, line: number) => {
     if (!target?.lines) return {opacity: 1, bar: 0};
     return inRanges(line, target.lines) ? {opacity: 1, bar: 1} : {opacity: DIM, bar: 0};
   };
@@ -67,6 +77,7 @@ export const CodeView: React.FC<{scene: CodeScene}> = ({scene}) => {
   return (
     <>
     <div
+      data-va-box="code"
       style={{
         position: 'absolute',
         left: PANEL.x,
@@ -101,8 +112,8 @@ export const CodeView: React.FC<{scene: CodeScene}> = ({scene}) => {
           {scene.lang}
         </span>
       </div>
-      <div style={{position: 'absolute', left: 0, right: 0, top: HEADER + PAD_Y, height: viewHeight, overflow: 'hidden'}}>
-        <div style={{translate: `0 ${-scroll}px`, fontFamily: MONO, fontSize, lineHeight: `${lineHeight}px`}}>
+      <div data-va-clip="code" style={{position: 'absolute', left: 0, right: 0, top: HEADER + PAD_Y, height: viewHeight, overflow: 'hidden'}}>
+        <div data-va-text="code" style={{translate: `0 ${-scroll}px`, fontFamily: MONO, fontSize, lineHeight: `${lineHeight}px`}}>
           {scene.code.map((tokens, index) => {
             const line = scene.startLine + index;
             const from = weight(previous, line);
@@ -138,11 +149,13 @@ export const CodeView: React.FC<{scene: CodeScene}> = ({scene}) => {
     </div>
       {beat?.note ? (
         <div
+          data-va-text="note"
+          data-va-box="note"
           style={{
             position: 'absolute',
             right: 1920 - PANEL.x - PANEL.w,
             top: PANEL.y + PANEL.h + 24,
-            maxWidth: 900,
+            maxWidth: Math.min(900, PANEL.w),
             padding: '16px 24px',
             borderRadius: 14,
             backgroundColor: '#0f1d33',
