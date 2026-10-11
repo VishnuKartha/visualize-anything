@@ -108,7 +108,8 @@ A strong hook followed by a video that starts again from the beginning is two vi
 - **No scene starts over.** "Now let's look at...", "Next, ...", "Moving on", "First, let's..." tell the viewer a new section is beginning, which tells them the last one did not lead anywhere. The router flags these.
 - **A term arrives with the thing it names.** Say "lo and hi" as the two markers appear, not a sentence earlier. Never define something before the viewer has a reason to want the word.
 - **The picture carries over.** Where two scenes show the same thing, the second is marked `continues` and starts on the frame the first ended on ([taste.md](taste.md)).
-- **Read the whole narration aloud as one piece**, scene breaks removed, before showing it to the user. Wherever you would have to pause and say "anyway", the join is wrong.
+- **Write the narration whole, then split it.** `script.md` is the entire narration as one continuous piece, written before any scene exists; scenes and beats are cuts made in it afterwards. A line that was written as the next sentence of a paragraph follows on; a line written to fill a scene does not. `va route` checks that the storyboard says the script's words, in order, and nothing else.
+- **Read it aloud from top to bottom** before showing it to the user. Wherever you would have to pause and say "anyway", the join is wrong.
 
 | Last line of a scene | A first line that starts over | A first line that follows on |
 |---|---|---|

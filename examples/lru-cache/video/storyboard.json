@@ -14,6 +14,79 @@
     "from": "write",
     "beat": 4
   },
+  "vocabulary": [
+    {
+      "word": "key",
+      "not": [
+        "item",
+        "element"
+      ],
+      "defined": "forget"
+    },
+    {
+      "word": "capacity",
+      "not": [
+        "size limit",
+        "maximum size"
+      ],
+      "defined": "state"
+    },
+    {
+      "word": "newest end",
+      "not": [
+        "tail",
+        "right end"
+      ],
+      "defined": "state"
+    }
+  ],
+  "facts": [
+    {
+      "id": "capacity",
+      "value": 3,
+      "given": "the capacity chosen for the example cache"
+    },
+    {
+      "id": "state-fields",
+      "value": 2,
+      "what": "fields an LRUCache keeps"
+    },
+    {
+      "id": "first-in",
+      "value": "A",
+      "what": "the key that went in first"
+    },
+    {
+      "id": "forgotten",
+      "value": "B",
+      "what": "the key evicted when a fourth arrives after A is read"
+    },
+    {
+      "id": "put-decisions",
+      "value": 2,
+      "what": "if statements in put"
+    },
+    {
+      "id": "entries-after-refresh",
+      "value": 3,
+      "what": "entries after writing a key that is already cached"
+    },
+    {
+      "id": "refresh-evicts-nothing",
+      "value": true,
+      "what": "writing a cached key into a full cache evicts nothing"
+    },
+    {
+      "id": "entries-before-eviction",
+      "value": 4,
+      "what": "entries at the moment popitem is called"
+    },
+    {
+      "id": "class-lines",
+      "value": 20,
+      "what": "lines in the LRUCache class"
+    }
+  ],
   "scenes": [
     {
       "id": "forget",
@@ -24,7 +97,8 @@
       "script": "manim/lru.py",
       "beats": [
         {
-          "say": "This cache holds three keys, and it is full. To store a fourth, it has to forget one."
+          "say": "This cache holds three keys, and it is full. To store a fourth, it has to forget one. Which one?",
+          "predict": true
         },
         {
           "say": "The obvious one to drop is whichever went in first. That is A. But A was read a moment ago."

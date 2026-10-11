@@ -2,9 +2,12 @@ import {existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync}
 import path from 'node:path';
 import {bakeDiagram} from './bake-diagram.mjs';
 import {withRenderer} from './remotion-api.mjs';
-import {analyzeRouting, formatRouting} from './router.mjs';
+import {compareFacts, parseOracle, unbackedNumbers} from './facts.mjs';
+import {analyzeRouting, formatRouting, scriptProse} from './router.mjs';
 import {HYPERFRAMES_VERSION, planCodeChange, renderComposition, writeAuthored, writeCodeChange} from './hyperframes.mjs';
-import {brightIn, concatVideos, frozenStretches, loudness, mixNarration, mux, probeStreams, subtitleFiles} from './media.mjs';
+import {BED, brightIn, concatVideos, firstBright, frameChanges, frameSimilarity, frozenStretches, loudness, mixBed, mixNarration, mux, probeStreams, silences, subtitleFiles} from './media.mjs';
+import {findSeams} from './seams.mjs';
+import {VIEWERS, planBrief, viewerContracts} from './viewers.mjs';
 import {HAS_PICTURE, buildSteps, buildTimeline, captionPhrases, loadStoryboard, loadTimeline, resolveCode, resolveVersions, speakable, withAutoCues} from './storyboard.mjs';
 import {
   ARCHIFY_BIN, MANIM_UV_ARGS, RUNTIME_DIR, TYPST_SPEC, fail, ffprobeDuration, fmtSeconds, manimEnv, readJson, run, sha, writeJson,
@@ -88,6 +91,65 @@ export const check = (paths) => {
   log('');
   route(paths);
   return storyboard;
+};
+
+// ---------------------------------------------------------------------------------------------
+// facts
+
+// The oracle is a script in the project that computes every fact again by running the real code.
+const ORACLES = [
+  ['facts.py', (file) => ['uv', ['run', '--quiet', '--no-project', 'python', file]]],
+  ['facts.mjs', (file) => [process.execPath, [file]]],
+];
+const shown = (value) => (typeof value === 'string' ? `"${value}"` : String(value));
+
+/** Run the project's oracle and hold every fact in the storyboard to what it computes. */
+export const facts = async (paths) => {
+  const {storyboard} = load(paths, {gate: false});
+  const declared = storyboard.facts;
+  const loose = unbackedNumbers(storyboard);
+  let computed = null;
+  let oracleName = null;
+  if (declared.some((fact) => !fact.given)) {
+    const oracle = ORACLES.map(([name, command]) => ({name, file: path.join(paths.dir, name), command})).find((entry) => existsSync(entry.file));
+    if (!oracle) {
+      fail(
+        `${declared.filter((fact) => !fact.given).length} fact(s) have nothing computing them. Write ${path.join(paths.dir, 'facts.py')} (or facts.mjs): ` +
+          'it runs the code the video is about on the video\'s own example and prints one JSON object, fact id to value. ' +
+          `Ids to print: ${declared.filter((fact) => !fact.given).map((fact) => fact.id).join(', ')}.`,
+      );
+    }
+    const [command, args] = oracle.command(oracle.file);
+    const result = await run(command, args, {cwd: paths.dir, capture: true, allowFail: true});
+    if (result.code !== 0) fail(`${oracle.name} failed (exit ${result.code}).\n${(result.stderr || result.stdout).trim().split('\n').slice(-25).join('\n')}`);
+    computed = parseOracle(result.stdout);
+    if (!computed) fail(`${oracle.name} has to print one JSON object, fact id to value, as its last line. It printed:\n${result.stdout.trim().split('\n').slice(-5).join('\n') || '(nothing)'}`);
+    oracleName = oracle.name;
+  }
+
+  const rows = compareFacts(declared, computed);
+  const bad = rows.filter((entry) => entry.status === 'differs' || entry.status === 'missing');
+  if (!declared.length) log('facts: none declared.');
+  else {
+    log(`facts: ${declared.length} in the storyboard${oracleName ? `, checked against ${oracleName}` : ''}.`);
+    const width = Math.max(...rows.map((entry) => entry.id.length));
+    const mark = {ok: ' ok    ', given: ' given ', differs: 'DIFFERS', missing: 'MISSING'};
+    for (const entry of rows) {
+      const detail = entry.status === 'differs' ? `the oracle computed ${shown(entry.computed)}`
+        : entry.status === 'missing' ? `${oracleName} does not print "${entry.id}"`
+          : entry.status === 'given' ? entry.given : entry.what;
+      log(`  ${mark[entry.status]}  ${entry.id.padEnd(width)}  ${shown(entry.value).padStart(9)}  ${detail}`);
+    }
+  }
+  if (loose.length) {
+    log(`  ${loose.length} number(s) said or shown with no fact behind them: ${loose.map((number) => `"${number.text}" (${number.where})`).join(', ')}.`);
+  }
+  if (bad.length) log(`  ${bad.length} fact(s) do not hold. Fix the narration and the picture to match the code, or fix the oracle if it is the one that is wrong; never the other way round.`);
+  else if (declared.length && !loose.length) log('  every number in the video is computed, and the computation agrees.');
+  const ok = bad.length === 0;
+  writeJson(path.join(paths.cache, 'facts.json'), {ok, oracle: oracleName, rows, loose});
+  if (!ok) process.exitCode = 1;
+  return {ok, rows, loose, oracle: oracleName};
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -247,6 +309,9 @@ export const manim = async (paths, only = [], {force = false, draft = false} = {
   const timeline = loadTimeline(paths, storyboard);
   const scale = (draft ? 0.5 : 1) * (storyboard.width / 1920);
 
+  const factsFile = path.join(paths.cache, 'fact-values.json');
+  writeJson(factsFile, Object.fromEntries(storyboard.facts.map((fact) => [fact.id, fact.value])));
+
   for (const scene of pick(storyboard.scenes, ['manim', 'trace'], only)) {
     const beside = scene.kind === 'trace';
     const even = (value) => 2 * Math.round(value / 2);
@@ -264,7 +329,9 @@ export const manim = async (paths, only = [], {force = false, draft = false} = {
     const keyFile = `${asset}.key`;
     const helper = sha(readFileSync(path.join(RUNTIME_DIR, 'python', 'va_manim.py'), 'utf8'));
     const spoken = timed.beats.map((beat) => [beat.from, beat.words]);
-    const key = sha({source, cls: scene.class, windows, spoken, width, height, fps: timeline.fps, typst: TYPST_SPEC, helper, continues: scene.continues === true});
+    // A script reads numbers with fact("<id>"), so a changed fact redraws the scenes that use one.
+    const ledger = /\bfact\(/.test(source) ? Object.fromEntries(storyboard.facts.map((fact) => [fact.id, fact.value])) : null;
+    const key = sha({source, cls: scene.class, windows, spoken, width, height, fps: timeline.fps, typst: TYPST_SPEC, helper, continues: scene.continues === true, ...(ledger ? {ledger} : {})});
     if (!force && existsSync(asset) && existsSync(keyFile) && readFileSync(keyFile, 'utf8') === key) {
       log(`manim ${scene.id}: unchanged`);
       continue;
@@ -290,6 +357,7 @@ export const manim = async (paths, only = [], {force = false, draft = false} = {
           VA_TYPST_CACHE: path.join(paths.cache, 'typst'),
           VA_LAYOUT: beside ? 'trace' : 'full',
           VA_CONTINUES: scene.continues === true ? '1' : '',
+          VA_FACTS: factsFile,
         }),
       },
     );
@@ -603,7 +671,7 @@ const runtimeSignature = () => {
  */
 export const render = async (paths, {draft = false, out, force = false} = {}) => {
   ensureRuntime();
-  const {props} = await buildProps(paths);
+  const {props, storyboard} = await buildProps(paths);
   const output = path.resolve(out || path.join(paths.out, draft ? 'draft.mp4' : 'video.mp4'));
   mkdirSync(path.dirname(output), {recursive: true});
   const quality = draft ? 'draft' : 'full';
@@ -652,8 +720,18 @@ export const render = async (paths, {draft = false, out, force = false} = {}) =>
   const clips = props.scenes.flatMap((scene) =>
     scene.beats.map((beat) => ({file: path.join(paths.public, beat.audio), start: (scene.from + beat.from) / props.fps})),
   );
-  await mixNarration(clips, props.totalFrames / props.fps, narration);
-  await mux(silent, narration, output);
+  const total = props.totalFrames / props.fps;
+  await mixNarration(clips, total, narration);
+  let sound = narration;
+  let bed = null;
+  if (storyboard.music) {
+    // The bed is ducked from the narration's own timeline, then measured where it ended up.
+    sound = path.join(workDir, 'sound.m4a');
+    const spoken = props.scenes.flatMap((scene) => scene.beats.map((beat) => ({start: (scene.from + beat.from) / props.fps, duration: beat.audioFrames / props.fps})));
+    bed = await mixBed({narration, bed: path.resolve(paths.dir, storyboard.music.file), clips: spoken, total, under: storyboard.music.under, gap: storyboard.music.gap, output: sound, workDir});
+    writeJson(path.join(workDir, 'bed.json'), bed);
+  } else rmSync(path.join(workDir, 'bed.json'), {force: true});
+  await mux(silent, sound, output);
 
   const stem = output.replace(/\.[^.]+$/, '');
   const subtitles = subtitleFiles(props);
@@ -663,6 +741,14 @@ export const render = async (paths, {draft = false, out, force = false} = {}) =>
   log(`  subtitles → ${path.basename(stem)}.srt, ${path.basename(stem)}.vtt (${subtitles.count} cues)`);
 
   if (needsCover) log(`  thumbnail → ${path.basename(thumbnail)}, and thumbnail-small.png: look at the small one, it is the size viewers see`);
+  if (bed) {
+    const tooClose = bed.distance < BED.floor;
+    const tooHot = bed.peak > BED.peak;
+    log(`  music: the bed sits ${bed.distance.toFixed(1)} LU under the voice while it speaks (asked for ${storyboard.music.under}, refused under ${BED.floor}); the mix peaks at ${bed.peak.toFixed(1)} dBTP.`);
+    if (tooClose) log(`  ERROR: the bed is only ${bed.distance.toFixed(1)} LU under the voice. It will mask speech: raise "under", or use a bed with less going on.`);
+    if (tooHot) log(`  ERROR: the mix peaks at ${bed.peak.toFixed(1)} dBTP, over ${BED.peak}. Raise "under" and "gap" so the music adds less to the voice's peaks.`);
+    if (tooClose || tooHot) process.exitCode = 1;
+  }
   await qc(paths, {video: output, props});
   return output;
 };
@@ -681,7 +767,36 @@ const STATIC_ADVICE = {
   bullets: 'reveal items on the words that name them ("cues": [{"at": "<phrase>", "show": n}])',
 };
 
-/** Check the finished file: complete, audible, in sync, and not sitting on one picture for too long. */
+// The part of the frame a scene's picture lives in, clear of the heading above and the captions below.
+const CONTENT = {x: 60, y: 104, width: 1800, height: 800};
+
+/** Measure the rendered file for seams: cuts, joins that do not match, the voice stopping, and its level stepping. */
+const measureSeams = async (paths, file, props, streams, voice = file) => {
+  const scale = streams.width / 1920;
+  const rect = (region) => [region.width, region.height, region.x, region.y].map((value) => Math.round(value * scale)).join(':');
+  const joins = [];
+  for (let index = 1; index < props.scenes.length; index += 1) {
+    const [before, after] = [props.scenes[index - 1], props.scenes[index]];
+    if (after.fadeIn !== false) continue;
+    // Two trace scenes share the animation panel; the code beside it is expected to change.
+    const region = before.kind === 'trace' && after.kind === 'trace' ? after.clip : CONTENT;
+    joins.push({index, similarity: await frameSimilarity(file, after.from - 1, after.from, props.fps, rect(region))});
+  }
+  const levels = await Promise.all(
+    props.scenes.flatMap((scene) =>
+      scene.beats.map(async (beat, beatIndex) => ({scene: scene.id, beat: beatIndex + 1, mean: (await loudness(path.join(paths.public, beat.audio))).mean})),
+    ),
+  );
+  return {
+    changes: await frameChanges(file),
+    joins,
+    silences: streams.hasAudio ? await silences(voice) : [],
+    levels,
+    firstPicture: await firstBright(file, rect(CONTENT)),
+  };
+};
+
+/** Check the finished file: complete, audible, in sync, not sitting on one picture for too long, and without seams. */
 export const qc = async (paths, {video, props} = {}) => {
   const file = path.resolve(video || path.join(paths.out, 'video.mp4'));
   if (!existsSync(file)) fail(`Nothing to check: ${file} does not exist. Run \`va render\` first.`);
@@ -712,6 +827,12 @@ export const qc = async (paths, {video, props} = {}) => {
     statics.push({scene, beat: step ? step.beat + 1 : 1, ...stretch});
   }
 
+  // Under a music bed the finished track is never silent, so the voice's pauses are read from the voice alone.
+  const stem = path.join(paths.cache, 'render', streams.width < reference.width ? 'draft' : 'full', 'narration.m4a');
+  const bedded = existsSync(path.join(path.dirname(stem), 'bed.json')) && existsSync(stem);
+  const measured = streams.frames ? await measureSeams(paths, file, reference, streams, bedded ? stem : file) : null;
+  const seams = measured ? findSeams(reference, measured) : [];
+
   log(`qc: ${path.basename(file)} — ${streams.frames} frames, ${fmtSeconds(streams.videoSeconds)}, ${streams.width}×${streams.height}${streams.hasAudio ? '' : ', NO AUDIO'}`);
   problems.forEach((text) => log(`  ERROR: ${text}`));
   reviews.forEach((text) => log(`  review: ${text}`));
@@ -722,9 +843,16 @@ export const qc = async (paths, {video, props} = {}) => {
     }
     for (const kind of new Set(statics.map((item) => item.scene.kind))) log(`    ${kind}: ${STATIC_ADVICE[kind]}.`);
   }
+  if (seams.length) {
+    log(`  ${seams.length} seam(s), where the video stops being one continuous thing:`);
+    seams.forEach((seam) => log(`    ${seam.text}`));
+  }
   if (!problems.length && !reviews.length && !statics.length) log('  complete, audible, in sync, and the picture keeps moving.');
+  if (measured && !seams.length) {
+    log(`  no seams: no single-frame changes, ${measured.joins.length ? `${measured.joins.length} carried-on join(s) match frame for frame` : 'no carried-on joins'}, the voice never stops for long, and its level is steady.`);
+  }
   if (problems.length) process.exitCode = 1;
-  return {problems, reviews, statics};
+  return {problems, reviews, statics, seams};
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -825,11 +953,20 @@ const RENDERER_NAME = {title: 'opening statement', credit: 'end card', code: 'co
  * when, where the frames are, and what the automated checks found. The reviewer must be a fresh
  * agent that did not build the video; this brief is all it is given.
  */
-export const review = async (paths, {verify} = {}) => {
+export const review = async (paths, {verify, plan} = {}) => {
+  if (plan) return reviewPlan(paths);
   const video = path.join(paths.out, 'video.mp4');
   if (!existsSync(video)) fail('Nothing to review yet. Run `va render <project>` first.');
   const {storyboard} = load(paths);
   const routing = routingOf(paths, storyboard);
+  const ledger = await facts(paths);
+  const failed = ledger.rows.filter((entry) => entry.status === 'differs' || entry.status === 'missing');
+  const ledgerLine = [
+    !ledger.rows.length ? 'no facts declared, so no number in the video is computed by anything'
+      : failed.length ? `${failed.length} of ${ledger.rows.length} do not hold (${failed.map((entry) => entry.id).join(', ')})`
+        : `${ledger.rows.length} declared; every computed one agrees with the oracle`,
+    ledger.loose.length ? `${ledger.loose.length} number(s) said or shown with no fact behind them (${ledger.loose.map((number) => `"${number.text}"`).join(', ')})` : null,
+  ].filter(Boolean).join('; ');
   const {dir: sheetDir, findings} = await stills(paths);
   const {props} = await buildProps(paths);
   const checks = await qc(paths, {video, props});
@@ -871,18 +1008,22 @@ export const review = async (paths, {verify} = {}) => {
   out.push(`- Contact sheets, every visual state labelled with scene, beat, and time (read all of them):`);
   sheets.forEach((name) => out.push(`  - ${path.join(sheetDir, name)}`));
   out.push(`- For a closer look at any moment: \`node ${path.join(RUNTIME_DIR, 'va.mjs')} stills ${paths.dir} --at <seconds>\` writes ${path.join(sheetDir, 'moment.png')} at full size (it replaces the sheets; rerun without --at to get them back).`);
-  out.push('', '## What the automated checks found', '');
+  out.push('', '## Who it has to work for', '');
+  out.push('The video makes a contract with three viewers. Watch it once as each.', '', ...viewerContracts(), '');
+  out.push('## What the automated checks found', '');
   out.push('```', formatRouting(routing), '```', '');
+  out.push(`- Facts: ${ledgerLine}`);
   out.push(`- Layout: ${findings.length ? findings.flatMap((entry) => entry.issues.map((issue) => `${entry.label}: ${issue}`)).join('; ') : 'no issues measured'}`);
   out.push(`- File: ${checks.problems.length ? checks.problems.join('; ') : 'complete, with audio'}${checks.reviews.length ? `; ${checks.reviews.join('; ')}` : ''}`);
   out.push(
     `- Still picture: ${checks.statics.length ? checks.statics.map((item) => `${item.scene.id} beat ${item.beat} holds for ${(item.end - item.start).toFixed(1)}s from ${clock(item.start)}`).join('; ') : 'no stretch longer than 6s'}`,
+    `- Seams: ${checks.seams.length ? checks.seams.map((seam) => seam.text).join(' ') : 'none measured (no single-frame changes, carried-on joins match, no long silences, steady voice level)'}`,
     '',
   );
 
   if (verify) {
     out.push('## Your job: verify the previous round', '');
-    out.push(`The previous review is at ${path.resolve(verify)}. For every defect and fix it lists, look at the new frames and say FIXED, PARTLY, or STILL PRESENT, with the time. Then list anything new that is wrong: fixes often break something next to them.`, '');
+    out.push(`The previous review is at ${path.resolve(verify)}. For every defect and fix it lists, look at the new frames and say FIXED, PARTLY, or STILL PRESENT, with the time. Where the builder has written a disposition under a finding (fixed, answered, or deferred), judge the disposition too: an "answered" that does not answer the finding is STILL PRESENT. Then list anything new that is wrong: fixes often break something next to them.`, '');
     out.push(`Write your report to ${reportPath}, under 400 words, ending with one line: SHIP or ONE MORE PASS (with at most three fixes).`);
   } else {
     out.push('## What to judge', '');
@@ -895,11 +1036,13 @@ export const review = async (paths, {verify} = {}) => {
       '6. **Narration.** Any sentence that is unclear, assumes a term the audience has not been given, or claims something the picture never shows?',
       '7. **Story.** Do the first ten seconds give a reason to keep watching, in the picture and not only in the words? Is the viewer shown why this exists before how it works: the obvious approach and what it costs? Where the voice claims a count or a cost, is that number on screen as it adds up? Does anything move that the narration gives no reason for?',
       '8. **Flow.** Read the narration as one piece. Where does it start over instead of following on: a scene that does not pick up from the one before, a term defined after it was needed, a jump the viewer has to make alone?',
+      '9. **Say each scene back.** As the newcomer, write the one sentence you would give a friend about each scene: what happened, and why it mattered. A scene you cannot do that for is a blocker, whatever else is right about it.',
+      '10. **Numbers and absolutes.** Is every number on screen the number the voice says, rounded the same way? Does any sentence say always, never, at most, or at least where the picture shows only one case?',
       '',
     );
     out.push('## Your report', '');
     out.push(`Write it to ${reportPath}, under 500 words, with no praise:`, '');
-    out.push('- **Verdict:** SHIP or REVISE.', '- **Defects**, most serious first. Each one: scene · beat · time, what is wrong, and what in the frame shows it.', '- **Top fixes**, at most five, each concrete enough to act on (which scene, what to change).');
+    out.push('- **Verdict:** SHIP or REVISE.', '- **Scene by scene:** your one sentence for each.', '- **Defects**, most serious first. Each one: scene · beat · time, blocker, major, or minor, what is wrong, and what in the frame shows it.', '- **Top fixes**, at most five, each concrete enough to act on (which scene, what to change).');
   }
   const briefPath = path.join(reviewDir, `brief-${round}.md`);
   writeFileSync(briefPath, out.join('\n') + '\n');
@@ -909,6 +1052,36 @@ export const review = async (paths, {verify} = {}) => {
   return {briefPath, reportPath, round};
 };
 
+/**
+ * The review that costs nothing to act on: the script and storyboard, read by three fresh agents
+ * before anything is recorded or drawn. One brief per viewer; each reviewer is given one and
+ * nothing else.
+ */
+const reviewPlan = async (paths) => {
+  const {storyboard} = load(paths, {gate: false});
+  const routing = routingOf(paths, storyboard);
+  const ledger = await facts(paths);
+  const reviewDir = path.join(paths.out, 'review');
+  mkdirSync(reviewDir, {recursive: true});
+  const round = Math.max(0, ...readdirSync(reviewDir).map((name) => Number(name.match(/^plan-(\d+)-/)?.[1] || 0))) + 1;
+  const scriptFile = path.join(paths.dir, 'script.md');
+  const script = existsSync(scriptFile) ? scriptProse(readFileSync(scriptFile, 'utf8')).replace(/\s+/g, ' ') : '';
+  const root = path.resolve(paths.dir, storyboard.sourceRoot);
+  const sources = [...new Set(storyboard.scenes.flatMap((scene) => [scene.file, ...(scene.versions || []).map((version) => version.file)]).filter(Boolean))].map((file) => path.resolve(root, file));
+
+  log('');
+  log(`review: plan round ${round}, one brief per viewer. Give each to its own fresh agent, and nothing else:`);
+  const briefs = Object.keys(VIEWERS).map((viewer) => {
+    const briefPath = path.join(reviewDir, `plan-${round}-${viewer}.md`);
+    const reportPath = path.join(reviewDir, `plan-${round}-${viewer}-report.md`);
+    writeFileSync(briefPath, planBrief({viewer, storyboard, script, routingText: formatRouting(routing), ledger, sources, reportPath}));
+    log(`  ${VIEWERS[viewer].name.padEnd(16)} ${briefPath}`);
+    return {viewer, briefPath, reportPath};
+  });
+  log('  Then give every finding a disposition (fixed, answered, or deferred) before `va tts`.');
+  return {round, briefs};
+};
+
 export const studio = async (paths) => {
   ensureRuntime();
   const {file} = await buildProps(paths);
@@ -916,6 +1089,9 @@ export const studio = async (paths) => {
 };
 
 export const build = async (paths, options = {}) => {
+  // A number that does not hold is cheapest to find before anything is recorded or drawn.
+  const ledger = await facts(paths);
+  if (!ledger.ok) fail('The facts do not hold, so nothing was built. Fix what `va facts` lists and run the build again.');
   await tts(paths);
   await diagram(paths, [], options);
   await manim(paths, [], options);
@@ -934,6 +1110,41 @@ export const init = (slug, {dir} = {}) => {
   mkdirSync(path.join(target, 'diagrams'), {recursive: true});
   mkdirSync(path.join(target, 'manim'), {recursive: true});
   writeFileSync(path.join(target, '.gitignore'), 'public/\n.cache/\nout/\ntimeline.json\n');
+  writeFileSync(
+    path.join(target, 'script.md'),
+    [
+      '<!-- The whole narration, written as one piece before any scene exists. No scene labels, no stage directions.',
+      '     Read it aloud from top to bottom. Then split it: a paragraph becomes a scene, a sentence or two becomes a beat.',
+      '     `va route` checks that the storyboard says these words, in this order, and nothing else. -->',
+      '',
+      'Replace this with the hook, said over the picture that shows it: the most surprising thing, or the problem with the obvious way.',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    path.join(target, 'facts.py'),
+    [
+      '"""The oracle: every number the video says or shows, computed by running the code it is about.',
+      '',
+      '`va facts` runs this and compares what it prints with the storyboard\'s "facts". Import the real code,',
+      'run it on the video\'s own example, and count what it does. Restate nothing: a number typed here',
+      'checks nothing.',
+      '"""',
+      '',
+      'import json',
+      'import sys',
+      'from pathlib import Path',
+      '',
+      `sys.path.insert(0, str((Path(__file__).resolve().parent / ${JSON.stringify(path.relative(target, process.cwd()) || '.')}).resolve()))`,
+      '',
+      '# from the_module import the_function',
+      '',
+      'print(json.dumps({',
+      '    # "fact-id": value computed above,',
+      '}))',
+      '',
+    ].join('\n'),
+  );
   writeJson(path.join(target, 'storyboard.json'), {
     title: 'Untitled explainer',
     voice: 'en-US-AndrewNeural',
@@ -944,6 +1155,8 @@ export const init = (slug, {dir} = {}) => {
       focus: 'The one question the video answers.',
       hook: 'The core of the problem, or the most *surprising* thing about the answer, in one sentence.',
     },
+    facts: [],
+    vocabulary: [],
     scenes: [
       {
         id: 'open',

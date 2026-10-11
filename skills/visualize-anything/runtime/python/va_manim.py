@@ -97,6 +97,22 @@ DISCARDED = THEME["rose"]    # ruled out, evicted, removed
 
 config.background_color = BG
 
+_facts_path = os.environ.get("VA_FACTS")
+_FACTS = json.loads(Path(_facts_path).read_text()) if _facts_path and Path(_facts_path).exists() else {}
+
+
+def fact(name: str):
+    """A value from the storyboard's "facts", by id.
+
+    A number typed into a script can drift from the code it describes. Read it instead, so what is
+    drawn is what `va facts` checked:
+
+        looks = Text(str(fact("scan-looks")), font_size=40, color=AMBER)
+    """
+    if name not in _FACTS:
+        raise KeyError(f'fact({name!r}): not in the storyboard\'s "facts". Known: {", ".join(sorted(_FACTS)) or "(none)"}')
+    return _FACTS[name]
+
 
 # Typst sets formulas at 10pt; this maps its points to Manim units so that a formula and a
 # Text() at the same font_size read as the same size on screen.
@@ -324,7 +340,7 @@ class VAScene(Scene):
 
 
 __all__ = [
-    "VAScene", "Beat", "Math", "Typst", "Cells", "THEME", "TRACE", "CONTINUES", "TEXT_SCALE", "FRAME_WIDTH", "FRAME_HEIGHT", "SAFE_LEFT", "SAFE_RIGHT",
+    "VAScene", "Beat", "Math", "Typst", "Cells", "fact", "THEME", "TRACE", "CONTINUES", "TEXT_SCALE", "FRAME_WIDTH", "FRAME_HEIGHT", "SAFE_LEFT", "SAFE_RIGHT",
     "UNVISITED", "CURRENT", "FRONTIER", "SETTLED", "DISCARDED", "BG", "PANEL", "BORDER", "TEXT", "MUTED", "DIM", "ACCENT", "CYAN", "VIOLET",
     "AMBER", "ROSE", "ORANGE", "MONO", "SANS", "SAFE_TOP", "SAFE_BOTTOM", "SAFE_CENTER_Y",
 ]

@@ -264,3 +264,55 @@ test('a thumbnail names a few words and a pictured scene; a credit needs the nam
   const old = loadStoryboard(project({scenes: [{...scenes[0], title: 'Why it is fast'}, scenes[1]]}));
   assert.equal(old.warnings.length, titled + 1, 'a title on an opening is no longer shown, and says so');
 });
+
+test('where the picture carries on across a join, the voice does not stop to breathe', () => {
+  const manifest = {voice: 'v', rate: '+0%', pitch: '+0Hz', beats: ['a-0', 'b-0', 'c-0'].map((name) => ({file: `${name}.mp3`, key: name, duration: 2, words: []}))};
+  const scenes = (carry) => [{id: 'a', beats: [{say: 'x'}]}, {id: 'b', continues: carry, beats: [{say: 'y'}]}, {id: 'c', beats: [{say: 'z'}]}];
+  const faded = buildTimeline({fps: 30, scenes: scenes(false)}, manifest);
+  const carried = buildTimeline({fps: 30, scenes: scenes(true)}, manifest);
+  const gap = (timeline, index) => {
+    const [before, after] = [timeline.scenes[index - 1], timeline.scenes[index]];
+    return (after.from + after.beats[0].from - (before.from + before.beats.at(-1).from + 60)) / 30; // 60 frames of speech
+  };
+  assert.equal(gap(faded, 1), 1.2, 'a fade keeps its breath: 0.7s out, 0.5s in');
+  // Scenes end on a whole frame, so the pause is 0.3s to within one frame.
+  assert.ok(Math.abs(gap(carried, 1) - 0.3) <= 1 / 30 + 1e-9, `a carried-on join pauses as long as two beats do (${gap(carried, 1)})`);
+  assert.equal(gap(carried, 2), 1.2, 'the next join, a fade, is unchanged');
+});
+
+test('a prediction pause ends on a question, is answered in the same scene, and holds the picture longer', () => {
+  const ask = (beats) => ({scenes: [{id: 'race', need: 'motion', class: 'Race', beats}]});
+  assert.throws(() => loadStoryboard(project(ask([{say: 'It gets there in two.', predict: true}, {say: 'Two looks.'}])), {strict: false}), /ends on the question/);
+  assert.throws(() => loadStoryboard(project(ask([{say: 'Six looks.'}, {say: 'Can it take fewer?', predict: true}])), {strict: false}), /answered by the next beat of the same scene/);
+  const {storyboard} = loadStoryboard(project(ask([{say: 'Six looks.'}, {say: 'Can it take fewer?', predict: true}, {say: 'Two.'}])), {strict: false});
+  const clip = (file) => ({file, key: file, duration: 2, words: []});
+  const timeline = buildTimeline(storyboard, {voice: 'v', rate: 'r', pitch: 'p', beats: ['race-0.mp3', 'race-1.mp3', 'race-2.mp3'].map(clip)});
+  const [first, asked, answer] = timeline.scenes[0].beats;
+  // 0.3s between ordinary beats; 1.5s more after the question.
+  assert.equal(asked.from - first.from, Math.round(2.3 * 30));
+  assert.equal(answer.from - asked.from, Math.round(3.8 * 30));
+});
+
+test('facts, the claims that rest on them, and the vocabulary are checked for shape', () => {
+  const scenes = [{id: 'race', need: 'motion', class: 'Race', beats: [{say: 'A read key is never evicted.', holds: 'recent-survives'}]}];
+  assert.throws(() => loadStoryboard(project({scenes}), {strict: false}), /"holds" names "recent-survives", which is not in "facts"/);
+  assert.throws(() => loadStoryboard(project({scenes, facts: [{id: 'recent-survives', value: false}]}), {strict: false}), /whose value is not true/);
+  assert.throws(() => loadStoryboard(project({scenes, vocabulary: [{word: 'entry', defined: 'nowhere'}]}), {strict: false}), /"defined" "nowhere" is not a scene/);
+  const {storyboard} = loadStoryboard(
+    project({scenes, facts: [{id: 'recent-survives', value: true, what: 'a key read last is not the next evicted, at capacity 1 to 5'}], vocabulary: [{word: 'entry', not: ['slot'], defined: 'race'}]}),
+    {strict: false},
+  );
+  assert.deepEqual(storyboard.facts, [{id: 'recent-survives', value: true, what: 'a key read last is not the next evicted, at capacity 1 to 5', given: null}]);
+  assert.deepEqual(storyboard.vocabulary, [{word: 'entry', not: ['slot'], defined: 'race'}]);
+});
+
+test('a music bed is a file and two distances below the voice, neither of them close', () => {
+  const scenes = [{id: 'race', need: 'motion', class: 'Race', beats: [{say: 'Six looks.'}]}];
+  const music = (value) => loadStoryboard(project({scenes, music: value}), {strict: false}).storyboard.music;
+  assert.equal(music(undefined), null);
+  assert.deepEqual(music('bed.mp3'), {file: 'bed.mp3', under: 18, gap: 10});
+  assert.deepEqual(music({file: 'bed.mp3', under: 20, gap: 12}), {file: 'bed.mp3', under: 20, gap: 12});
+  assert.throws(() => music({file: 'bed.mp3', under: 9}), /"under" must be at least 16/);
+  assert.throws(() => music({file: 'bed.mp3', gap: 25}), /"gap" must be between 4 and "under"/);
+  assert.throws(() => loadStoryboard(project({scenes, music: 'bed.mp3'})), /"music": file not found/);
+});

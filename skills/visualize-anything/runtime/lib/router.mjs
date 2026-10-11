@@ -4,6 +4,7 @@
 // reason, and a scene can disagree with the router by saying why in `override`.
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
+import {absolutesIn, unbackedNumbers, vocabularyFindings} from './facts.mjs';
 import {speakable} from './speech.mjs';
 
 /** What the viewer needs to see → which renderer shows it. The single source of routing truth. */
@@ -183,7 +184,8 @@ const hasOverride = (scene) => typeof scene.override === 'string' && scene.overr
 const estimateSeconds = (scene, timed) => {
   if (timed) return timed.frames / timed.fps;
   const words = scene.beats.reduce((sum, beat) => sum + beat.say.split(/\s+/).length, 0);
-  return words / 2.6 + 1.2 + 0.3 * (scene.beats.length - 1);
+  const thinking = 1.5 * scene.beats.filter((beat) => beat.predict).length;
+  return words / 2.6 + 1.2 + 0.3 * (scene.beats.length - 1) + thinking;
 };
 
 const diagramNodeCount = (scene, projectDir) => {
@@ -197,6 +199,30 @@ const diagramNodeCount = (scene, projectDir) => {
   } catch {
     return null;
   }
+};
+
+// The narration is written once, whole, in script.md, and then split into scenes and beats. The two
+// are compared by their words alone, in order, so line breaks and punctuation are free to differ.
+const spokenWords = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+
+/** The prose of a script: its headings, comments, and quoted notes are for the writer, not the voice. */
+export const scriptProse = (markdown) => {
+  const prose = String(markdown).replace(/<!--[\s\S]*?-->/g, ' ');
+  return prose.split('\n').filter((line) => !/^\s*(#|>)/.test(line)).join(' ');
+};
+
+/** Where a storyboard's narration first parts from the script, or null when they are the same words in the same order. */
+export const scriptDrift = (markdown, scenes) => {
+  const script = spokenWords(scriptProse(markdown));
+  const spoken = scenes.flatMap((scene) => scene.beats.flatMap((beat, beatIndex) => spokenWords(beat.say).map((word) => ({word, scene: scene.id, beat: beatIndex + 1}))));
+  const length = Math.max(script.length, spoken.length);
+  for (let index = 0; index < length; index += 1) {
+    if (script[index] === spoken[index]?.word) continue;
+    const around = (words) => words.slice(Math.max(0, index - 3), index + 4).join(' ') || '(nothing more)';
+    const place = spoken[Math.min(index, spoken.length - 1)];
+    return {scene: place?.scene ?? null, beat: place?.beat ?? null, script: around(script), storyboard: around(spoken.map((entry) => entry.word))};
+  }
+  return null;
 };
 
 /**
@@ -224,6 +250,8 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
       text: `No "subject" declared. The narration reads as "${guess}" (${totals.algorithm} algorithm cues, ${totals.system} system cues). Set "subject" to algorithm, system, or mixed.`,
     });
   }
+
+  const offVocabulary = vocabularyFindings(storyboard);
 
   // A credit comes after the close: the scene before it is the one that has to end the explanation.
   const closeIndex = count > 1 && scenes[count - 1].kind === 'credit' ? count - 2 : count - 1;
@@ -305,7 +333,21 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
       }
       const padding = FILLER.filter(([, pattern]) => pattern.test(beat.say)).map(([phrase]) => `"${phrase}"`);
       if (padding.length) flag('review', `Beat ${beatIndex + 1} has filler: ${padding.join(', ')}. Cut it; the sentence is stronger without.`);
+      // A sentence without exceptions is a promise about the edges, and is tested there before it is said.
+      const absolute = absolutesIn(beat.say);
+      if (absolute.length && !beat.holds) {
+        flag('review', `Beat ${beatIndex + 1} says ${absolute.map((word) => `"${word}"`).join(', ')}. That is a claim about every case, so try the edges before voicing it (nothing in it, one thing in it, a tie, the limit): have the oracle print true or false, record it in "facts", and name it here with "holds": "<fact id>". If it only usually holds, say that instead.`);
+      }
     });
+
+    // One word per idea, and no word before the scene that explains it.
+    for (const finding of offVocabulary.filter((entry) => entry.scene === scene.id)) {
+      flag('review', finding.kind === 'synonym'
+        ? `Beat ${finding.beat} says "${finding.said}" for what the video calls "${finding.word}". Two words for one thing are heard as two things.`
+        : `Beat ${finding.beat} says "${finding.word}" before "${finding.defined}", the scene that explains it. Use plain words until then, or explain it here.`);
+    }
+    const asked = scene.beats.filter((beat) => beat.predict).length;
+    if (asked > 2) flag('review', `${asked} prediction pauses in one scene. One or two; past that the stopping becomes the rhythm and none of them is a question the viewer wanted to answer.`);
 
     // Two scenes drawn by the same script usually share one picture, and should not blink between them.
     const before = scenes[index - 1];
@@ -395,6 +437,17 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
   if (subject === 'system' && !kinds.includes('diagram')) seq('review', 'A system video with no diagram never shows how the parts connect. Add an architecture or sequence scene.');
   if (!kinds.includes('code') && !kinds.includes('trace') && !scenes.some((scene) => scene.need === 'change')) seq('review', 'No code scene. An explainer about code should show the real lines at least once.');
 
+  // The narration is one piece of writing, split up; not a set of lines written a scene at a time.
+  const scriptFile = projectDir ? path.join(projectDir, 'script.md') : null;
+  if (scriptFile && !existsSync(scriptFile)) {
+    if (count > 2) seq('review', 'No script.md. Write the whole narration there first, as one continuous piece with no scene labels, and read it through. Then split it into scenes and beats. Lines written a scene at a time do not follow on from each other.');
+  } else if (scriptFile) {
+    const drift = scriptDrift(readFileSync(scriptFile, 'utf8'), scenes);
+    if (drift) {
+      seq('review', `The storyboard's narration is not the script. They part at "${drift.scene}" beat ${drift.beat}: script.md has "${drift.script}", the storyboard has "${drift.storyboard}". Change the script first, reread the lines either side of the change, then bring the storyboard into line.`);
+    }
+  }
+
   // The hook is settled before the storyboard: the core of the problem, or the most interesting thing about the answer.
   const agreedHook = typeof storyboard.brief?.hook === 'string' ? storyboard.brief.hook.trim() : '';
   const spokenIn = (scene) => new Set(scene.beats.flatMap((beat) => beat.say.toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ')));
@@ -419,6 +472,21 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
     seq('review', 'No beat is marked to land. Find the moment the main point resolves and give that beat "land": true; the voice waits a moment longer there so it can sink in.');
   }
 
+  // Every number said or shown is a row of the ledger, where the oracle can compute it again.
+  const loose = unbackedNumbers(storyboard);
+  if (loose.length) {
+    const listed = loose.slice(0, 6).map((number) => `"${number.text}" (${number.where})`).join(', ');
+    seq('review', `${loose.length} number(s) are said or shown but are not in "facts": ${listed}${loose.length > 6 ? ', and more' : ''}. A number typed in by hand can be wrong without anything noticing. Give each a row, {"id": "...", "value": n, "what": "..."}, have facts.py compute it by running the real code, and run \`va facts\`. A number nothing computes (the count of takeaways) gets "given": "<where it comes from>" instead.`);
+  }
+  // The viewer who has guessed is waiting for the answer; the one who was only told is not.
+  const total = rows.reduce((sum, row) => sum + row.seconds, 0);
+  if (count > 2 && total > 45 && !scenes.some((scene) => scene.beats.some((beat) => beat.predict))) {
+    seq('review', 'No prediction pause. Find one place where the viewer could work out what comes next, end that beat on the question, and give it "predict": true: the picture holds for a moment longer before the next beat answers. One or two a video.');
+  }
+  if (count > 2 && !(storyboard.vocabulary || []).length) {
+    seq('review', 'No "vocabulary". List the handful of words the video uses for its ideas, each with the words it must not also be called and the scene that explains it: [{"word": "entry", "not": ["item", "element"], "defined": "state"}]. The router then holds the narration to one word per idea.');
+  }
+
   // The video's title is read where it is posted, beside the thumbnail; it is not shown in the video.
   if (storyboard.title && storyboard.title !== 'Untitled') for (const problem of weakTitle(storyboard.title)) seq('review', problem);
 
@@ -441,7 +509,6 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
     seq('review', 'The thumbnail repeats the title, which already sits beside it wherever the video is listed. Use the hook instead: the number, the failure, the question.');
   }
 
-  const total = rows.reduce((sum, row) => sum + row.seconds, 0);
   const target = Number(storyboard.brief?.length);
   if (Number.isFinite(target) && target > 0 && Math.abs(total - target) / target > 0.2) {
     seq('review', `The brief asks for about ${target}s; this runs ${timeline ? '' : 'about '}${total.toFixed(0)}s. ${total > target ? 'Cut a scene or tighten the narration' : 'There is room for another idea, or say so and shorten the brief'}.`);

@@ -14,6 +14,79 @@
     "from": "race",
     "beat": 3
   },
+  "vocabulary": [
+    {
+      "word": "item",
+      "not": [
+        "element",
+        "entry"
+      ],
+      "defined": "race"
+    },
+    {
+      "word": "look",
+      "not": [
+        "comparison",
+        "probe"
+      ],
+      "defined": "race"
+    },
+    {
+      "word": "pass",
+      "not": [
+        "iteration",
+        "round"
+      ],
+      "defined": "walk"
+    }
+  ],
+  "facts": [
+    {
+      "id": "items",
+      "value": 7,
+      "what": "items in the list the video searches"
+    },
+    {
+      "id": "target",
+      "value": 57,
+      "what": "the value being searched for"
+    },
+    {
+      "id": "scan-looks",
+      "value": 6,
+      "what": "looks a scan from the front takes to reach the target"
+    },
+    {
+      "id": "binary-looks",
+      "value": 2,
+      "what": "passes binary_search takes to reach the target"
+    },
+    {
+      "id": "first-middle",
+      "value": 23,
+      "what": "the first middle item binary_search looks at"
+    },
+    {
+      "id": "passes-for-a-million",
+      "value": 20,
+      "what": "the most passes binary_search can take on a million items"
+    },
+    {
+      "id": "lines",
+      "value": 11,
+      "what": "lines in binary_search"
+    },
+    {
+      "id": "a-million",
+      "value": 1000000,
+      "given": "the size of list the hook asks about"
+    },
+    {
+      "id": "takeaways",
+      "value": 3,
+      "given": "the recap has three items"
+    }
+  ],
   "scenes": [
     {
       "id": "race",
@@ -99,10 +172,11 @@
       "script": "manim/search.py",
       "beats": [
         {
-          "say": "Two passes for seven items, because every pass throws away half of what is left."
+          "say": "Two passes for seven items, because every pass throws away half of what is left. So how many for a million?",
+          "predict": true
         },
         {
-          "say": "So a list of n items needs about log base two of n passes. For a million items, that is twenty."
+          "say": "A list of n items needs about log base two of n passes. For a million items, that is twenty."
         }
       ]
     },

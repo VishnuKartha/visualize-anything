@@ -16,6 +16,22 @@ Every video opens on the picture, with the hook said over it: the core of the pr
 
 These and the other decisions about taste (no reciting code, no filler, a pause after the main point, a minimum text size, one palette, pictures carried across scenes) are written down in [taste.md](skills/visualize-anything/references/taste.md), and most are checked automatically.
 
+## The method
+
+The router decides what each scene looks like. What makes the video worth trusting is the method around it, which follows the one in Jeffrey Emanuel's [jeffs_math_explainer_videos](https://github.com/Dicklesworthstone/jeffs_math_explainer_videos): a chain of gates that fail closed, each one there because of a way an explainer goes wrong.
+
+| Gate | What it holds | How |
+|---|---|---|
+| Facts | No number is typed. Every number said or shown is a row in the storyboard's `facts`, computed again by an oracle (`facts.py`) that runs the real code | `va facts` (a difference stops the build); `va route` lists numbers with no row |
+| Edges | A sentence that says always or never names the fact that tried its edge cases | `va route` |
+| Words | One word per idea, and no word before the scene that explains it | `va route`, against the storyboard's `vocabulary` |
+| Plan review | The script and storyboard are read by three fresh agents before anything is recorded: a newcomer, a practitioner, an expert. Each says every scene back in one sentence; one they cannot is a blocker | `va review --plan` |
+| Prediction | At least one question is left open long enough for the viewer to answer it | `"predict": true` on a beat; `va route` |
+| Sound | A music bed, if you bring one, is ducked ahead of each sentence and measured afterwards: 18 LU under the voice, refused closer than 16 | `"music"`; `va render` |
+| Video review | The rendered video is judged by an agent that did not build it, against the same three viewers; every finding gets a disposition | `va review` |
+
+Those ideas are that project's; the code here is not. It renders maths videos in Rust on its author's own engine and voice stack, and its licence carries a rider that would attach to anything derived from it, so nothing from it is included or required. [facts.md](skills/visualize-anything/references/facts.md) and [review.md](skills/visualize-anything/references/review.md) describe this skill's versions.
+
 ## The router
 
 The agent does not pick renderers directly. For each scene it declares what the viewer needs to see, from a closed vocabulary (`source`, `trace`, `change`, `data`, `motion`, `branching`, `math`, `structure`, `conversation`, `pipeline`, `process`, `states`, `question`, `recap`, `credit`), and `va route` does the rest:
@@ -47,7 +63,16 @@ Narration is synthesized with [edge-tts](https://github.com/rany2/edge-tts) (no 
 read the code
      │
      ▼
-storyboard.json ── scenes, each with a kind and narrated beats
+va facts ───────── facts.py runs the real code; every number the video will use is computed first
+     │
+     ▼
+script.md ──────── the whole narration, written as one piece
+     │
+     ▼
+storyboard.json ── scenes, each with a need and narrated beats; facts; vocabulary
+     │
+     ▼
+va review --plan ─ three viewers read the plan before anything is recorded
      │
      ▼
 va tts ─────────── one edge-tts clip per beat → timeline.json (frame-exact time budget)
@@ -104,7 +129,7 @@ node skills/visualize-anything/runtime/va.mjs build examples/lru-cache/video
 node skills/visualize-anything/runtime/va.mjs build examples/binary-search/video
 ```
 
-Results are written to each project's `out/video.mp4`. Its [storyboard.json](examples/lru-cache/video/storyboard.json) is a good template, including a `why` for each routing choice.
+Results are written to each project's `out/video.mp4`. Its [storyboard.json](examples/lru-cache/video/storyboard.json) is a good template, including a `why` for each routing choice, and its [facts.py](examples/lru-cache/video/facts.py) shows an oracle that watches the real class run.
 
 ## CLI
 
@@ -113,6 +138,7 @@ va setup | doctor
 va init <slug>                 create .visualize/<slug>/ with a starter storyboard
 va route <project>             review every routing decision: need → renderer, with reasons
 va check <project>             validate the storyboard and its routing
+va facts <project>             run the oracle (facts.py); hold every number in the video to it
 va tts <project>               narration → timeline.json
 va diagram <project> [ids]     Archify candidates → baked diagrams
 va manim <project> [ids]       Manim scripts → clips at narration length
@@ -121,7 +147,8 @@ va stills <project> [ids]      contact sheets + layout check   (--at <seconds> f
 va render <project>            → out/video.mp4, .srt, .vtt, thumbnail.png   (--draft, --force)
 va qc <project>                check the rendered video: complete, audible, picture not frozen
 va review <project>            write the brief for an independent reviewer   (--verify <report>)
-va build <project>             all of the above
+va review <project> --plan     before building: one brief each for the newcomer, practitioner, expert
+va build <project>             facts → tts → diagram → manim → hyperframes → render
 va studio <project>            interactive preview in Remotion Studio
 ```
 
@@ -133,9 +160,15 @@ Every step is cached by content. Changing one scene reruns one scene, including 
 - **The picture follows what is named.** Say an identifier and its line is highlighted at that word; say a diagram node's label and it lights up. No cue needed.
 - **Mixed renderers.** Remotion, Manim, Archify, and HyperFrames scenes share one backdrop, palette, heading, and caption style, so a video can cut between them without the seam showing.
 - **Trace scenes.** Code on the left with a highlight stepping through it, the data it changes animated on the right, both driven by the same sentence.
+- **Facts ledger.** Numbers are computed, not typed. `facts.py` runs the code being explained on the video's own example; `va facts` compares it with the storyboard, at the precision the storyboard writes, and a Manim script reads the same values with `fact("<id>")`.
+- **Three viewers.** `va review --plan` writes one brief per viewer before anything is built; the video review holds the result to the same three contracts.
 - **Independent review.** `va review` writes a brief for a fresh agent that did not build the video: the plan, the narration, the frames, and what the checks found. A second round verifies the fixes.
+- **Prediction pauses.** A beat marked `predict` ends on a question; the voice waits and the picture holds before the next beat answers.
+- **Music under the voice.** A bed you supply is ducked from the narration's own timeline, shaped to stay out of the voice's band, and measured: the render fails if it sits closer than 16 LU or the mix peaks over -1 dBTP. No music is supplied or generated.
 - **Word-anchored cues.** A beat can change the picture mid-sentence: `{"at": "check the size", "lines": 21}` moves the highlight when those words are spoken, using the speech engine's word timestamps. Manim scenes get the same with `beat.until("<phrase>")`.
 - **Contact sheets.** `va stills` puts every visual state of the video on a few labelled images, so a reviewer reads three images instead of twenty.
+- **Script check.** The narration is written whole in `script.md` and then split; the router checks that the storyboard says those words, in that order, and nothing else.
+- **Seam check.** The rendered file is measured for places it stops being continuous: a single-frame cut, a jump at a join meant to carry on, the voice stopping where the picture does not, dead air, a line at a different level. Same file, same answer.
 - **Layout check.** While making the sheets, title, code, and bullets scenes are measured in the browser: anything off the frame, colliding with captions or heading, or cut off is reported and outlined in red. Manim clips are checked for drawing under the captions or heading.
 - **Static-picture detection.** `va qc` finds stretches where the picture holds still for more than six seconds under a moving voice, and says which beat to fix.
 - **Deliverables.** Every render also writes `.srt` and `.vtt` subtitles and a thumbnail.
@@ -147,8 +180,8 @@ skills/visualize-anything/
 ├── SKILL.md                 the router: workflow and contract
 ├── references/              routing rules, storyboard format, diagram and Manim scene guides
 └── runtime/
-    ├── va.mjs, lib/         CLI: router, validation, timeline, Archify bake, Manim render, Remotion render, QC
-    ├── test/                router, cue timing, and subtitle tests (npm test)
+    ├── va.mjs, lib/         CLI: router, facts ledger, viewers, validation, timeline, Archify bake, Manim render, Remotion render, sound, QC
+    ├── test/                router, facts, cue timing, duck envelope, seam, and subtitle tests (npm test)
     ├── python/              tts.py (edge-tts), va_manim.py (beat timing + theme for Manim)
     ├── hyperframes/         the code-change composition and a starter for authored ones
     ├── src/                 Remotion composition and scene components

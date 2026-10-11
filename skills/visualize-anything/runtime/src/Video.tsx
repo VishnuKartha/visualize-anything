@@ -1,6 +1,6 @@
 import {Audio} from '@remotion/media';
 import type React from 'react';
-import {useMemo} from 'react';
+import {useContext, useMemo} from 'react';
 import {AbsoluteFill, Sequence, interpolate, staticFile, useCurrentFrame, useVideoConfig} from 'remotion';
 import {Captions} from './Captions';
 import {BulletsView} from './scenes/Bullets';
@@ -10,7 +10,7 @@ import {DiagramView} from './scenes/Diagram';
 import {HyperframesView, ManimView} from './scenes/Manim';
 import {TitleView} from './scenes/Title';
 import {TraceView} from './scenes/Trace';
-import {StageContext} from './StageContext';
+import {FadeContext, StageContext} from './StageContext';
 import {MONO, STAGE, theme} from './theme';
 import type {ExplainerProps, Scene} from './types';
 
@@ -59,9 +59,21 @@ const SceneShell: React.FC<{scene: Scene; captions: boolean}> = ({scene, caption
   const fadeIn = scene.fadeIn === false ? 1 : interpolate(frame, [0, 9], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
   const fadeOut = scene.fadeOut === false ? 1 : interpolate(frame, [scene.frames - 7, scene.frames - 1], [1, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
   const opacity = fadeIn * fadeOut;
+  // A heading that changes at a carried-on join is faded across it, not swapped. One that stays the same stays put.
+  const {scenes} = useContext(StageContext);
+  const at = scenes.findIndex((entry) => entry.id === scene.id);
+  const changesIn = scene.fadeIn === false && scenes[at - 1]?.heading !== scene.heading;
+  const changesOut = scene.fadeOut === false && scenes[at + 1]?.heading !== scene.heading;
+  const carry =
+    (changesIn ? interpolate(frame, [0, 9], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}) : 1) *
+    (changesOut ? interpolate(frame, [scene.frames - 10, scene.frames - 1], [1, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}) : 1);
+  // Scenes that blend a clip into the backdrop fade their own parts; the rest fade as a whole.
+  const blended = scene.kind === 'manim' || scene.kind === 'trace';
   return (
-    <AbsoluteFill style={{opacity}}>
-      <View scene={scene} />
+    <AbsoluteFill style={{opacity: blended ? 1 : opacity}}>
+      <FadeContext.Provider value={blended ? opacity : 1}>
+        <View scene={scene} />
+      </FadeContext.Provider>
       {scene.heading ? (
         <div
           data-va-text="heading"
@@ -78,6 +90,7 @@ const SceneShell: React.FC<{scene: Scene; captions: boolean}> = ({scene, caption
             fontWeight: 500,
             letterSpacing: '0.04em',
             color: theme.muted,
+            opacity: carry * (blended ? opacity : 1),
           }}
         >
           <span style={{width: 10, height: 10, borderRadius: 3, backgroundColor: theme.accent}} />

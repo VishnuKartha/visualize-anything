@@ -26,6 +26,8 @@ The house rules, in [references/taste.md](references/taste.md), shape every vide
 - **End on the picture.** No slide of bullets. The recap shows each takeaway beside the moment that proved it, and its last line returns to the hook. The name of what was explained comes after that, in a short `credit` scene.
 - **One picture, carried through.** Scenes that share a picture are marked `continues` and do not fade between each other.
 - **The voice explains.** It does not recite code or pad with filler, and it leaves a moment of quiet after the main point (`land`).
+- **No number is typed.** Every number said or shown is a row in the storyboard's `facts`, computed again by a script that runs the real code. A sentence that says always or never is tested at its edges first. See [references/facts.md](references/facts.md).
+- **Three viewers, before and after.** The plan is read by a newcomer, a practitioner, and an expert before anything is built, and the video is judged against the same three.
 
 You do not pick renderers directly. You declare what each scene's viewer needs to see (`need`), and the router maps that to a renderer and reviews your choices. See [references/routing.md](references/routing.md).
 
@@ -34,6 +36,7 @@ You do not pick renderers directly. You declare what each scene's viewer needs t
 - Continue until `out/video.mp4` exists and you have looked at its frames. If blocked, report the exact blocker.
 - The storyboard's narration is the clock. Never write a visual before `va tts` has told you how long each beat lasts.
 - Every factual claim in the narration must come from code you actually read. Quote real lines with `file` + `range`; do not retype code from memory.
+- Every number comes from running that code. `va facts` must pass before anything is built; when a fact differs, the code is right and the sentence changes.
 - The hook is settled with the user before the storyboard, and the video opens on the picture that shows it: no title card, no introduction, no pointer to the source. The thumbnail is a hook frame you write (`thumbnail`), and the source is named in the last scene. Read [references/opening.md](references/opening.md) before the brief.
 - Report honestly: say which checks you ran and which stills you looked at.
 
@@ -47,7 +50,9 @@ node <skill>/runtime/va.mjs doctor
 
 If anything is marked `MISS`, run `va setup` once. It installs the Remotion runtime, a pinned copy of Archify under `~/.visualize-anything/`, and Manim with Typst through `uv`. Typst typesets formulas in Manim scenes, so no LaTeX installation is needed: write `Math("O(log n)")` instead of `MathTex`.
 
-## Workflow: Brief → Understand → Storyboard → TTS → Visuals → Review → Render → Independent review
+## Workflow: Brief → Understand → Facts → Storyboard → Plan review → TTS → Visuals → Review → Render → Independent review
+
+Each arrow is a gate. `va facts` and routing errors stop the build outright; the two reviews stop it until every finding has a disposition.
 
 ### 0. Agree the brief
 
@@ -63,18 +68,32 @@ Read the code the video is about, from its real location. Decide the one questio
 
 Then decide the shape of the story, from [references/story.md](references/story.md): the obvious approach this code replaces and what that approach costs, the number that will be counted on screen, and the limit worth naming. A video that only walks through what the code does has skipped why it is written that way.
 
-### 2. Storyboard
+### 2. Facts
 
 ```bash
 VA init <slug>          # prints the project directory, .visualize/<slug>/
 ```
 
-Write `storyboard.json` there. It is the single source of truth: a `subject`, then an ordered list of scenes, each with a `need` and a list of `beats`. A beat is one spoken line plus the visual cue that accompanies it.
+Before writing a sentence, work out the numbers the story turns on: what the obvious approach costs on the example, what the real one costs, how it scales, how many lines. Write `facts.py` in the project, following [references/facts.md](references/facts.md): it runs the real code on the video's own example and prints each number. Record them as `facts` in the storyboard and run:
+
+```bash
+VA facts <project>      # every fact against what the oracle computes. A difference stops the build.
+```
+
+A number that surprises you here is a better hook than the one you had. A claim you meant to make with "always" or "never" gets its edges tried here too.
+
+### 3. Storyboard
+
+**Write the script first, whole.** `script.md` in the project is the entire narration as one continuous piece: no scene labels, no stage directions, the hook as its first sentence. Write it from the first word to the last in one go, the way it will be heard, then read it through and fix every sentence that does not follow from the one before. Only then split it: a paragraph becomes a scene, a sentence or two becomes a beat. Never write a line into the storyboard that is not in the script. Narration written a scene at a time comes out as a list of separate explanations; narration written whole and then cut cannot.
+
+Then write `storyboard.json`. It is the single source of truth for everything but the wording: a `subject`, then an ordered list of scenes, each with a `need` and a list of `beats`. A beat is one spoken line of the script plus the visual cue that accompanies it. `va route` checks that the beats, read in order, are the script's words and nothing else.
 
 - Set `subject` and give every scene a `need` from the vocabulary in [references/routing.md](references/routing.md). Record the reason in the scene's `"why"`.
 - Field-by-field format and a complete example: [references/storyboard.md](references/storyboard.md).
 - Write the `thumbnail` (five words at most and the scene whose picture goes under them) and end on a `credit` scene that names what was explained. Both are in [references/opening.md](references/opening.md) and [references/taste.md](references/taste.md).
 - Write narration for the ear: short sentences, one idea per beat, 8 to 25 words. Write identifiers and notation as they are (`move_to_end`, `O(log n)`): the voice gets a spoken form automatically and the captions keep what you wrote.
+- Use numbers only from `facts`, and one word per idea: list the video's words as `vocabulary`, each with what it must not also be called and the scene that explains it.
+- Leave one question open. Where the viewer could work out what comes next, end the beat on the question and mark it `"predict": true`; the next beat answers. See [references/taste.md](references/taste.md).
 - Name things. When a sentence says an identifier or a diagram node's label, the highlight or focus follows it to that word without any cue from you. "It refreshes the entry" moves nothing; "`move_to_end` refreshes the entry" moves the highlight.
 - When you need more control, keep the sentence as one beat and add `cues` that land on spoken words (`{"at": "check the size", "lines": 21}`).
 
@@ -85,9 +104,19 @@ VA check <project>      # the same, plus structure, line ranges, and file paths.
 
 Read the routing report before going further. An `ERROR` blocks every later step: fix the scene, or add an `override` with the reason if the route really is right. A `REVIEW` is advice: act on it or leave it, but do not skip reading it. Rerun `va route` whenever narration or scene order changes.
 
-**Approval gate.** Before synthesizing or rendering anything, read the whole narration through as one piece and fix every join where a scene starts over instead of following on. Then show the user the routing table and the narration, scene by scene, and wait for a go-ahead or changes. Changing a sentence now costs nothing; changing it after the render costs the render. Skip the gate only if the user has said to go straight through.
+### 4. Plan review
 
-### 3. TTS
+The plan is read by three fresh agents before anything is recorded, each as one viewer: the newcomer, the practitioner, the expert.
+
+```bash
+VA review <project> --plan     # writes out/review/plan-1-<viewer>.md, one brief per viewer
+```
+
+Hand each brief to its own new subagent, at the same time, as described in [references/review.md](references/review.md). Each says every scene back in one sentence and lists what confused, bored, or misled it. Give every finding a disposition (fixed, answered, or deferred), fix the blockers in `script.md` and then the storyboard, and rerun `va route` and `va facts`. If you cannot start subagents, tell the user the plan was not reviewed.
+
+**Approval gate.** Before synthesizing or rendering anything, show the user the script as it reads whole, then the routing table with where each scene begins in it, the facts table, and what the three viewers found and what you did about it, and wait for a go-ahead or changes. Changing a sentence now costs nothing; changing it after the render costs the render. Skip the gate only if the user has said to go straight through.
+
+### 5. TTS
 
 ```bash
 VA tts <project>
@@ -95,7 +124,7 @@ VA tts <project>
 
 Synthesizes one clip per beat with edge-tts and writes `timeline.json`. It prints the time budget: how many seconds each beat's visual window lasts. Those numbers are what you build the diagram focus and Manim animations against. Unchanged lines are cached, so rerunning after a wording edit is cheap.
 
-### 4. Visuals
+### 6. Visuals
 
 `title`, `bullets`, and `credit` scenes need nothing more: they render from the storyboard.
 
@@ -121,7 +150,7 @@ VA manim <project> [scene-id...]
 
 It renders the scene and reports any beat whose animation ran past its narration window. Fix those by shortening `run_time` values, not by ignoring them.
 
-### 5. Review
+### 7. Review
 
 ```bash
 VA stills <project>                  # contact sheets: every visual state, nine to an image
@@ -133,7 +162,7 @@ Contact sheets land in `out/stills/sheet-NN.png`, each frame labelled with its s
 
 The same pass measures layout in the browser for title, code, and bullets scenes and prints anything that runs off the frame, collides with the captions or heading, or is cut off; those frames are outlined in red on the sheet. Fix every layout issue it reports. `va manim` does the equivalent for animations, warning when a clip draws where the captions or heading sit.
 
-### 6. Render
+### 8. Render
 
 ```bash
 VA render <project>            # → .visualize/<slug>/out/video.mp4
@@ -141,15 +170,17 @@ VA render <project>            # → .visualize/<slug>/out/video.mp4
 
 Scenes are rendered one at a time and joined, and a scene whose inputs have not changed is reused, so after a fix only the scenes you touched are rendered again. Alongside the video you get `video.srt` and `video.vtt` (the captions as subtitle files) and `thumbnail.png` with `thumbnail-small.png` (the hook frame, and the same image at the size it is seen in a feed; look at the small one and cut words until every one can be read). `--draft` renders at half resolution for a faster look; `--force` ignores the cache.
 
-Rendering ends with a quality check, also available as `VA qc <project>`: the file is complete, has audio, audio and picture agree in length, and the picture never sits still for more than six seconds while the voice carries on. A still stretch is the most common weakness in an explainer. Fix each one it lists: add a word-anchored cue so the highlight or focus moves mid-sentence, or in a Manim scene hold each move with `beat.until("<phrase>")` so the animation is spread across the sentence.
+Rendering ends with a quality check, also available as `VA qc <project>`: the file is complete, has audio, audio and picture agree in length, the picture never sits still for more than six seconds while the voice carries on, and there are no seams (a single-frame cut, a jump at a join marked `continues`, the voice stopping where the picture carries on, dead air, a line at a different level). Fix every seam it lists; each comes with its time and cause, and [references/taste.md](references/taste.md) has the table. A still stretch is the most common weakness in an explainer. Fix each one it lists: add a word-anchored cue so the highlight or focus moves mid-sentence, or in a Manim scene hold each move with `beat.until("<phrase>")` so the animation is spread across the sentence.
 
-### 7. Independent review
+### 9. Independent review
 
 You built the video, so you are the wrong one to judge it. Run `VA review <project>` and hand the brief it writes to a fresh subagent, as described in [references/review.md](references/review.md). Fix what the reviewer ranks highest, rerender, and run one verification round. If you cannot start a subagent, tell the user the video was not independently reviewed.
 
 Then give the user the absolute path, the duration, the scene list with each scene's need, renderer, and why, and the reviewer's verdict with what changed because of it. `VA studio <project>` opens Remotion Studio for an interactive preview if the user wants to scrub.
 
-`VA build <project>` runs tts → diagram → manim → hyperframes → render in one go once every source file exists.
+`VA build <project>` runs facts → tts → diagram → manim → hyperframes → render in one go once every source file exists.
+
+To put music under the voice, set `"music": "<file>"` in the storyboard. The bed is ducked ahead of each sentence and `va render` measures where it ended up; see [references/taste.md](references/taste.md). The skill supplies no music of its own.
 
 ## Iterating on feedback
 
@@ -157,7 +188,9 @@ Every step is cached by content, so change the source and rerun only what it aff
 
 | Changed | Rerun |
 |---|---|
-| Narration wording | `tts`, then `manim` (budgets moved), then `render` |
+| Narration wording | change `script.md` first and reread the lines either side, then the storyboard; `tts`, then `manim` (budgets moved), then `render` |
+| A number, or the code the video is about | `facts`; then the sentence and the picture that carry it, as above |
+| The `music` file or its levels | `render` (no scene is rendered again; only the sound) |
 | A trace scene's `range`, `lines`, `note`, or `cues`; a title's `text` | `render` (only that scene is rendered again) |
 | The `thumbnail` | `render` (no scene is rendered again; only the thumbnail) |
 | A diagram candidate, or a beat's `focus` | `diagram <id>`, `render` |
@@ -172,7 +205,9 @@ When feedback names a moment ("at 0:42 the label overlaps"), run `VA stills <pro
 
 ```
 .visualize/<slug>/
-├── storyboard.json        # authored: scenes, beats, routing
+├── script.md              # authored: the whole narration, written as one piece before it is split
+├── storyboard.json        # authored: scenes, beats, routing, facts, vocabulary
+├── facts.py               # authored: the oracle that computes every fact by running the real code
 ├── diagrams/<id>.json     # authored: Archify candidates
 ├── manim/<id>.py          # authored: Manim scenes
 ├── html/<id>.html         # authored: HyperFrames compositions (only for scenes that need one)

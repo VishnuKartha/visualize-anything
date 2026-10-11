@@ -1,5 +1,6 @@
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
+import {normalizeFacts, normalizeVocabulary} from './facts.mjs';
 import {NEEDS, SUBJECTS, resolveRoute} from './router.mjs';
 import {findRun, speakable, spokenTokens} from './speech.mjs';
 import {fail, readJson} from './util.mjs';
@@ -14,10 +15,12 @@ export const DIAGRAM_TYPES = ['architecture', 'workflow', 'sequence', 'dataflow'
 const LEAD = 0.5; // silence before a scene's first word, while the visual settles in
 const GAP = 0.3; // pause between beats
 const TAIL = 0.7; // hold after the last word, before the cut
+const CARRY = 0.15; // either side of a join where the picture carries on: together, one pause between beats
 const ANTICIPATE = 0.15; // visuals change slightly ahead of the voice
 const LAND = 0.7; // extra silence after a beat marked `land`, so its point can sink in
+export const PREDICT = 1.5; // extra silence after a beat marked `predict`: the question is asked, and the viewer gets to answer it first
 
-const gapAfter = (beat) => beat.pause ?? (beat.land ? GAP + LAND : GAP);
+const gapAfter = (beat) => beat.pause ?? (beat.predict ? GAP + PREDICT : beat.land ? GAP + LAND : GAP);
 const HAS_PICTURE = ['manim', 'trace', 'diagram', 'hyperframes'];
 
 const LANG_BY_EXT = {
@@ -140,6 +143,9 @@ export const loadStoryboard = (paths, {strict = true} = {}) => {
     sourceRoot: raw.sourceRoot || '.',
     scenes: [],
   };
+  storyboard.facts = normalizeFacts(raw.facts, errors);
+  storyboard.vocabulary = normalizeVocabulary(raw.vocabulary, errors);
+  const factById = new Map(storyboard.facts.map((fact) => [fact.id, fact]));
   if (!Array.isArray(raw.scenes) || raw.scenes.length === 0) fail('storyboard.json needs a non-empty "scenes" array.');
 
   if (raw.subject && !SUBJECTS.includes(raw.subject)) errors.push(`"subject" must be one of ${SUBJECTS.join(', ')}.`);
@@ -179,6 +185,18 @@ export const loadStoryboard = (paths, {strict = true} = {}) => {
       const words = beat.say.trim().split(/\s+/).length;
       if (words > 40) warnings.push(`${at}: ${words} words is a long single beat; split it so the visual can change with the idea.`);
       const out = {...beat, say: beat.say.trim(), caption: (beat.caption || beat.say).trim()};
+      // A prediction pause: the beat asks, the picture holds, and the next beat of the scene answers.
+      if (beat.predict !== undefined) {
+        if (beat.predict !== true && beat.predict !== false) errors.push(`${at}: "predict" must be true or false.`);
+        else if (beat.predict && !/\?["')\]]?$/.test(out.say)) errors.push(`${at}: a "predict" beat ends on the question the viewer is left to answer. End its "say" with that question.`);
+        else if (beat.predict && beatIndex === scene.beats.length - 1) errors.push(`${at}: a "predict" beat is answered by the next beat of the same scene, so the picture can hold while the viewer thinks. Put the answer after it.`);
+      }
+      // A sentence that says always or never names the fact that tested it.
+      if (beat.holds !== undefined) {
+        const tested = factById.get(beat.holds);
+        if (!tested) errors.push(`${at}: "holds" names "${beat.holds}", which is not in "facts".`);
+        else if (tested.value !== true) errors.push(`${at}: "holds" names "${beat.holds}", whose value is not true. A claim is voiced once the oracle has tried its edges and it held.`);
+      }
       const checkCue = (cue, label) => {
         const checked = {...cue};
         if (showsCode(scene) && cue.lines !== undefined) checked.lines = normalizeLines(cue.lines, label, errors);
@@ -319,6 +337,23 @@ export const loadStoryboard = (paths, {strict = true} = {}) => {
     storyboard.scenes.push(normalized);
   });
 
+  for (const entry of storyboard.vocabulary) {
+    if (entry.defined !== null && !storyboard.scenes.some((scene) => scene.id === entry.defined)) errors.push(`vocabulary "${entry.word}": "defined" "${entry.defined}" is not a scene.`);
+  }
+
+  // Music is optional and brought by the author; how far under the voice it sits is not left to the ear.
+  storyboard.music = null;
+  if (raw.music !== undefined && raw.music !== null) {
+    const music = typeof raw.music === 'string' ? {file: raw.music} : raw.music;
+    const levels = [music?.under, music?.gap].filter((value) => value !== undefined);
+    if (!music || typeof music.file !== 'string' || !music.file.trim()) errors.push('"music" must be the path of an audio file, or {"file": "...", "under": 18, "gap": 10}.');
+    else if (levels.some((value) => typeof value !== 'number' || !Number.isFinite(value))) errors.push('"music": "under" and "gap" are numbers: how many loudness units below the voice the bed sits while it speaks, and in a silence.');
+    else if ((music.under ?? 18) < 16) errors.push('"music": "under" must be at least 16. Closer than that and the bed competes with the consonants; `va render` would refuse the mix.');
+    else if ((music.gap ?? 10) > (music.under ?? 18) || (music.gap ?? 10) < 4) errors.push('"music": "gap" must be between 4 and "under": the bed comes up in a silence, but never to the level of the voice.');
+    else if (strict && !existsSync(path.resolve(paths.dir, music.file))) errors.push(`"music": file not found: ${path.resolve(paths.dir, music.file)}.`);
+    else storyboard.music = {file: music.file, under: music.under ?? 18, gap: music.gap ?? 10};
+  }
+
   // The thumbnail: a few words, and optionally the moment of the video shown under them.
   storyboard.thumbnail = null;
   if (raw.thumbnail !== undefined) {
@@ -345,8 +380,11 @@ export const buildTimeline = (storyboard, manifest) => {
   const {fps} = storyboard;
   const byFile = new Map(manifest.beats.map((beat) => [beat.file, beat]));
   let cursor = 0;
-  const scenes = storyboard.scenes.map((scene) => {
-    let t = LEAD;
+  const scenes = storyboard.scenes.map((scene, sceneIndex) => {
+    // Where one picture runs through a join, so does the voice: no breath out, no breath in.
+    const carriesIn = scene.continues === true;
+    const carriesOut = storyboard.scenes[sceneIndex + 1]?.continues === true;
+    let t = carriesIn ? CARRY : LEAD;
     const beats = scene.beats.map((beat, index) => {
       const clip = byFile.get(`${scene.id}-${index}.mp3`);
       if (!clip) fail(`TTS produced no clip for scene "${scene.id}" beat ${index + 1}.`);
@@ -363,7 +401,7 @@ export const buildTimeline = (storyboard, manifest) => {
       };
     });
     const last = scene.beats.at(-1);
-    const end = t - gapAfter(last) + TAIL + (last.land ? LAND : 0) + (scene.hold || 0);
+    const end = t - gapAfter(last) + (carriesOut ? CARRY : TAIL) + (last.land ? LAND : 0) + (scene.hold || 0);
     const frames = Math.ceil(end * fps);
     beats.forEach((beat, index) => {
       beat.cue = index === 0 ? 0 : Math.max(0, beat.from - Math.round(ANTICIPATE * fps));

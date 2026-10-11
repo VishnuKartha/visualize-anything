@@ -92,6 +92,9 @@ What the router checks, scene by scene:
 | Scenes drawn by one script say whether they share a picture | A shared picture should not fade out and back in between scenes. |
 | The recap shows the moment behind each takeaway | A list of text is not an ending. |
 | Every scene has a `why` | Routing has to be reviewable by someone who was not there. |
+| A beat that says always, never, at most, or at least names the fact that tested it (`holds`) | A claim about every case is a claim about the edges. See [facts.md](facts.md). |
+| The narration keeps to the storyboard's `vocabulary`: one word per idea, none before the scene that explains it | Two words for one thing are heard as two things. See [taste.md](taste.md). |
+| A scene has at most two `predict` beats | Past that, the stopping becomes the rhythm. |
 
 And across the sequence:
 
@@ -99,6 +102,7 @@ And across the sequence:
 |---|---|
 | Opens on a picture, or on a statement that says why it is not one; never on bullets or bare code. Closes on a recap or code, with at most a short `credit` after it | The subject is on screen from the first second; do not end on a new idea. The name of the source comes last. |
 | The brief has a hook with a starred word; the opening scene says it; the closing scene returns to it | The hook is the reason to watch. It is chosen first, delivered first, and paid off last. |
+| The storyboard's narration is `script.md`, word for word and in order | The narration is written whole and then split, so every line was written as the next sentence of the one before. |
 | No scene after the first starts over ("Now let's look at", "Next,", "Moving on") | Each scene picks up where the last stopped. See [opening.md](opening.md), "Make it flow". |
 | The opening's narration does not announce the video; the video's title promises a payoff | "In this video" gives the viewer nothing. See [opening.md](opening.md). |
 | The thumbnail has five words at most, one starred, a picture under them, and does not repeat the title | It is seen about 120 pixels wide, with the title beside it. See [opening.md](opening.md). |
@@ -107,6 +111,9 @@ And across the sequence:
 | An algorithm video has a Manim scene; a system video has a diagram; every video has code | Otherwise the subject is never actually shown. |
 | The closing scene returns to what the opening starred | The hook made a promise; the ending cashes it in. |
 | One beat is marked to land | The main point needs a moment of quiet after it. |
+| Every number said or shown (narration, on-screen text, recap, thumbnail, hook) is a value in `facts` | A typed number can be wrong without anything noticing; a fact is computed by `va facts`. See [facts.md](facts.md). |
+| A video over 45 seconds leaves one question open (`predict`) | The viewer who has guessed is waiting for the answer. |
+| The storyboard lists its `vocabulary` | The check above has nothing to hold the narration to without it. |
 
 The reasoning behind these, and how to satisfy each, is in [taste.md](taste.md).
 

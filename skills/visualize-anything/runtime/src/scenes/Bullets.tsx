@@ -62,9 +62,13 @@ export const BulletsView: React.FC<{scene: BulletsScene}> = ({scene}) => {
   const pictured = Boolean(shot) && scenes.length > 0;
   const swap = ramp(frame, scene.steps[current]?.cue ?? 0, 14);
   const same = before && shot && before.scene === shot.scene && before.frame === shot.frame;
-  const target = shot ? scenes.find((entry) => entry.id === shot.scene) : null;
-  const crop = target ? cropOf(target) : {width: 16, height: 9};
-  const panelHeight = PANEL_WIDTH * (crop.height / crop.width);
+  // Each picture sits in a panel of its own shape. Two of different shapes cross-fade; neither is resized.
+  const panel = (of: Shot): React.CSSProperties => {
+    const target = scenes.find((entry) => entry.id === of.scene);
+    const crop = target ? cropOf(target) : {width: 16, height: 9};
+    const height = PANEL_WIDTH * (crop.height / crop.width);
+    return {position: 'absolute', left: 80, top: 104 + (800 - height) / 2, width: PANEL_WIDTH, height};
+  };
   const size = pictured ? (dense ? 34 : 40) : dense ? 42 : 50;
 
   const list = (
@@ -103,10 +107,16 @@ export const BulletsView: React.FC<{scene: BulletsScene}> = ({scene}) => {
   }
   return (
     <AbsoluteFill>
-      <div style={{position: 'absolute', left: 80, top: 104 + (800 - panelHeight) / 2, width: PANEL_WIDTH, height: panelHeight}}>
-        {before && !same && swap < 1 ? <Picture key={`out-${current}`} shot={before} opacity={1 - swap} /> : null}
-        {shot ? <Picture key={`in-${current}`} shot={shot} opacity={same || current === 0 ? ramp(frame, 0, 14) : swap} /> : null}
-      </div>
+      {before && !same && swap < 1 ? (
+        <div key={`out-${current}`} style={panel(before)}>
+          <Picture shot={before} opacity={1 - swap} />
+        </div>
+      ) : null}
+      {shot ? (
+        <div key={`in-${current}`} style={panel(shot)}>
+          <Picture shot={shot} opacity={same || current === 0 ? ramp(frame, 0, 14) : swap} />
+        </div>
+      ) : null}
       <div data-va-box="bullets" style={{position: 'absolute', left: 80 + PANEL_WIDTH + 70, top: 104, width: STAGE.width - (80 + PANEL_WIDTH + 70) - 80, height: 800, display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
         {title}
         {list}

@@ -73,6 +73,8 @@ export const CodePanel: React.FC<{scene: CodeScene | TraceScene; region: Region;
     return inRanges(line, target.lines) ? {opacity: 1, bar: 1} : {opacity: DIM, bar: 0};
   };
   const enter = ramp(frame, 0, 20);
+  // Where the animation beside it carries on into the next scene, the code leaves on a fade, not a cut.
+  const leave = scene.fadeOut === false ? 1 - ramp(frame, scene.frames - 10, 9) : 1;
 
   return (
     <>
@@ -89,7 +91,7 @@ export const CodePanel: React.FC<{scene: CodeScene | TraceScene; region: Region;
         border: `1px solid ${theme.panelBorder}`,
         boxShadow: '0 40px 120px rgba(0,0,0,0.55)',
         overflow: 'hidden',
-        opacity: enter,
+        opacity: enter * leave,
         translate: `0 ${(1 - enter) * 30}px`,
       }}
     >
@@ -166,7 +168,7 @@ export const CodePanel: React.FC<{scene: CodeScene | TraceScene; region: Region;
             fontWeight: 600,
             lineHeight: 1.3,
             color: theme.text,
-            opacity: p * enter,
+            opacity: p * enter * leave,
             translate: `0 ${(1 - p) * -14}px`,
             boxShadow: '0 16px 50px rgba(0,0,0,0.5)',
           }}

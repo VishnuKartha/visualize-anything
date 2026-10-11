@@ -120,6 +120,10 @@ The phrase must be words from that beat's narration; an unknown phrase is an err
 
 Several scenes can share one file. When an algorithm takes two or three animation scenes, put them in one script with shared helpers (how an element is drawn, where slots sit) and point each scene's `script` at it, so the picture stays identical from scene to scene. Start each scene from the state the previous one ended in.
 
+### Numbers come from the ledger
+
+A number drawn on screen is read from the storyboard's `facts`, not typed: `Text(str(fact("scan-looks")))`. It is then the number `va facts` checked against the real code, and the one the voice says. A counter that counts as the animation runs is better still; the fact confirms where it stops. See [facts.md](facts.md).
+
 ## Formulas
 
 Formulas are typeset by [Typst](https://typst.app/docs/reference/math/), which `va setup` downloads as a Python wheel. No LaTeX installation is involved, and `MathTex` and `Tex` should not be used.

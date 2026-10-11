@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
-import {NEEDS, analyzeRouting, cueHits, resolveRoute, suggestNeed, weakTitle} from '../lib/router.mjs';
+import {NEEDS, analyzeRouting, cueHits, resolveRoute, scriptDrift, suggestNeed, weakTitle} from '../lib/router.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -61,10 +62,21 @@ const CREDIT = scene('credit', 'credit', ['That is LRUCache, in lru.py.'], {titl
 // The default shape: the picture first with the hook said over it, the code after, the name last.
 const OPEN = scene('open', 'motion', ['A full cache has to forget a key, and the entry that went in first is the wrong one to drop.', 'The entry used longest ago shifts out instead.']);
 const HOOK = {hook: 'A full cache has to *forget* a key, and the obvious choice is *wrong*.'};
+// The same opening with the question left open for a moment before the picture answers it.
+const ASKED = {
+  ...OPEN,
+  beats: [OPEN.beats[0], {say: 'So which entry should go?', caption: '', predict: true}, OPEN.beats[1]],
+};
 
 test('a well-routed algorithm video has no errors and nothing to review', () => {
   const report = analyzeRouting(
-    board('algorithm', [OPEN, LRU[1], LRU[3], LRU[4], CREDIT], {title: 'How an LRU cache decides what to forget', brief: HOOK, thumbnail: {...THUMBNAIL, from: 'open'}}),
+    board('algorithm', [ASKED, LRU[1], LRU[3], LRU[4], CREDIT], {
+      title: 'How an LRU cache decides what to forget',
+      brief: HOOK,
+      thumbnail: {...THUMBNAIL, from: 'open'},
+      facts: [{id: 'state-fields', value: 2, what: 'fields the class keeps'}, {id: 'takeaways', value: 3, given: 'the recap has three items'}],
+      vocabulary: [{word: 'entry', not: ['element', 'record'], defined: 'open'}],
+    }),
   );
   assert.equal(report.errors, 0, texts(report.rows.flatMap((entry) => entry.reasons)));
   assert.equal(report.reviews, 0, texts([...report.rows.flatMap((entry) => entry.reasons), ...report.notes]));
@@ -350,4 +362,85 @@ test('a scene that starts over instead of following on is flagged', () => {
   assert.match(restart('Next, the read path and what it returns for a missing key.'), /starts over/);
   assert.doesNotMatch(restart('But a read has to count as a use, and one line makes it so.'), /starts over/);
   assert.doesNotMatch(restart('So the cache needs to know which key was used longest ago.'), /starts over/);
+});
+
+test('the storyboard says the script, whole and in order, and nothing else', () => {
+  const scenes = [
+    scene('open', 'motion', ['A full cache has to forget a key.', 'The obvious choice is wrong.']),
+    scene('get', 'trace', ['So a hit calls move_to_end, and the key is spared.'], {file: 'lru.py', class: 'Read'}),
+  ];
+  const script = `<!-- notes for the writer -->
+# Not spoken
+
+A full cache has to forget a key. The obvious choice
+is wrong.
+
+So a hit calls move_to_end, and the key is spared.
+`;
+  assert.equal(scriptDrift(script, scenes), null, 'line breaks, headings, comments, and punctuation do not count');
+  // A line reworded in the storyboard only.
+  const reworded = [scenes[0], {...scenes[1], beats: [{say: 'Now a hit calls move_to_end, and the key is spared.'}]}];
+  assert.deepEqual(scriptDrift(script, reworded), {scene: 'get', beat: 1, script: 'choice is wrong so a hit calls', storyboard: 'choice is wrong now a hit calls'});
+  // A line written into a scene that the script never had, and a line of the script left out.
+  assert.equal(scriptDrift(script, [...scenes, scene('recap', 'recap', ['Remember this.'])]).scene, 'recap');
+  assert.equal(scriptDrift(script, [scenes[0]]).script, 'choice is wrong so a hit calls');
+});
+
+test('a project is asked for its script, and told where the storyboard has left it', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'va-script-'));
+  const notes = () => texts(analyzeRouting(board('algorithm', [OPEN, LRU[1], LRU[3], LRU[4]]), {projectDir: dir}).notes);
+  assert.match(notes(), /No script\.md\. Write the whole narration there first/);
+  const whole = [OPEN, LRU[1], LRU[3], LRU[4]].flatMap((entry) => entry.beats.map((beat) => beat.say)).join(' ');
+  writeFileSync(path.join(dir, 'script.md'), whole);
+  assert.doesNotMatch(notes(), /script/);
+  writeFileSync(path.join(dir, 'script.md'), whole.replace('The whole cache is', 'So the whole cache is'));
+  assert.match(notes(), /not the script\. They part at "state" beat 1: script\.md has "shifts out instead so the whole cache", the storyboard has "shifts out instead the whole cache is"/);
+});
+
+test('a number said or shown has to be a row of the facts ledger', () => {
+  const scenes = [OPEN, LRU[1], LRU[3], LRU[4]];
+  const loose = texts(analyzeRouting(board('algorithm', scenes)).notes);
+  assert.match(loose, /2 number\(s\) are said or shown but are not in "facts": "two" \(state beat 1\), "three" \(recap beat 1\)/);
+  const backed = board('algorithm', scenes, {facts: [{id: 'fields', value: 2}, {id: 'takeaways', value: 3, given: 'the recap has three items'}]});
+  assert.doesNotMatch(texts(analyzeRouting(backed).notes), /not in "facts"/);
+  // What is on screen counts as much as what is said, and a rounded fact backs the round number said.
+  const shown = board('algorithm', scenes, {facts: backed.facts, thumbnail: {text: '*20* looks', from: 'open'}});
+  assert.match(texts(analyzeRouting(shown).notes), /"20" \(the thumbnail\)/);
+  const rounded = board('algorithm', scenes, {facts: [...backed.facts, {id: 'passes', value: 19.93}], thumbnail: {text: '*20* looks', from: 'open'}});
+  assert.doesNotMatch(texts(analyzeRouting(rounded).notes), /not in "facts"/);
+});
+
+test('always and never are claims about the edges, and name the fact that tested them', () => {
+  const claim = (extra) => scene('order', 'motion', ['A key that was read a moment ago is never the one evicted, and the others shift down.'], extra);
+  const bare = analyzeRouting(board('algorithm', [LRU[0], LRU[1], claim({}), LRU[4]]));
+  assert.match(texts(row(bare, 'order').reasons), /says "never"\. That is a claim about every case, so try the edges/);
+  const tested = claim({});
+  tested.beats[0].holds = 'recent-key-survives';
+  const report = analyzeRouting(board('algorithm', [LRU[0], LRU[1], tested, LRU[4]]));
+  assert.doesNotMatch(texts(row(report, 'order').reasons), /every case/);
+});
+
+test('the narration keeps to one word per idea, and to the order the words are explained in', () => {
+  const vocabulary = [{word: 'entry', not: ['slot'], defined: 'state'}, {word: 'evict', not: [], defined: 'get'}];
+  const scenes = [
+    LRU[0],
+    LRU[1],
+    scene('order', 'motion', ['Reading a key counts as a use, so its slot jumps to the newest end.', 'The oldest entry is evicted.']),
+    LRU[3],
+    LRU[4],
+  ];
+  const report = analyzeRouting(board('algorithm', scenes, {vocabulary}));
+  assert.match(texts(row(report, 'order').reasons), /Beat 1 says "slot" for what the video calls "entry"/);
+  assert.match(texts(row(report, 'order').reasons), /Beat 2 says "evict" before "get", the scene that explains it/);
+  assert.doesNotMatch(texts(report.notes), /No "vocabulary"/);
+  assert.match(texts(analyzeRouting(board('algorithm', scenes)).notes), /No "vocabulary"/);
+});
+
+test('a video of any length is asked for one prediction pause, and no scene for more than two', () => {
+  const long = [OPEN, LRU[1], LRU[2], LRU[3], LRU[4]];
+  assert.match(texts(analyzeRouting(board('algorithm', long)).notes), /No prediction pause/);
+  assert.doesNotMatch(texts(analyzeRouting(board('algorithm', [ASKED, ...long.slice(1)])).notes), /No prediction pause/);
+  const ask = (say) => ({say, caption: '', predict: true});
+  const eager = {...OPEN, beats: [ask('Which entry goes?'), OPEN.beats[0], ask('And then which?'), OPEN.beats[1], ask('And after that?'), OPEN.beats[1]]};
+  assert.match(texts(row(analyzeRouting(board('algorithm', [eager, ...long.slice(1)])), 'open').reasons), /3 prediction pauses in one scene/);
 });

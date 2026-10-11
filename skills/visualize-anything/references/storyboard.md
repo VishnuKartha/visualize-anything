@@ -1,6 +1,6 @@
 # storyboard.json
 
-One file describes the whole video. Scenes play in order. Each scene has beats; each beat is one spoken line and the visual cue that goes with it. `va tts` measures every line, so a scene lasts exactly as long as its narration plus short breaths (0.5s in, 0.3s between beats, 0.7s out).
+One file describes the whole video, and its narration comes from another: `script.md`, the whole narration written as one piece first. Every `say` below is a cut from that script, in order. Scenes play in order. Each scene has beats; each beat is one spoken line and the visual cue that goes with it. `va tts` measures every line, so a scene lasts exactly as long as its narration plus short breaths (0.5s in, 0.3s between beats, 0.7s out; longer after a beat marked `land` or `predict`). Where a scene `continues` the one before, the breath at that join shrinks to the pause between two beats, so one picture gets one unbroken voice.
 
 ## Top level
 
@@ -10,6 +10,9 @@ One file describes the whole video. Scenes play in order. Each scene has beats; 
 | `thumbnail` | the hook | `{"text": "...", "from": "<scene id>", "beat": n}`: five words at most, one starred, above the named scene frozen at the end of that beat. See [opening.md](opening.md). |
 | `subject` | guessed | `algorithm`, `system`, or `mixed`. Decides which renderers belong in the video; see [routing.md](routing.md). |
 | `brief` | none | What was agreed with the user: `{"audience": "...", "length": 90, "focus": "...", "hook": "..."}`. `length` is in seconds; the router compares the video against it. `hook` is the one sentence the video opens on, with the word or number it turns on starred; the router checks that the opening says it and the ending returns to it. See [opening.md](opening.md). |
+| `facts` | none | The ledger: every number the video says or shows, as `{"id", "value", "what"}`, each computed again by the project's `facts.py`. See [facts.md](facts.md). |
+| `vocabulary` | none | The words the video uses for its ideas: `{"word": "look", "not": ["comparison"], "defined": "<scene id>"}`. The router holds the narration to them. See [taste.md](taste.md). |
+| `music` | none | A bed to lay under the voice: a path in the project, or `{"file": "bed.mp3", "under": 18, "gap": 10}` (loudness units below the voice while it speaks, and in a silence). See [taste.md](taste.md). |
 | `voice` | `"en-US-AndrewNeural"` | Any edge-tts voice. List them with `uv run --with edge-tts edge-tts --list-voices`. |
 | `rate`, `pitch` | `"+0%"`, `"+0Hz"` | edge-tts prosody, e.g. `"+8%"` for a brisker read. |
 | `sourceRoot` | `"."` | Base for code `file` paths, relative to the project directory. `va init` sets it to the directory you ran it from. |
@@ -39,6 +42,8 @@ One file describes the whole video. Scenes play in order. Each scene has beats; 
 | `caption` | Optional. Only when the automatic spoken form is wrong: put the words to speak in `say` and the text to show here. |
 | `pause` | Optional seconds of silence after this beat (default 0.3). |
 | `land` | `true` on the beat where the main point resolves: the voice waits 0.7 seconds longer after it. Use once or twice a video. |
+| `predict` | `true` on a beat that ends on a question the viewer can answer: the voice waits 1.5 seconds longer and the picture holds, then the next beat of the same scene answers. See [taste.md](taste.md). |
+| `holds` | On a beat that says always, never, at most, or at least: the id of the fact, with value `true`, that tested the claim at its edges. See [facts.md](facts.md). |
 | `cues` | Optional changes inside the beat, each landing on a spoken phrase. See below. |
 
 Plus one cue, depending on the scene kind:

@@ -2,7 +2,7 @@
 
 The house rules in [taste.md](taste.md) came from watching videos this skill produced. These came from the other direction: looking at how the channels people learn from build theirs (3Blue1Brown, Reducible, Polylog, Fireship, ByteByteGo, Spanning Tree, Primer, Welch Labs) and keeping what fits a 60 to 150 second code explainer.
 
-Decide these in step 1, before the storyboard exists. `va route` checks none of them; the independent reviewer is asked about them.
+Decide these in step 1, before the storyboard exists. `va route` checks none of them; the reviewers are asked about them. The numbers the story turns on are worked out next, in [facts.md](facts.md), before a sentence is written around them.
 
 | Move | Why | Where it goes |
 |---|---|---|
@@ -50,6 +50,8 @@ Chapter titles in these videos are often the viewer's question at that point: wh
 
 In a storyboard this is the first beat of a scene: "But how does it know which key is oldest?" and then the picture that answers. One or two in a video. A question the viewer does not actually have at that moment is filler.
 
+When the viewer could answer it themselves, give them the time to: mark the beat `"predict": true` and the voice waits before the next beat answers (taste.md, "Ask, then wait").
+
 ## The first code is the smallest piece
 
 The long videos hold the code back until the idea is understood: the implementation chapter starts 65%, 90%, and 96% of the way through the three algorithm videos that have one. The 100 second video is the closer model for this skill, and it does the opposite with a condition: code is on screen by the eighth second, but it is three lines, typed in as it is spoken, and its consequence is drawn beside it straight away. The real function arrives in the second half. The 38 minute coding video works the same way throughout: a short excerpt on an otherwise empty frame, then what that excerpt renders.
@@ -70,7 +72,7 @@ In a Manim script: an object moves when the data it stands for moves, changes co
 
 - **Characters and stories.** Two of the channels carry the explanation with characters (a bookshop robot, a crowd of pi creatures). It works, and it needs an illustrator's judgement this skill does not have.
 - **A roadmap card between sections.** The 19 minute video returns to a card of chapter thumbnails between sections. Under three minutes there is nothing to navigate.
-- **Music and sound.** All of them have it. taste.md leaves sound undecided.
+- **Composed music.** All of them have it. This skill will lay a bed you bring under the voice and hold it to a measured level (taste.md, "Music stays under the voice"), but it writes no music.
 
 ## Where this came from
 
