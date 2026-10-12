@@ -9,6 +9,7 @@ export const VIEWERS = {
     short: 'Can program; has never seen this code, algorithm, or system and does not know its words; closes the tab when lost.',
     who: 'You can program, and you have never seen this code, this algorithm, or this system. You do not know its vocabulary. You are watching because someone sent you the link, and you stop the moment you feel lost: you do not rewind, you close the tab.',
     needs: [
+      'To be told where you are before you are asked to be surprised: the opening starts from something you already know or use.',
       'Something you can picture before anything abstract.',
       'Every new word explained the first time it is said, in plain words, and then used the same way each time. Two words for one thing sound like two things to you.',
       'Numbers small enough to check in your head.',
@@ -17,6 +18,10 @@ export const VIEWERS = {
     ],
     contract: 'After every scene you can say in one sentence what just happened and why it mattered. If a scene needs something you do not know, it gives it to you in a few seconds or goes around it.',
     look: [
+      'After the opening, say what the video is about and why its hook is surprising. If you cannot, say what you needed to be told first.',
+      'Read the script once, at speaking pace, without looking back. Mark every "it", "they", "that", or "them" where you were not sure what it stood for, and every sentence you had to read twice.',
+      'Without looking back, write down the numbers you remember. List the numbers the script says that you did not keep.',
+      'Say why you should care about this subject, in your own words. If the script never told you, say so.',
       'Mark the first word in each scene that you could not define from what the video had told you so far.',
       'Say where you would have stopped watching, and what was on screen.',
       'Say which prediction pause you could answer, and which asked something you had no way to work out.',
@@ -35,6 +40,8 @@ export const VIEWERS = {
     contract: 'After the video you could explain the idea to a colleague and write a small version of it. Nothing in it turns out, once you read the real code, to have been simplified in a way that matters in practice.',
     look: [
       'Name each step you could not reimplement from what was shown, and what was missing.',
+      'Name each idea the explanation relies on but never explains (what a batch is, why a cache needs a lock). An argument that rests on an unexplained idea is not followed, only nodded at.',
+      'Find any word used for two different things, and any thing called by two different words.',
       'Name each cost, limit, or failure the video left out that you would hit in real use.',
       'Say where the example is too kind: an input the explanation quietly avoids.',
     ],
@@ -54,6 +61,9 @@ export const VIEWERS = {
       'For every sentence that says always, never, every, at most, or at least: name the case that would break it, and say whether the facts ledger shows that case was tried.',
       'For every number said or shown: find its row in the facts ledger. Say which have none, and which rows nothing computes.',
       'Name anything true but misleading: a guarantee stated without its condition, a cost stated without its unit.',
+      'For every general claim ("routing is now faster"): find the cases the source measured, and say whether the claim holds for all of them or only for the one shown. A claim is as wide as its evidence and no wider.',
+      'For every cause the narration gives ("it was slow because..."): say whether the source shows that cause, or only shows both things.',
+      'Check that numbers set side by side were measured in the same setup: the same models, the same load, the same table.',
     ],
   },
 };
@@ -89,7 +99,7 @@ const pictureOf = (scene, beat) => {
   if (scene.kind === 'manim' || (scene.kind === 'trace' && !parts.some((part) => part.includes('highlights')))) parts.unshift('the animation (its script comes after this review)');
   if (scene.kind === 'bullets' && !parts.length) parts.push('the next takeaway appears');
   if (PARTS[scene.kind] && !parts.some((part) => part.includes('visible'))) parts.push(`the next ${PARTS[scene.kind].replace('(s)', '')} arrives`);
-  if (scene.kind === 'credit') parts.push(`the name "${scene.title}"${scene.subtitle ? ` over "${scene.subtitle}"` : ''}`);
+  if (scene.kind === 'credit') parts.push(`${scene.need === 'name' ? 'a title card: ' : ''}the name "${scene.title}"${scene.subtitle ? ` over "${scene.subtitle}"` : ''}`);
   return parts.join('; ') || '(nothing declared)';
 };
 
@@ -113,19 +123,33 @@ const madeOf = (scene) => {
  * The page one viewer is handed before anything is recorded: the whole script, the plan scene by
  * scene, the facts ledger, and what to report. Pure text in, text out.
  */
-export const planBrief = ({viewer, storyboard, script, routingText, ledger, sources, reportPath}) => {
+export const planBrief = ({viewer, storyboard, script, routingText, ledger, sources, reportPath, paper = null}) => {
   const person = VIEWERS[viewer];
   const out = [];
   out.push(`# Plan review as ${person.name}: ${storyboard.title}`, '');
-  out.push('This is the plan for a short narrated explainer video about code: its script and its storyboard. Nothing has been recorded or drawn yet, so everything here is still cheap to change. You did not write it, and nobody will tell you what was intended beyond this page.', '');
+  out.push('This is the plan for a short narrated explainer video: its script and its storyboard. Nothing has been recorded or drawn yet, so everything here is still cheap to change. You did not write it, and nobody will tell you what was intended beyond this page.', '');
   out.push('## Who you are', '', person.who, '', 'What you need from a video:', ...person.needs.map((need) => `- ${need}`), '', `**The contract the video has with you:** ${person.contract}`, '');
   out.push('Read as this person and only as this person. Do not review it as an editor or as an engineer in general; two other reviewers are reading it as the other two viewers.', '');
 
   out.push('## What the video is for', '');
   const brief = storyboard.brief || {};
   out.push(`- Audience it was written for: ${brief.audience || '(not stated)'}`, `- The question it answers: ${brief.focus || '(not stated)'}`, `- Length asked for: ${brief.length ? `about ${brief.length}s` : '(not stated)'}`);
-  if (brief.hook) out.push(`- The hook it means to open on: ${brief.hook.replace(/\*/g, '')}`);
+  if (brief.context) out.push(`- The context it means to give first: ${brief.context}`);
+  if (brief.hook) out.push(`- The hook it means to land after that: ${brief.hook.replace(/\*/g, '')}`);
   out.push('');
+
+  if (paper) {
+    // The abstract is what the authors chose to say first. Every viewer judges the plan against it.
+    const kept = new Map((storyboard.claims || []).map((entry) => [entry.abstract, entry]));
+    out.push(`## The paper it explains: ${paper.title}`, '', "Its abstract, claim by claim, with what this plan does with each. The abstract is the authors' own account of what matters: judge the plan against it. A claim the plan shows should be shown faithfully; a claim it sets aside should be one a viewer can do without; a claim it ignores is a finding.", '');
+    out.push('| # | The abstract says | This plan |', '|---|---|---|');
+    for (const claim of paper.claims) {
+      const entry = kept.get(claim.n);
+      const does = entry?.scene ? `shows it in "${entry.scene}"` : entry?.omit ? `sets it aside: ${entry.omit}` : '**does not account for it**';
+      out.push(`| ${claim.n} | ${claim.text.replace(/\|/g, '/')} | ${does.replace(/\|/g, '/')} |`);
+    }
+    out.push('');
+  }
 
   out.push('## The script, as it will be heard', '', script.trim() || '(no script.md; the lines are in the plan below)', '');
 

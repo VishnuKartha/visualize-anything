@@ -1,20 +1,26 @@
 # Independent review
 
-The agent that built a video is the worst judge of it: it knows what every frame was meant to show, so it sees that instead of what is there. A review only counts when it comes from an agent that did not build the video and was told nothing about the intent.
+The agent that built a video is the worst judge of it. It knows the purpose of each frame, so it sees the purpose and not the frame. A review is valid only when it comes from an agent that did not build the video and did not get the intent.
 
-There are two reviews. The first reads the plan, before anything is recorded or drawn, when a finding costs a sentence to fix. The second watches the result.
+There are two reviews. The first review reads the plan, before you record or draw. A finding then costs one sentence to correct. The second review watches the result.
 
 ## The three viewers
 
-Every video makes a contract with three people. They are specific on purpose: "a general audience" notices nothing.
+Each video makes a contract with three people. They are specific on purpose. "A general audience" notices nothing.
 
 | Viewer | Who | The contract |
 |---|---|---|
-| The newcomer | Can program; has never seen this code, algorithm, or system; does not know its words; closes the tab when lost | After every scene they can say in one sentence what happened and why it mattered |
-| The practitioner | Writes code daily and has to use or change this next week; dislikes unexplained jargon and unearned confidence | They could explain it to a colleague and write a small version; nothing turns out to have been simplified in a way that matters |
-| The expert | Knows the code and the ideas behind it thoroughly; notices every claim that is only nearly true | Nothing is incorrect or misleading; they would send it to someone joining the team |
+| The newcomer | Can program. Did not see this code, algorithm, or system before. Does not know its words. Closes the tab when lost | After each scene they can say in one sentence what occurred and why it was important |
+| The practitioner | Writes code each day and must use or change this next week. Does not like jargon without explanation or confidence without evidence | They can explain it to a colleague and write a small version. Nothing was made simple in a way that is important in practice |
+| The expert | Knows the code and its ideas fully. Notices each claim that is only almost true | Nothing is incorrect or gives a wrong idea. They would send it to a new team member |
 
-Where the three pull apart: the expert decides what is true, and that is not traded away. The newcomer decides pacing and vocabulary. The practitioner decides which mechanisms and costs make the cut. A better example usually satisfies all three.
+Where the three disagree:
+
+- The expert decides what is true. Do not trade that away.
+- The newcomer decides the pace and the vocabulary.
+- The practitioner decides which mechanisms and costs are in the video.
+
+A better example usually satisfies all three.
 
 ## The plan review
 
@@ -24,49 +30,79 @@ Run it after `va route` is clean and `va facts` passes, before `va tts`.
 VA review <project> --plan
 ```
 
-This writes three briefs to `out/review/`: `plan-1-newcomer.md`, `plan-1-practitioner.md`, `plan-1-expert.md`. Each holds the whole script as it will be heard, the plan scene by scene (what is heard beside what is on screen), the facts ledger with what the oracle found, the vocabulary, the router's report, and one viewer's description of themselves. The practitioner and the expert are also given the paths of the source.
+This writes three briefs to `out/review/`: `plan-1-newcomer.md`, `plan-1-practitioner.md`, `plan-1-expert.md`. Each brief has:
 
-1. **Start three fresh subagents, one per brief,** each with only this instruction: *"Read `<path to its brief>` and do what it says."* Run them at the same time. Do not tell any of them what the others are, or what you think is weak.
-2. **Read the three reports** (`plan-1-<viewer>-report.md`). Each starts by saying every scene back in one sentence. A scene a viewer could not say back, or said back wrongly, is a blocker for that scene whoever is right: the plan as written did not carry it.
-3. **Give every finding a disposition,** written under it in the report:
-   - *fixed*: what changed, in the script and the storyboard;
-   - *answered*: why not, in one sentence a stranger would accept;
-   - *deferred*: to what, and why it can wait.
+- the full script, as the viewer will hear it
+- the plan for each scene: the words next to the picture
+- the facts ledger, with the results of the oracle
+- the vocabulary
+- the report of the router
+- the description of one viewer
 
-   The plan goes on to `va tts` when no finding lacks one and no blocker is open.
-4. **Rerun `va route` and `va facts`** after the fixes. If the script changed in substance, run the plan review again; it is three short reads.
+The practitioner and the expert also get the paths of the source.
 
-The plan review catches what no check can: a word used before the newcomer has it, a step the practitioner could not reproduce, a sentence the expert knows is only usually true. It is the cheapest moment to hear all three.
+1. **Start three new subagents, one for each brief.** Give each only this instruction: *"Read `<path to its brief>` and do what it says."* Start them at the same time. Do not tell a subagent about the others. Do not tell it what you think is weak.
+2. **Read the three reports** (`plan-1-<viewer>-report.md`). Each report starts with each scene said back in one sentence. If a viewer cannot say a scene back, or says it back incorrectly, that scene has a blocker. This is true if the viewer is wrong also: the plan as written did not carry the scene.
+3. **Give each finding a disposition.** Write it below the finding in the report:
+   - *fixed*: the change, in the script and the storyboard
+   - *answered*: the reason not to change, in one sentence that a stranger accepts
+   - *deferred*: to what, and why it can wait
+
+   The plan continues to `va tts` when each finding has a disposition and no blocker is open.
+4. **Run `va route` and `va facts` again** after the corrections. If the content of the script changed, run the plan review again. It is three short reads.
+
+The plan review finds the things that no check can find: a word that the newcomer does not have, a step that the practitioner cannot reproduce, a sentence that the expert knows is only usually true. It costs the least at this moment.
 
 ## The video review
 
-1. **Render first.** `VA render <project>` must have succeeded and its QC report read.
+1. **Render first.** `VA render <project>` must pass, and you must read its QC report.
 2. **Write the brief.**
 
    ```bash
    VA review <project>
    ```
 
-   This refreshes the contact sheets, reruns the checks, and writes `out/review/brief-1.md`: what the video is for, the scene plan with each scene's need and reason, the narration with times, the paths to the sheets, what the automated checks found, what to judge, and the report format.
-3. **Hand it to a fresh agent.** Start a new subagent and give it only this instruction: *"Read `<path to brief-1.md>` and do what it says."* Do not summarise the video, list what you fixed, or say what you are worried about. It will read the sheets itself and write `out/review/report-1.md`.
-4. **Act on the report.** Fix the defects it ranks highest, most serious first. Do not argue with a finding because you know what was intended; if a reviewer misread the frame, a viewer will too. Rerender.
-5. **Verify with another fresh agent.**
+   This makes the contact sheets again and runs the checks again. It writes `out/review/brief-1.md`, which has:
+   - the purpose of the video
+   - the scene plan, with the need and the reason of each scene
+   - the narration with times
+   - the paths to the sheets
+   - the findings of the automatic checks
+   - the things to judge
+   - the report format
+3. **Give it to a new agent.** Start a new subagent and give it only this instruction: *"Read `<path to brief-1.md>` and do what it says."* Do not summarise the video. Do not list your corrections. Do not say what worries you. The agent reads the sheets and writes `out/review/report-1.md`.
+4. **Act on the report.** Correct the defects that it puts highest, the most serious first. Do not argue with a finding because you know the intent. If a reviewer read the frame incorrectly, a viewer will also. Render again.
+5. **Verify with one more new agent.**
 
    ```bash
    VA review <project> --verify <project>/out/review/report-1.md
    ```
 
-   This writes `brief-2.md`, which asks a new reviewer to mark each earlier item FIXED, PARTLY, or STILL PRESENT and to look for anything the fixes broke. It ends its report with SHIP or ONE MORE PASS.
-6. **Stop** at SHIP, or after the verification round if what remains is cosmetic. Two rounds is the norm; more only if the user asks.
+   This writes `brief-2.md`. It asks a new reviewer to mark each earlier item FIXED, PARTLY, or STILL PRESENT, and to look for defects that the corrections caused. The report ends with SHIP or ONE MORE PASS.
+6. **Stop** at SHIP, or after the verification round if the remaining defects are cosmetic. Two rounds is the norm. Do more only if the user asks.
 
-The video brief names the three viewers and their contracts, and asks its reviewer to say each scene back as the newcomer would. Give its findings dispositions the same way; the verification round judges those too.
+The video brief names the three viewers and their contracts. It asks its reviewer to say each scene back as the newcomer. Give its findings dispositions the same way. The verification round judges those also.
 
-Tell the user the verdict and what was changed because of the review. If no subagent is available, say plainly that the video was not independently reviewed rather than reviewing it yourself and calling it a review.
+Tell the user the decision of the reviewer and the changes that you made because of the review. If no subagent is available, say that the video was not independently reviewed. Do not review it yourself and call that a review.
 
 ## Where this came from
 
-Three named viewers, a review of the plan before the build as well as of the result after it, the one-sentence summary as the test of a scene, and a recorded disposition for every finding are the review method of [jeffs_math_explainer_videos](https://github.com/Dicklesworthstone/jeffs_math_explainer_videos), adapted from maths videos to code. The viewers here are this skill's own.
+These come from the review method of [jeffs_math_explainer_videos](https://github.com/Dicklesworthstone/jeffs_math_explainer_videos), changed from maths videos to code:
+
+- three named viewers
+- a review of the plan before the build, and of the result after it
+- the summary in one sentence as the test of a scene
+- a recorded disposition for each finding
+
+The viewers here belong to this skill.
 
 ## What a reviewer catches that the checks do not
 
-The automated checks find a frozen picture, text off the frame, a collision with the captions. They cannot tell that the highlighted line is not the one being talked about, that a colour means "current" in one scene and "found" in the next, that a label is technically on screen but too small to read, or that the narration asserts something the picture never shows. Those are what the reviewer is for.
+The automatic checks find a still picture, text off the frame, and a collision with the captions. They cannot find these defects:
+
+- the highlighted line is not the line that the voice speaks about
+- a colour means "current" in one scene and "found" in the next
+- a label is on screen but too small to read
+- the narration says a thing that the picture does not show
+
+The reviewer finds those.

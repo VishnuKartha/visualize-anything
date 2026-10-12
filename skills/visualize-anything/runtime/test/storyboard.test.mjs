@@ -382,3 +382,14 @@ test('a Manim script is told when it ignores the kit or reaches for a class that
   // Only the scene being rendered is judged: a neighbour in the same file does not speak for it.
   assert.doesNotMatch(manimTaste(`${scene('row = Cells([1])')}\nclass Other(VAScene):\n    def construct(self):\n        n = Integer(3)\n`, false, 'Open').join(''), /LaTeX/);
 });
+
+test('the storyboard says what it does with each claim of a paper\'s abstract', () => {
+  const load = (claims) => loadStoryboard(project({claims, scenes: [{id: 'open', need: 'motion', class: 'Open', why: 'w', beats: [{say: 'It does one thing well.'}]}]})).storyboard.claims;
+  assert.deepEqual(load([{abstract: 1, scene: 'open'}, {abstract: 2, omit: 'A claim about future work.'}]), [{abstract: 1, scene: 'open', omit: null}, {abstract: 2, scene: null, omit: 'A claim about future work.'}]);
+  assert.deepEqual(load(undefined), []);
+  assert.throws(() => load([{abstract: 1, scene: 'nowhere'}]), /"scene" "nowhere" is not a scene/);
+  assert.throws(() => load([{abstract: 1}]), /give "scene" .* or "omit"/);
+  assert.throws(() => load([{abstract: 1, scene: 'open', omit: 'Both at once is neither.'}]), /one or the other/);
+  assert.throws(() => load([{abstract: 1, omit: 'no'}]), /"omit" says why/);
+  assert.throws(() => load([{abstract: 1, scene: 'open'}, {abstract: 1, scene: 'open'}]), /accounted for twice/);
+});

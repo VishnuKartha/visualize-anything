@@ -1,82 +1,108 @@
 # The shape of the story
 
-The house rules in [taste.md](taste.md) came from watching videos this skill produced. These came from the other direction: looking at how the channels people learn from build theirs (3Blue1Brown, Reducible, Polylog, Fireship, ByteByteGo, Spanning Tree, Primer, Welch Labs) and keeping what fits a 60 to 150 second code explainer.
+The house rules in [taste.md](taste.md) came from videos that this skill made. The rules here came from the other direction. We looked at how the channels that people learn from build their videos: 3Blue1Brown, Reducible, Polylog, Fireship, ByteByteGo, Spanning Tree, Primer, and Welch Labs. We kept the things that fit a code explainer of 60 to 150 seconds.
 
-Decide these in step 1, before the storyboard exists. `va route` checks none of them; the reviewers are asked about them. The numbers the story turns on are worked out next, in [facts.md](facts.md), before a sentence is written around them.
+Decide these in step 1, before the storyboard exists. `va route` does not examine them. The reviewers get questions about them. Calculate the numbers of the story next, in [facts.md](facts.md), before you write a sentence around them.
 
 | Move | Why | Where it goes |
 |---|---|---|
-| The obvious way goes first, and is shown costing something | The clever version means nothing until the viewer has seen what it replaces | Scene 2, a `motion` scene |
-| The cost is a number on screen, counted as it happens | A claim the viewer watched add up is believed; one that is only said is not | Every scene that claims a cost |
-| The opening starts from something the viewer already has | A stranger's problem is easy to click away from | The hook; see [opening.md](opening.md) |
-| The example is small; one beat says how it scales | Seven items can be followed. A million cannot, but it is the reason to care | The `math` scene or the last trace |
-| A question is asked before it is answered | The viewer who has the question in mind is waiting for the answer | The first beat of a scene |
+| The obvious way goes first, and the video shows its cost | The clever version means nothing until the viewer sees the thing that it replaces | Scene 2, a `motion` scene |
+| The cost is a number on screen, counted as it occurs | The viewer believes a claim that they saw add up. They do not believe a claim that is only said | Each scene that claims a cost |
+| The opening starts from a thing that the viewer has | A stranger's problem is easy to leave, and a surprise needs an expectation to break | The context, said before the hook. See [opening.md](opening.md) |
+| The example is small. One beat says how it scales | The viewer can follow seven items. They cannot follow a million, but a million is the reason to care | The `math` scene or the last trace |
+| Ask a question before you answer it | The viewer who has the question in mind waits for the answer | The first beat of a scene |
 | The first code on screen is the smallest piece that shows the idea | Code is the slowest thing on screen to read | The first `trace` scene |
-| The limit is named | Saying what it cannot do is what makes the rest credible | One beat before the recap |
-| Nothing moves without a reason | Motion pulls the eye; if it means nothing, it pulls the eye from what does | Every Manim script |
+| Say why it is important | A viewer who does not know what is at stake has no reason to follow the mechanism | One sentence in the opening, before the hook |
+| Use one concrete example, and return to it | A thing that the viewer can picture holds each abstract statement that follows | The opening, and each scene that needs it |
+| Explain the idea that the mechanism depends on | The clever part means nothing to a viewer who does not have the idea below it | One sentence and a picture, before the mechanism |
+| Name the limit | The statement of what it cannot do makes the other statements credible | One beat before the recap |
+| Nothing moves without a reason | Motion pulls the eye. If the motion means nothing, it pulls the eye from the thing that has meaning | Each Manim script |
 
 ## The obvious way first
 
-Five of the ten videos looked at spend their first minute on an approach that is about to lose. An error-correcting code is introduced by first sending redundant copies, under a bar showing about half the file given up to redundancy; the next bar shows 96.5% of the file kept. Consistent hashing starts with `hash(key) % n`, then crosses a server out in red and lets the keys reshuffle. A* is introduced by Dijkstra's search flooding a large red disc across the map, with A*'s small one under it. Recursion is introduced by a function with no base case, whose call stack grows and turns red.
+Five of the ten videos use their first minute for an approach that will lose:
 
-The pattern has three parts: the approach anyone would try, the same data, and what it costs as something visible.
+- An error-correcting code starts with redundant copies, below a bar that shows half the file lost to redundancy. The next bar shows 96.5% of the file kept.
+- Consistent hashing starts with `hash(key) % n`. Then a server gets a red cross and the keys move.
+- A* starts with the search of Dijkstra, which fills a large red disc across the map. The small disc of A* is below it.
+- Recursion starts with a function that has no base case. Its call stack grows and turns red.
 
-| Subject | The obvious way | What it costs, on screen |
+The pattern has three parts: the approach that all people try, the same data, and the cost as a visible thing.
+
+| Subject | The obvious way | Its cost, on screen |
 |---|---|---|
 | Binary search | Check every item in turn | Six looks against two |
 | LRU cache | Drop whatever was added first | It evicts the key that was read a moment ago |
 | Consistent hashing | `hash(key) % n` | One server leaves and nearly every key moves |
 | Bloom filter | Keep every key in a set | Memory grows with each key, beside a row of bits that stays one size |
 
-Give it the second scene, as `motion`: both approaches run on the same data, in the same colours, with a count beside each (routing.md, "`change` or `motion`?"). `race` in `examples/binary-search/video/storyboard.json` is the model. Ten to fifteen seconds is enough.
+Give it the second scene, as `motion`. Run the two approaches on the same data, in the same colours, with a count next to each (routing.md, "`change` or `motion`?"). `race` in `examples/binary-search/video/storyboard.json` is the model. Ten to fifteen seconds is sufficient.
 
-When the subject has no rival approach (a data layout, a protocol), show the failure the design prevents instead: the request that would be lost, the write that would be overwritten.
+When the subject has no competing approach (a data layout, a protocol), show the failure that the design prevents: the request that would be lost, or the write that would be overwritten.
 
 ## A count on screen
 
-Where these videos claim a cost, the measure is in the frame with the mechanism, updating as it runs: a histogram of the population's speed above the simulation that produces it; a bar of original against redundant bits above the block of bits; the area a search has explored, shaded as it grows; a network's weights added up term by term until the total, 13,002, stands under the sum.
+When these videos claim a cost, the measure is in the frame with the mechanism, and it changes as the mechanism runs:
 
-So when the narration says "six looks", "four comparisons", or "nothing is evicted", a counter next to the data reaches that number at that word. If the hook stars a number, some scene should end with that number standing on screen, earned. How to draw it is in [scene-manim.md](scene-manim.md), "What to draw".
+- a histogram of the speed of the population, above the simulation that makes it
+- a bar of original bits against redundant bits, above the block of bits
+- the area that a search explored, shaded as it grows
+- the weights of a network, added term by term until the total, 13,002, stands below the sum
+
+Thus, when the narration says "six looks", "four comparisons", or "nothing is evicted", a counter next to the data gets to that number on that word. If the hook has a star on a number, one scene must end with that number on screen. [scene-manim.md](scene-manim.md), "What to draw", tells you how to draw it.
 
 ## Small, then scaled
 
-The explanations run on something small enough to follow: sixteen bits standing in for a 256-bit block, one creature before a population, a handful of road junctions cut out of a whole map. The large case appears before or after, never during.
+The explanations run on a thing small enough to follow: sixteen bits for a block of 256 bits, one creature before a population, a small number of road junctions from a full map. The large case comes before or after, not during.
 
-This skill already holds one small dataset for the whole video and returns to the hook at the end. The piece to add is one explicit beat that connects the two: "Seven items took two passes. A million take twenty, because each pass halves what is left." Without it, the hook's number and the worked example are two separate facts.
+This skill holds one small dataset for the full video and returns to the hook at the end. Add one beat that connects the two: "Seven items took two passes. A million take twenty, because each pass halves what is left." Without it, the number of the hook and the worked example are two separate facts.
 
 ## Ask it before answering it
 
-Chapter titles in these videos are often the viewer's question at that point: why layers, what makes a good potential, what a neuron is. 3Blue1Brown draws the audience as characters who say what the viewer is thinking, including the objection (that recognising a loop is as hard as recognising the digit). The narration raises the question, leaves a breath, then answers.
+The chapter titles in these videos are frequently the question of the viewer at that point: why layers, what makes a good potential, what a neuron is. 3Blue1Brown draws the audience as characters who say the thoughts of the viewer, including the objection. The narration asks the question, waits a breath, and then answers.
 
-In a storyboard this is the first beat of a scene: "But how does it know which key is oldest?" and then the picture that answers. One or two in a video. A question the viewer does not actually have at that moment is filler.
+In a storyboard this is the first beat of a scene: "But how does it know which key is oldest?" and then the picture that answers. Use one or two in a video. A question that the viewer does not have at that moment is filler.
 
-When the viewer could answer it themselves, give them the time to: mark the beat `"predict": true` and the voice waits before the next beat answers (taste.md, "Ask, then wait").
+When the viewer can answer the question, give them the time. Mark the beat `"predict": true`. The voice waits before the next beat answers (taste.md, "Ask, then wait").
 
 ## The first code is the smallest piece
 
-The long videos hold the code back until the idea is understood: the implementation chapter starts 65%, 90%, and 96% of the way through the three algorithm videos that have one. The 100 second video is the closer model for this skill, and it does the opposite with a condition: code is on screen by the eighth second, but it is three lines, typed in as it is spoken, and its consequence is drawn beside it straight away. The real function arrives in the second half. The 38 minute coding video works the same way throughout: a short excerpt on an otherwise empty frame, then what that excerpt renders.
+The long videos hold the code back until the viewer understands the idea. In the three algorithm videos that have an implementation chapter, it starts 65%, 90%, and 96% of the way through.
 
-For a video under three minutes: the first `trace` scene shows the fewest lines that carry the idea (a field, a loop header, one call), and the full function comes later. For a longer one, put a `motion` scene before the first `trace` (routing.md, "Concept, then code").
+The video of 100 seconds is the nearer model for this skill. It does the opposite, with a condition. Code is on screen at the eighth second. But it has three lines, it is typed as the voice speaks it, and its effect is drawn next to it immediately. The real function arrives in the second half. The coding video of 38 minutes works the same way: a short excerpt on an empty frame, then the thing that the excerpt renders.
+
+- For a video shorter than three minutes: the first `trace` scene shows the smallest number of lines that hold the idea (a field, a loop header, one call). The full function comes later.
+- For a longer video: put a `motion` scene before the first `trace` (routing.md, "Concept, then code").
 
 ## Name the limit
 
-Two of these videos end the explanation on a limit: the Bloom filter video's last chapter is what it cannot do (delete), and the neural network lesson closes on a caveat about the function it just taught. One beat before the recap: "It costs a second dictionary entry per key", "The list has to stay sorted". It belongs in the recap as a takeaway when it changes how the viewer would use the thing.
+Two of these videos end the explanation on a limit. The last chapter of the Bloom filter video is the thing that it cannot do (delete). The neural network lesson closes on a caveat about the function that it taught.
+
+Use one beat before the recap: "It costs a second dictionary entry per key", "The list has to stay sorted". Put the limit in the recap as a takeaway when it changes how the viewer uses the thing.
 
 ## Nothing moves without a reason
 
-3Blue1Brown's advice to people starting out names this as the common abuse of animation software: equations and text that move because they can. Each movement should make the same point the voice is making at that moment.
+The advice of 3Blue1Brown to new makers names the usual misuse of animation software: equations and text that move because they can. Each movement must make the same point that the voice makes at that moment.
 
-In a Manim script: an object moves when the data it stands for moves, changes colour when its state changes, and otherwise stays where it is. Do not animate a label in from the side, bounce a box on arrival, or re-lay-out the row between beats. `va qc` asks that the picture not sit still for six seconds; answer that by spreading real steps across the sentence with `beat.until(...)`, not by adding drift.
+In a Manim script:
+
+- An object moves when the data that it stands for moves.
+- An object changes colour when its state changes.
+- If neither occurs, the object stays in its position.
+
+Do not animate a label in from the side. Do not make a box bounce when it arrives. Do not arrange the row again between beats. `va qc` asks that the picture not stay still for six seconds. To obey it, put real steps across the sentence with `beat.until(...)`. Do not add drift.
 
 ## Left out on purpose
 
-- **Characters and stories.** Two of the channels carry the explanation with characters (a bookshop robot, a crowd of pi creatures). It works, and it needs an illustrator's judgement this skill does not have.
-- **A roadmap card between sections.** The 19 minute video returns to a card of chapter thumbnails between sections. Under three minutes there is nothing to navigate.
-- **Composed music.** All of them have it. This skill will lay a bed you bring under the voice and hold it to a measured level (taste.md, "Music stays under the voice"), but it writes no music.
+- **Characters and stories.** Two of the channels use characters to hold the explanation (a bookshop robot, a crowd of pi creatures). It works, but it needs the judgement of an illustrator, which this skill does not have.
+- **A roadmap card between sections.** The video of 19 minutes returns to a card of chapter thumbnails between sections. A video shorter than three minutes has nothing to navigate.
+- **Composed music.** All of them have it. This skill puts music that you supply below the voice and holds it to a measured level (taste.md, "Music stays under the voice"). It does not write music.
 
 ## Where this came from
 
-Ten videos, looked at on 2026-10-10 through their chapter lists and through preview frames sampled every one to ten seconds (the opening and two or three stretches of each, not every frame), plus 3Blue1Brown's written advice for new explainers and the judging criteria of its Summer of Math Exposition (clarity, motivation within the first thirty seconds, novelty, memorability). The narration was not heard and transcripts were not available, so everything here about wording is inferred from chapter titles and one written lesson, not measured.
+We looked at ten videos on 2026-10-10. We used their chapter lists and preview frames sampled each one to ten seconds: the opening and two or three parts of each video, not each frame. We also used the written advice of 3Blue1Brown for new explainers, and the judging criteria of its Summer of Math Exposition: clarity, motivation in the first thirty seconds, novelty, and memorability.
+
+We did not hear the narration, and transcripts were not available. Thus all statements here about wording are inferred from chapter titles and one written lesson. They are not measured.
 
 | Channel | Video | Length |
 |---|---|---|
@@ -91,4 +117,10 @@ Ten videos, looked at on 2026-10-10 through their chapter lists and through prev
 | Welch Labs | The moment we stopped understanding AI | 17:38 |
 | Sebastian Lague | Coding Adventure: Ray Tracing | 37:57 |
 
-Rules this skill already had that the same videos follow: a hook before any title, a concrete example before the general statement, one colour per meaning for the whole video (red is reserved for the error or the cost in four of them), the same object kept on screen while its state changes, and code shown beside what it does.
+The same videos obey these rules, which this skill had before:
+
+- a hook before a title
+- a concrete example before the general statement
+- one colour for each meaning in the full video (four of them keep red for the error or the cost)
+- the same object on screen while its state changes
+- code next to its effect

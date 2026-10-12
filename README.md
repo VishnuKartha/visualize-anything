@@ -13,7 +13,7 @@ A router skill for coding agents that turns code into a narrated explainer video
 
 Two rules hold throughout. Code is never shown alone: whenever lines are on screen, a picture of what they do is beside them. And algorithms are animated end to end; Archify is reserved for how the components of a system relate.
 
-Every video opens on an animation, drawn in Manim, with the hook said over it: the core of the problem, or the most interesting thing about the answer, agreed before anything is written. No title card, no introduction, no link. It ends on the picture, not a list: each takeaway is shown beside the moment that proved it. Then a short end card names what was explained and where to find it. The thumbnail is a hook frame: five words at most above one picture from the video.
+Every video opens on an animation, drawn in Manim. It starts from where the viewer already is, in a sentence or two, and then lands the hook on the same picture: the core of the problem, or the most interesting thing about the answer. Both are agreed before anything is written. No lecture, no link, and no hook said to a viewer who has not been told what it is about. The title card comes after that opening, not before it: one line says this is what the work sets out to show, and the card names it. It ends on the picture, not a list: each takeaway is shown beside the moment that proved it. Then a short end card names what was explained and where to find it. The thumbnail is a hook frame: five words at most above one picture from the video.
 
 These and the other decisions about taste (no reciting code, no filler, a pause after the main point, a minimum text size, one palette, pictures carried across scenes) are written down in [taste.md](skills/visualize-anything/references/taste.md), and most are checked automatically.
 
@@ -25,6 +25,7 @@ The router decides what each scene looks like. What makes the video worth trusti
 |---|---|---|
 | Facts | No number is typed. Every number said or shown is a row in the storyboard's `facts`, computed again by an oracle (`facts.py`) that runs the real code | `va facts` (a difference stops the build); `va route` lists numbers with no row |
 | Edges | A sentence that says always or never names the fact that tried its edge cases | `va route` |
+| Abstract | For a paper: every claim of its abstract is shown by a scene or set aside with a reason, every number it states is said, and every number credited to the paper is in the paper | `va paper`, then `va route` and `va facts` |
 | Words | One word per idea, and no word before the scene that explains it | `va route`, against the storyboard's `vocabulary` |
 | Plan review | The script and storyboard are read by three fresh agents before anything is recorded: a newcomer, a practitioner, an expert. Each says every scene back in one sentence; one they cannot is a blocker | `va review --plan` |
 | Prediction | At least one question is left open long enough for the viewer to answer it | `"predict": true` on a beat; `va route` |
@@ -51,7 +52,8 @@ Routing: 7 scenes, subject "algorithm", about 124s.
 
 - **Need to renderer** is a fixed table, so the same intent always gets the same kind of picture.
 - **Cross-check**: cue words in the narration question a declared need they do not support. They never choose the route.
-- **Sequence rules**: open on a Manim animation and say the agreed hook over it, no scene starts over, no three same-kind scenes in a row, an identifier named on screen has its code nearby, every beat changes the picture.
+- **Prose check**: Vale reads each script with the proselint and ai-tells rule packages (`va prose`). Vale is a required dependency, installed by `va setup`.
+- **Sequence rules**: open on a Manim animation that gives the agreed context and then the agreed hook, no scene starts over, no three same-kind scenes in a row, an identifier named on screen has its code nearby, every beat changes the picture.
 - **Explainable and overridable**: every verdict states its reason, and a scene can disagree by recording an `override` with its own reason. Routing errors block the build.
 
 The design borrows from two projects: the style director in [html-explainer](https://github.com/OneMoh/html-explainer) (roles from position and text cues, diversity constraints, a `why` per decision) and the semantic annotation and card matching in [video-talkcraft](https://github.com/Vincentwei1021/video-talkcraft) (declare what each sentence needs, check coverage, write a deviation line to disagree). The trace scene, the algorithm drawing patterns, and the list of Manim pitfalls draw on [3brown1blue](https://github.com/AmitSubhash/3brown1blue) and [manim_skill](https://github.com/adithya-s-k/manim_skill); narration that drives the highlight by naming things on [diagram-tour](https://github.com/centraltowerlabs/diagram-tour); spoken-form conversion on [paperview](https://github.com/ssrajadh/paperview); the independent review loop on [motion-video-kit](https://github.com/echris6/motion-video-kit). The evidence scenes (a number counted up, panels set against each other, bars and lines, a marked quote, a figure with its parts pointed out) take their catalogue from the scene templates of [paper-video](https://github.com/nikhilanand03/paper-video), which turns a PDF into a narrated deck; here each is redrawn in this skill's palette and is driven beat by beat by the narration. The review tooling follows the same two projects: narration-anchored cues and in-browser layout measurement from html-explainer; contact sheets, per-shot rendering, and static-frame detection from video-talkcraft. No code from any of these is included.
@@ -139,6 +141,7 @@ va setup | doctor
 va init <slug>                 create .visualize/<slug>/ with a starter storyboard
 va route <project>             review every routing decision: need → renderer, with reasons
 va check <project>             validate the storyboard and its routing
+va paper <project> <source>    read a paper into the project (arXiv id, address, or PDF): abstract first
 va facts <project>             run the oracle (facts.py); hold every number in the video to it
 va tts <project>               narration → timeline.json
 va diagram <project> [ids]     Archify candidates → baked diagrams
@@ -162,6 +165,7 @@ Every step is cached by content. Changing one scene reruns one scene, including 
 - **Mixed renderers.** Remotion, Manim, Archify, and HyperFrames scenes share one backdrop, palette, heading, and caption style, so a video can cut between them without the seam showing.
 - **Evidence scenes.** A paper's number, its comparison with prior work, its results, its words, and its own figure each have a scene that draws them from the storyboard, with every part arriving on the word that names it and every number held to the facts ledger.
 - **A kit of ready-made pictures.** Manim scenes are composed, not drawn from scratch: `va_manim` ships a row of cells with pointers, a number that counts with its unit, a pipeline with something travelling along it, steps along a line, trees and graphs, braces, labels, and layout helpers, all built on [Manim Community](https://github.com/ManimCommunity/manim)'s own mobjects and checked against a pinned release. `runtime/python/va_gallery.py` draws all of them, and `va manim` warns when a script ignores the kit or reaches for a Manim class that needs LaTeX.
+- **Papers are read in.** `va paper` fetches an arXiv paper (or reads a PDF) into the project: the abstract split into numbered claims, the sections, the tables as tables, the figures as images, and the licence. The plan is then held to the abstract claim by claim. The reading follows the extract stage of [paper-video](https://github.com/nikhilanand03/paper-video), without its paid parser.
 - **Trace scenes.** Code on the left with a highlight stepping through it, the data it changes animated on the right, both driven by the same sentence.
 - **Facts ledger.** Numbers are computed, not typed. `facts.py` runs the code being explained on the video's own example; `va facts` compares it with the storyboard, at the precision the storyboard writes, and a Manim script reads the same values with `fact("<id>")`.
 - **Three viewers.** `va review --plan` writes one brief per viewer before anything is built; the video review holds the result to the same three contracts.

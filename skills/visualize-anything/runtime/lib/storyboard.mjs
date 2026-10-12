@@ -1,6 +1,7 @@
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {normalizeFacts, normalizeVocabulary} from './facts.mjs';
+import {normalizeClaims} from './paper.mjs';
 import {NEEDS, SUBJECTS, resolveRoute} from './router.mjs';
 import {findRun, speakable, spokenTokens} from './speech.mjs';
 import {fail, readJson} from './util.mjs';
@@ -472,6 +473,9 @@ export const loadStoryboard = (paths, {strict = true} = {}) => {
     }
     storyboard.scenes.push(normalized);
   });
+
+  // What the video does with each claim of the paper's abstract: shown by a scene, or set aside with a reason.
+  storyboard.claims = normalizeClaims(raw.claims, storyboard.scenes.map((scene) => scene.id), errors);
 
   for (const entry of storyboard.vocabulary) {
     if (entry.defined !== null && !storyboard.scenes.some((scene) => scene.id === entry.defined)) errors.push(`vocabulary "${entry.word}": "defined" "${entry.defined}" is not a scene.`);

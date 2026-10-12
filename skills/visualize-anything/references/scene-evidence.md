@@ -1,29 +1,31 @@
 # Evidence scenes
 
-Five scene kinds show what the source itself reports: its number, its comparison, its measurements, its words, its figure. They matter most when the subject is a paper, whose claims are only as good as the evidence it gives, but a benchmark in a README or a table in a design document is the same thing.
+Five scene kinds show the things that the source reports: its number, its comparison, its measurements, its words, its figure. They are most important when the subject is a paper, because the claims of a paper are only as good as its evidence. A benchmark in a README or a table in a design document is the same thing.
 
-| `need` | Kind | It answers |
+| `need` | Kind | The question it answers |
 |---|---|---|
-| `number` | `stat` | How much? How many? One number set large, or up to four side by side. |
+| `number` | `stat` | How much? How many? One large number, or four at most side by side. |
 | `contrast` | `compare` | What are the alternatives, and what does each get right and wrong? |
 | `chart` | `chart` | How do these measurements compare, or change from one round to the next? |
 | `quote` | `quote` | What exactly did the source claim? |
-| `figure` | `figure` | What did the source draw, and where in it should I look? |
+| `figure` | `figure` | What did the source draw, and where must I look in it? |
 
-All five are drawn by Remotion straight from the storyboard. There is no script to write and no clip to render first, so `va stills` shows them as soon as `va tts` has run, and their layout is measured like a title's or a recap's.
+Remotion draws all five from the storyboard. You write no script and render no clip first. `va stills` shows them immediately after `va tts`. The tool measures their layout as it does for a title or a recap.
 
-They do not replace the explanation. The idea is still animated, in Manim or a diagram; these are the scenes either side of it that say what was measured and what it is being compared with. A video made only of them is a slide deck.
+They do not replace the explanation. Animate the idea in Manim or in a diagram. These scenes go before and after it, and say what was measured and what it is compared with. A video made only of these scenes is a slide deck.
 
 ## How they move
 
-Every evidence scene is made of parts (metrics, points, bars, marked phrases, callouts), and a beat's `show` says how many are on screen. Parts arrive as the voice reaches them: a number counts up to its value, a bar grows, a point slides in with its tick or cross, a phrase is marked.
+Each evidence scene has parts: metrics, points, bars, marked phrases, callouts. The `show` of a beat gives the number of parts on screen. Parts arrive when the voice gets to them: a number counts up to its value, a bar grows, a point slides in with its tick or cross, a phrase gets a mark.
 
-- With no `show` anywhere, each beat brings the next part and the last beat shows everything. A `compare` brings a panel's points per beat. A `compare`, a `quote`, and a `figure` start bare when the scene has a beat to spare, so the frame is seen whole before anything in it is singled out.
-- A number takes its time: it counts for nearly half the beat that brings it, and its `detail` line arrives as it lands. A long sentence that builds to its number is said over a number still on its way.
-- To land a part on a word, use a cue: `{"at": "forty-one", "show": 2}`. This is how a long sentence keeps the picture moving; `va qc` reports an evidence scene that sits finished for more than six seconds while the voice carries on.
-- `note` puts a callout under the picture for the beat that carries it. Use it for the qualification a number needs ("not a fair race: these agents arrive pretrained"), so the caveat is on screen at the same moment as the claim.
+- With no `show`, each beat adds the next part and the last beat shows all parts. A `compare` adds the points of one panel in each beat. A `compare`, a `quote`, and a `figure` start empty when the scene has a spare beat. The viewer thus sees the full frame before a part of it gets attention.
+- A number takes time. It counts for almost half of the beat that adds it. Its `detail` line arrives when it stops. A long sentence that builds to its number is said over a number that still counts.
+- To put a part on a word, use a cue: `{"at": "forty-one", "show": 2}`. A long sentence keeps the picture in motion this way. `va qc` reports an evidence scene that is complete and still for more than six seconds while the voice continues.
+- `note` puts a callout below the picture for its beat. Use it for the qualification that a number needs ("not a fair race: these agents arrive pretrained"). The caveat is then on screen at the same moment as the claim.
 
-Every number these scenes show is held to the facts ledger like a number in the narration: a metric's value, a chart's values, a number inside a point or a quote. A chart's axis labels are the exception; "Round 1" names a position and measures nothing. For a paper, most numbers are the paper's own and nothing in the project computes them: give each a row with `"given"` saying where in the paper it is ("Table 2, bridge task, round 1"). See [facts.md](facts.md).
+The facts ledger holds each number in these scenes, as it holds a number in the narration: the value of a metric, the values of a chart, a number in a point or a quote. The axis labels of a chart are the exception. "Round 1" names a position and measures nothing.
+
+For a paper, most numbers belong to the paper, and nothing in the project calculates them. Give each a row with `"given"` and its location in the paper ("Table 2, bridge task, round 1"). See [facts.md](facts.md).
 
 ## `stat`: the number
 
@@ -47,14 +49,14 @@ Every number these scenes show is held to the facts ledger like a number in the 
 
 | Metric field | Meaning |
 |---|---|
-| `value` | The number as it should read: `"36"`, `"25,000,000"`, `"94.3"`, `"~4"`. It counts up to this without changing width. |
-| `label` | What it counts or whose it is, in a few words. Shown small and in capitals. |
+| `value` | The number as it must read: `"36"`, `"25,000,000"`, `"94.3"`, `"~4"`. It counts up to this value and its width does not change. |
+| `label` | The thing that it counts or its owner, in a few words. It shows small and in capitals. |
 | `unit` | Optional: `"fps"`, `"episodes"`, `"%"`. |
-| `detail` | Optional line under the number: what it means, or what it is compared with. |
-| `delta` | Optional small badge: a change (`"+3.2"`), or a two-word qualifier. A leading `+` or `-` adds an arrow. |
-| `tone` | `positive` (default, the accent), `negative`, `caution`, or `neutral`. It colours the number: use it to tell the old number from the new one, not to decorate. |
+| `detail` | Optional. A line below the number: its meaning, or the thing that it is compared with. |
+| `delta` | Optional. A small badge: a change (`"+3.2"`), or a qualifier of two words. A `+` or `-` at the start adds an arrow. |
+| `tone` | `positive` (the default, the accent), `negative`, `caution`, or `neutral`. It sets the colour of the number. Use it to show the old number and the new number as different. Do not use it as decoration. |
 
-One metric is set as large as the frame allows, with rings drawing round it. Two to four become cards, all at one size, set by the longest value. Keep a scene to numbers that are compared with each other; four unrelated numbers are four scenes or none.
+One metric is as large as the frame permits, with rings around it. Two to four metrics become cards of one size, which the longest value sets. Keep a scene to numbers that are compared with each other. Four numbers with no relation are four scenes or none.
 
 ## `compare`: the contrast
 
@@ -75,12 +77,12 @@ One metric is set as large as the frame allows, with rings drawing round it. Two
 }
 ```
 
-- `left` and `right`, or `panels` for three. Each has a `label`, one to four `points`, and an optional `tone` that tints its border and is the default for its points.
-- A point is a line of text, or `{"text", "tone"}`: `positive` draws a tick, `negative` a cross, `caution` a warning mark, `neutral` a dash. Keep a point under about 60 characters; it wraps to two lines at most.
-- `show` counts points across the panels in reading order. In the example, 1 and 2 are the simulator's, 3 and 4 the video model's. The panel whose point arrived last is lit and the others step back; once every point is on screen, all are lit.
-- `"versus": true` puts a "vs" between two panels. Use it for a head-to-head; leave it off when the panels are two cases of the same thing.
+- Use `left` and `right`, or `panels` for three. Each has a `label` and one to four `points`. An optional `tone` gives a tint to its border and is the default for its points.
+- A point is a line of text, or `{"text", "tone"}`. `positive` draws a tick, `negative` a cross, `caution` a warning mark, and `neutral` a dash. Keep a point shorter than approximately 60 characters. It wraps to two lines at most.
+- `show` counts points across the panels in reading order. In the example, 1 and 2 belong to the simulator, and 3 and 4 to the video model. The panel with the newest point is lit and the others step back. When all points are on screen, all panels are lit.
+- `"versus": true` puts "vs" between two panels. Use it for a direct comparison. Omit it when the panels are two cases of the same thing.
 
-Write the points in parallel. If the left panel says what it remembers and what it costs, the right says the same two things in the same order, so the viewer reads across.
+Write the points in parallel. If the left panel says what it remembers and what it costs, the right panel says the same two things in the same order. The viewer then reads across.
 
 ## `chart`: the measurements
 
@@ -104,15 +106,15 @@ Write the points in parallel. If the left panel says what it remembers and what 
 | Field | Meaning |
 |---|---|
 | `labels` | Two to twelve positions along the axis, in order. |
-| `values` | One number per label, zero or more. Or `series`: one to four of `{"label", "values"}` for grouped bars or several lines, with a legend. |
-| `chart` | `"bar"` (default) or `"line"`. A line is for an ordered axis (rounds, sizes, time); bars are for separate things. |
+| `values` | One number for each label, zero or more. Or `series`: one to four of `{"label", "values"}` for grouped bars or some lines, with a legend. |
+| `chart` | `"bar"` (the default) or `"line"`. A line is for an ordered axis (rounds, sizes, time). Bars are for separate things. |
 | `unit` | Written after each value when there is one series: `"s"`, `"%"`. |
-| `axis` | A short line in the chart's corner saying what is measured and which way is better. |
+| `axis` | A short line in the corner of the chart. It says what is measured and which direction is better. |
 
-- `show` is how many labels have been drawn. Bars grow from the axis, a line draws out to its next point, and each value counts up as its mark arrives.
-- `focus` names the labels or series the sentence is about. With one series, the bars in focus keep the accent and the rest fall back to slate.
-- The axis always starts at zero. A chart that starts anywhere else exaggerates the difference it shows.
-- Chart only the values the narration compares. A paper's table of forty cells is not a chart; the four that make the point are.
+- `show` is the number of labels drawn. Bars grow from the axis. A line draws to its next point. Each value counts up when its mark arrives.
+- `focus` names the labels or series that the sentence is about. With one series, the bars in focus keep the accent and the others become slate.
+- The axis always starts at zero. A chart that starts at a different value makes the difference look larger than it is.
+- Chart only the values that the narration compares. A table of forty cells is not a chart. The four cells that make the point are.
 
 ## `quote`: the source's words
 
@@ -128,10 +130,10 @@ Write the points in parallel. If the left panel says what it remembers and what 
 }
 ```
 
-- `quote` is the source's words exactly, copied from it and not from memory. Nothing checks this for you; a misquotation is the one mistake here that names someone else.
-- `highlight` is a phrase of the quote, or a list of them, marked one per `show`. The router checks each is in the quote.
-- Keep it under about forty-five words. Longer than that, quote the sentence and say the rest.
-- The voice should not read the quote out while it is on screen in different words. Either the narration says it as written, or it says what follows from it and lets the viewer read.
+- `quote` is the exact words of the source. Copy them from the source, not from memory. No tool examines this. An incorrect quotation is the one mistake here that puts words in the mouth of a named person.
+- `highlight` is a phrase of the quote, or a list of phrases. Each `show` marks one. The router makes sure that each is in the quote.
+- Keep it shorter than approximately forty-five words. For a longer text, quote the sentence and say the remainder.
+- The voice must not read the quote in different words while it is on screen. The narration says it as written, or it says what follows from it and lets the viewer read.
 
 ## `figure`: the source's figure
 
@@ -155,14 +157,14 @@ Write the points in parallel. If the left panel says what it remembers and what 
 }
 ```
 
-- `image` is a PNG, JPEG, WebP, or GIF in the project. Export a PDF figure to PNG first, at 1600 pixels wide or more. It is shown whole, at its own shape, on white.
-- Each callout points at `x`, `y`, as percentages of the image from its top left. `side` is where the label stands from its point: `left`, `right`, `above`, or `below` (default: right of a point in the left of the image, left of one in the right). `va stills` is how you place them: look, move, look again.
-- `show` counts callouts. The frame leans in a little toward the newest one; the earlier labels stay and step back.
-- Use the figure the paper drew. Do not rebuild it as a chart or a diagram: the authors chose that picture, and theirs is the one a reader will recognise. Say where it is from in `caption`, and check you may reproduce it: a figure from an arXiv paper is under whatever licence the authors chose there.
-- A dense figure cannot be read at video size. Crop the panel the narration is about before using it.
+- `image` is a PNG, JPEG, WebP, or GIF in the project. Export a PDF figure to PNG first, at 1600 pixels wide or more. The tool shows it complete, at its own shape, on white.
+- Each callout points at `x`, `y`, as percentages of the image from its top left. `side` is the position of the label from its point: `left`, `right`, `above`, or `below`. The default is right of a point in the left of the image, and left of a point in the right. Use `va stills` to position them: look, move, look again.
+- `show` counts callouts. The frame moves a small distance to the newest callout. The earlier labels stay and step back.
+- Use the figure of the paper. Do not build it again as a chart or a diagram. The authors selected that picture, and a reader recognises it. Give its source in `caption`. Make sure that you can reproduce it: a figure from an arXiv paper has the licence that the authors selected there.
+- A viewer cannot read a dense figure at video size. Crop the panel that the narration is about before you use it.
 
 ## What they are not for
 
-- The opening. A video opens on a Manim animation of the hook, always; when the hook is a number, that animation counts it beside the thing it measures (`Count` in [scene-manim.md](scene-manim.md)). A `number` scene is for a result stated later.
-- The recap: that is `recap`, which can show a moment of any of these beside a takeaway (`{"text": "...", "from": "bridge"}`). A `quote` has no picture to show there.
-- How something works. A panel of ticks and crosses says that two things differ, never why. The scene after it has to show the why.
+- **The opening.** A video always opens on a Manim animation of the hook. When the hook is a number, that animation counts it next to the thing that it measures (`Count` in [scene-manim.md](scene-manim.md)). A `number` scene is for a result that comes later.
+- **The recap.** That is `recap`. It can show a moment of one of these scenes next to a takeaway (`{"text": "...", "from": "bridge"}`). A `quote` has no picture to show there.
+- **How a thing works.** A panel of ticks and crosses says that two things are different. It does not say why. The next scene must show why.
