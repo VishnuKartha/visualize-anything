@@ -57,50 +57,67 @@ export const FigureView: React.FC<{scene: FigureScene}> = ({scene}) => {
         }}
       >
         <div style={{position: 'absolute', left: PAD, top: PAD, width, height, transformOrigin: `${view.x}% ${view.y}%`, scale: String(view.scale)}}>
-          <Img src={staticFile(scene.image)} style={{width, height, objectFit: 'contain'}} />
-          {scene.callouts.map((callout, index) => {
-            const start = arrival(scene.steps, index);
-            if (start === null) return null;
-            const arrived = ramp(frame, start, 18);
-            const ring = ramp(frame, start, 36);
-            // The label stands off from its point on the side it was given, joined to it by a short lead.
-            const across = callout.side === 'left' || callout.side === 'right';
-            const sign = callout.side === 'left' || callout.side === 'above' ? -1 : 1;
-            const lead = 44 * arrived;
-            return (
-              <div key={index} style={{position: 'absolute', left: `${callout.x}%`, top: `${callout.y}%`, opacity: arrived}}>
-                <div style={{position: 'absolute', left: -60, top: -60, width: 120, height: 120, borderRadius: 60, boxSizing: 'border-box', border: `4px solid ${theme.accent}`, opacity: 1 - ring, scale: String(0.3 + ring)}} />
-                <div style={{position: 'absolute', left: across ? (sign > 0 ? 13 : -13 - lead) : -2, top: across ? -2 : sign > 0 ? 13 : -13 - lead, width: across ? lead : 4, height: across ? 4 : lead, backgroundColor: theme.bg}} />
-                <div style={{position: 'absolute', left: -13, top: -13, width: 26, height: 26, borderRadius: 13, boxSizing: 'border-box', backgroundColor: theme.accent, border: `4px solid ${theme.bg}`, scale: String(arrived)}} />
-                <div
-                  data-va-text="callout"
-                  style={{
-                    position: 'absolute',
-                    left: across ? sign * 56 : 0,
-                    top: across ? 0 : sign * 86,
-                    translate: `${across ? (sign > 0 ? '0' : '-100%') : '-50%'} -50%`,
-                    height: 60,
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 22px',
-                    borderRadius: 12,
-                    backgroundColor: theme.bg,
-                    // The label being spoken about is lit; the ones before it stay, and step back.
-                    border: `2px solid ${index === newest ? theme.accent : theme.dim}`,
-                    fontFamily: SANS,
-                    fontSize: 28,
-                    fontWeight: 600,
-                    color: index === newest ? theme.text : theme.muted,
-                    whiteSpace: 'nowrap',
-                    boxShadow: '0 12px 36px rgba(0,0,0,0.45)',
-                  }}
-                >
-                  {callout.label}
-                </div>
-              </div>
-            );
-          })}
+          {/* A crop shows one region of the figure: the whole image, scaled so that region fills the frame. */}
+          <div style={{position: 'absolute', inset: 0, overflow: 'hidden'}}>
+            <Img
+              src={staticFile(scene.image)}
+              style={{
+                position: 'absolute',
+                width: (width * 100) / scene.crop.width,
+                height: (height * 100) / scene.crop.height,
+                left: (-width * scene.crop.x) / scene.crop.width,
+                top: (-height * scene.crop.y) / scene.crop.height,
+                maxWidth: 'none',
+              }}
+            />
+          </div>
         </div>
+      </div>
+      {/* Callouts sit in a layer of their own, over the card and moving with it, so a label that
+          stands off a narrow figure is not cut off at the card's edge. */}
+      <div style={{position: 'absolute', left: left + PAD, top: top + PAD, width, height, transformOrigin: `${view.x}% ${view.y}%`, scale: String(view.scale), opacity: enter}}>
+        {scene.callouts.map((callout, index) => {
+          const start = arrival(scene.steps, index);
+          if (start === null) return null;
+          const arrived = ramp(frame, start, 18);
+          const ring = ramp(frame, start, 36);
+          // The label stands off from its point on the side it was given, joined to it by a short lead.
+          const across = callout.side === 'left' || callout.side === 'right';
+          const sign = callout.side === 'left' || callout.side === 'above' ? -1 : 1;
+          const lead = 44 * arrived;
+          return (
+            <div key={index} style={{position: 'absolute', left: `${callout.x}%`, top: `${callout.y}%`, opacity: arrived}}>
+              <div style={{position: 'absolute', left: -60, top: -60, width: 120, height: 120, borderRadius: 60, boxSizing: 'border-box', border: `4px solid ${theme.accent}`, opacity: 1 - ring, scale: String(0.3 + ring)}} />
+              <div style={{position: 'absolute', left: across ? (sign > 0 ? 13 : -13 - lead) : -2, top: across ? -2 : sign > 0 ? 13 : -13 - lead, width: across ? lead : 4, height: across ? 4 : lead, backgroundColor: theme.bg}} />
+              <div style={{position: 'absolute', left: -13, top: -13, width: 26, height: 26, borderRadius: 13, boxSizing: 'border-box', backgroundColor: theme.accent, border: `4px solid ${theme.bg}`, scale: String(arrived)}} />
+              <div
+                data-va-text="callout"
+                style={{
+                  position: 'absolute',
+                  left: across ? sign * 56 : 0,
+                  top: across ? 0 : sign * 86,
+                  translate: `${across ? (sign > 0 ? '0' : '-100%') : '-50%'} -50%`,
+                  height: 60,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 22px',
+                  borderRadius: 12,
+                  backgroundColor: theme.bg,
+                  // The label being spoken about is lit; the ones before it stay, and step back.
+                  border: `2px solid ${index === newest ? theme.accent : theme.dim}`,
+                  fontFamily: SANS,
+                  fontSize: 28,
+                  fontWeight: 600,
+                  color: index === newest ? theme.text : theme.muted,
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 12px 36px rgba(0,0,0,0.45)',
+                }}
+              >
+                {callout.label}
+              </div>
+            </div>
+          );
+        })}
       </div>
       {scene.caption ? (
         <div

@@ -73,7 +73,7 @@ export const VIEWERS = {
 export const PRIORITY = 'Where the three pull apart: the expert decides what is true and that is not traded away; the newcomer decides pacing and vocabulary; the practitioner decides which mechanisms and costs make the cut. A better example usually satisfies all three.';
 
 // What `show` counts in each kind of scene that reveals its parts.
-const PARTS = {stat: 'number(s)', compare: 'point(s)', chart: 'value(s)', quote: 'marked phrase(s)', figure: 'callout(s)'};
+const PARTS = {stat: 'number(s)', compare: 'point(s)', chart: 'value(s)', table: 'row(s)', matrix: 'row(s)', quote: 'marked phrase(s)', figure: 'callout(s)'};
 
 /** What a beat puts on screen, as far as the storyboard says. */
 const pictureOf = (scene, beat) => {
@@ -106,13 +106,16 @@ const pictureOf = (scene, beat) => {
 const SHOWN_AS = {
   title: 'a statement on screen', credit: 'the end card', code: 'code alone', trace: 'code beside an animation of what it does', hyperframes: 'a code diff or chart', manim: 'an animation', diagram: 'a diagram',
   bullets: 'the recap, each takeaway beside the moment that proved it',
-  stat: 'a number counted up on screen', compare: 'panels side by side', chart: 'a chart', quote: "the source's words, quoted", figure: "the source's own figure",
+  stat: 'a number counted up on screen', compare: 'panels side by side', chart: 'a chart', table: 'a results table', matrix: 'a grid of values coloured by size', quote: "the source's words, quoted", figure: "the source's own figure",
 };
 
 /** What an evidence scene is made of, in words, for the plan a reviewer reads. */
 const madeOf = (scene) => {
   if (scene.kind === 'stat') return `Numbers shown: ${scene.metrics.map((metric) => `${metric.value}${metric.unit ? ` ${metric.unit}` : ''} (${metric.label})`).join('; ')}`;
   if (scene.kind === 'compare') return `Panels: ${scene.panels.map((panel) => `"${panel.label}": ${panel.points.map((point) => `${point.text} [${point.tone}]`).join(', ')}`).join(' | ')}`;
+  if (scene.kind === 'chart' && scene.chart === 'scatter') return `A scatter chart, ${scene.axis} against ${scene.across}: ${scene.series.map((entry) => `${entry.label ? `${entry.label}: ` : ''}${entry.points.map((point) => `${point.label || 'a point'} at (${point.x}, ${point.y})`).join(', ')}`).join(' | ')}`;
+  if (scene.kind === 'table') return `A table (${scene.columns.join(' | ')}): ${scene.rows.map((cells) => cells.join(' | ')).join('; ')}${scene.best ? `; the row marked best: ${scene.best}` : ''}`;
+  if (scene.kind === 'matrix') return `A ${scene.rows.length}×${scene.columns.length} matrix, rows ${scene.rows.join(', ')}, columns ${scene.columns.join(', ')}${scene.numbers ? '' : ', as colours alone'}`;
   if (scene.kind === 'chart') return `A ${scene.chart} chart${scene.unit ? ` in ${scene.unit}` : ''}: ${scene.series.map((entry) => `${entry.label ? `${entry.label}: ` : ''}${scene.labels.map((label, index) => `${label} = ${entry.values[index]}`).join(', ')}`).join(' | ')}`;
   if (scene.kind === 'quote') return `Quoted: "${scene.quote}"${scene.attribution ? ` (${scene.attribution})` : ''}`;
   if (scene.kind === 'figure') return `Figure: ${scene.image}${scene.caption ? `, captioned "${scene.caption}"` : ''}${scene.callouts.length ? `; pointed out: ${scene.callouts.map((callout) => callout.label).join(', ')}` : ''}`;
@@ -123,11 +126,12 @@ const madeOf = (scene) => {
  * The page one viewer is handed before anything is recorded: the whole script, the plan scene by
  * scene, the facts ledger, and what to report. Pure text in, text out.
  */
-export const planBrief = ({viewer, storyboard, script, routingText, ledger, sources, reportPath, paper = null}) => {
+export const planBrief = ({viewer, storyboard, script, routingText, ledger, sources, drawn = {}, reportPath, paper = null}) => {
   const person = VIEWERS[viewer];
   const out = [];
   out.push(`# Plan review as ${person.name}: ${storyboard.title}`, '');
-  out.push('This is the plan for a short narrated explainer video: its script and its storyboard. Nothing has been recorded or drawn yet, so everything here is still cheap to change. You did not write it, and nobody will tell you what was intended beyond this page.', '');
+  const made = (storyboard.sources || []).map((source) => `${source.title || source.id} (${source.kind === 'design-doc' ? 'a design document' : source.kind === 'docs' ? 'documentation' : source.kind === 'topic' ? 'general knowledge' : source.kind === 'code' ? 'code' : 'a research paper'})`);
+  out.push(`This is the plan for a short narrated explainer video${made.length ? ` made from ${made.join(' and ')}` : ''}: its script and its storyboard. Nothing has been recorded or drawn yet, so everything here is still cheap to change. You did not write it, and nobody will tell you what was intended beyond this page.`, '');
   out.push('## Who you are', '', person.who, '', 'What you need from a video:', ...person.needs.map((need) => `- ${need}`), '', `**The contract the video has with you:** ${person.contract}`, '');
   out.push('Read as this person and only as this person. Do not review it as an editor or as an engineer in general; two other reviewers are reading it as the other two viewers.', '');
 
@@ -157,6 +161,11 @@ export const planBrief = ({viewer, storyboard, script, routingText, ledger, sour
   storyboard.scenes.forEach((scene, index) => {
     out.push(`### ${index + 1}. ${scene.id}: ${SHOWN_AS[scene.kind]}`, '');
     if (scene.why) out.push(`Why this picture: ${scene.why}`, '');
+    // What the scene rests on: hold a design doc's claim against the doc, and the code against what it does.
+    if ((storyboard.sources || []).length > 1) {
+      const ids = drawn[scene.id] || [];
+      out.push(`Drawn from: ${ids.length ? ids.map((id) => storyboard.sources.find((source) => source.id === id)).map((source) => `${source.title || source.id} (${source.kind})`).join(' and ') : "the video's own picture, no source"}`, '');
+    }
     if (scene.kind === 'bullets') out.push(`Takeaways shown: ${scene.items.map((item) => `"${item.text}"${item.from ? ` (beside "${item.from}")` : ''}`).join('; ')}`, '');
     if (madeOf(scene)) out.push(madeOf(scene), '');
     out.push('| Beat | Heard | On screen |', '|---|---|---|');

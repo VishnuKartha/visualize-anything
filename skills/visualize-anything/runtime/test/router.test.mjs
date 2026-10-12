@@ -43,7 +43,7 @@ const LRU = [
 
 test('every need routes to a known renderer', () => {
   for (const [need, spec] of Object.entries(NEEDS)) {
-    assert.ok(['title', 'code', 'trace', 'hyperframes', 'manim', 'diagram', 'bullets', 'credit', 'stat', 'compare', 'chart', 'quote', 'figure'].includes(spec.kind), need);
+    assert.ok(['title', 'code', 'trace', 'hyperframes', 'manim', 'diagram', 'bullets', 'credit', 'stat', 'compare', 'chart', 'table', 'matrix', 'quote', 'figure'].includes(spec.kind), need);
     assert.equal(spec.kind === 'diagram', Boolean(spec.type), `${need}: only diagrams carry a type`);
   }
 });
@@ -76,6 +76,7 @@ test('a well-routed algorithm video has no errors and nothing to review', () => 
       thumbnail: {...THUMBNAIL, from: 'open'},
       facts: [{id: 'state-fields', value: 2, what: 'fields the class keeps'}, {id: 'takeaways', value: 3, given: 'the recap has three items'}],
       vocabulary: [{word: 'entry', not: ['element', 'record'], defined: 'open'}],
+      sources: [{id: 'lru', kind: 'code', path: 'lru.py'}],
     }),
   );
   assert.equal(report.errors, 0, texts(report.rows.flatMap((entry) => entry.reasons)));

@@ -7,7 +7,7 @@ A router skill for coding agents that turns code into a narrated explainer video
 | "Watch what happens to the data", "first it checks..., and if so..." | animation of the algorithm, including its branches and formulas | [Manim](https://www.manim.community/) |
 | "This line does X", "each time around the loop..." | the code with a moving highlight, beside the data it changes | Remotion + Manim |
 | "The fix is one line" / "a million against twenty" | an animated diff of the code; a chart or comparison | [HyperFrames](https://github.com/heygen-com/hyperframes) |
-| "Thirty-six frames a second", "a simulator remembers, a video model looks real", "seventy-one seconds, then forty-one" | what the source itself reports: its number counted up, its alternatives side by side, its results as bars or a line, its own words, its own figure | Remotion |
+| "Thirty-six frames a second", "a simulator remembers, a video model looks real", "seventy-one seconds, then forty-one" | what the source itself reports: its number counted up, its alternatives side by side, its results as bars, a line, or a scatter, the rows of its table, a grid of its values, its own words, its own figure | Remotion |
 | "The API asks the cache, then the database" | architecture, sequence, dataflow, workflow, or lifecycle diagram of a system's separate parts | [Archify](https://github.com/tt-a1i/archify) |
 | Opening hook, recap, end card | statement, bullets, credit | Remotion |
 
@@ -23,6 +23,7 @@ The router decides what each scene looks like. What makes the video worth trusti
 
 | Gate | What it holds | How |
 |---|---|---|
+| Sources | What the video is made from (code, a paper, a design doc, documentation, a topic with none) is recognised at the brief and recorded. A scene drawn from a document is held to its rules: no paragraph shown as code, evidence that says where in the document it is and follows the scene that sets it up, the document's own figures rather than redrawn ones | `va sources` lists what a document holds; `va route` |
 | Facts | No number is typed. Every number said or shown is a row in the storyboard's `facts`, computed again by an oracle (`facts.py`) that runs the real code | `va facts` (a difference stops the build); `va route` lists numbers with no row |
 | Edges | A sentence that says always or never names the fact that tried its edge cases | `va route` |
 | Abstract | For a paper: every claim of its abstract is shown by a scene or set aside with a reason, every number it states is said, and every number credited to the paper is in the paper | `va paper`, then `va route` and `va facts` |
@@ -36,7 +37,7 @@ Those ideas are that project's; the code here is not. It renders maths videos in
 
 ## The router
 
-The agent does not pick renderers directly. For each scene it declares what the viewer needs to see, from a closed vocabulary (`source`, `trace`, `change`, `data`, `number`, `contrast`, `chart`, `quote`, `figure`, `motion`, `branching`, `math`, `structure`, `conversation`, `pipeline`, `process`, `states`, `question`, `recap`, `credit`), and `va route` does the rest:
+The agent does not pick renderers directly. For each scene it declares what the viewer needs to see, from a closed vocabulary (`source`, `trace`, `change`, `data`, `number`, `contrast`, `chart`, `table`, `matrix`, `quote`, `figure`, `motion`, `branching`, `math`, `structure`, `conversation`, `pipeline`, `process`, `states`, `question`, `recap`, `credit`), and `va route` does the rest:
 
 ```
 Routing: 7 scenes, subject "algorithm", about 124s.
@@ -63,7 +64,7 @@ Narration is synthesized with [edge-tts](https://github.com/rany2/edge-tts) (no 
 ## How it works
 
 ```
-read the code
+read the source ── va sources: what a paper or doc holds (figures, tables, algorithms), and where
      │
      ▼
 va facts ───────── facts.py runs the real code; every number the video will use is computed first
@@ -80,7 +81,7 @@ va review --plan ─ three viewers read the plan before anything is recorded
      ▼
 va tts ─────────── one edge-tts clip per beat → timeline.json (frame-exact time budget)
      │
-     ├─ title / bullets / number / contrast / chart / quote / figure ── nothing to build; rendered from the storyboard
+     ├─ title / bullets / number / contrast / chart / table / matrix / quote / figure ── nothing to build; rendered from the storyboard
      ├─ manim ──── VAScene script, each beat held to its narration window → clip
      ├─ hyperframes ─ a diff between versions of code (or your own HTML composition), timed to the beats → clip
      └─ diagram ── Archify candidate → finalize gates → baked SVG, revealed and framed per beat
@@ -139,6 +140,7 @@ Results are written to each project's `out/video.mp4`. Its [storyboard.json](exa
 ```
 va setup | doctor
 va init <slug>                 create .visualize/<slug>/ with a starter storyboard
+va sources <project>           what each source holds: a document's figures, tables, algorithms (--figures: export PNGs)
 va route <project>             review every routing decision: need → renderer, with reasons
 va check <project>             validate the storyboard and its routing
 va paper <project> <source>    read a paper into the project (arXiv id, address, or PDF): abstract first
@@ -163,7 +165,7 @@ Every step is cached by content. Changing one scene reruns one scene, including 
 - **Written-form narration.** Narration is written the way it reads on screen (`move_to_end`, `O(log n)`); the voice is given the spoken form and the captions keep the original.
 - **The picture follows what is named.** Say an identifier and its line is highlighted at that word; say a diagram node's label and it lights up. No cue needed.
 - **Mixed renderers.** Remotion, Manim, Archify, and HyperFrames scenes share one backdrop, palette, heading, and caption style, so a video can cut between them without the seam showing.
-- **Evidence scenes.** A paper's number, its comparison with prior work, its results, its words, and its own figure each have a scene that draws them from the storyboard, with every part arriving on the word that names it and every number held to the facts ledger.
+- **Evidence scenes.** A paper's number, its comparison with prior work, its results (bars, a line, a scatter, or the rows of its table), a grid of its values, its words, and its own figure (cropped to a panel if need be) each have a scene that draws them from the storyboard, with every part arriving on the word that names it and every number held to the facts ledger.
 - **A kit of ready-made pictures.** Manim scenes are composed, not drawn from scratch: `va_manim` ships a row of cells with pointers, a number that counts with its unit, a pipeline with something travelling along it, steps along a line, trees and graphs, braces, labels, and layout helpers, all built on [Manim Community](https://github.com/ManimCommunity/manim)'s own mobjects and checked against a pinned release. `runtime/python/va_gallery.py` draws all of them, and `va manim` warns when a script ignores the kit or reaches for a Manim class that needs LaTeX.
 - **Papers are read in.** `va paper` fetches an arXiv paper (or reads a PDF) into the project: the abstract split into numbered claims, the sections, the tables as tables, the figures as images, and the licence. The plan is then held to the abstract claim by claim. The reading follows the extract stage of [paper-video](https://github.com/nikhilanand03/paper-video), without its paid parser.
 - **Trace scenes.** Code on the left with a highlight stepping through it, the data it changes animated on the right, both driven by the same sentence.

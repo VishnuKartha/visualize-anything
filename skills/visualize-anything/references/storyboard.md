@@ -18,6 +18,7 @@ Where a scene `continues` the scene before it, the breath at that join is as sho
 | `title` | `"Untitled"` | The name of the video where it is published. The video does not show it. See [opening.md](opening.md). |
 | `thumbnail` | the hook | `{"text": "...", "from": "<scene id>", "beat": n}`: five words at most, one with a star, above the named scene stopped at the end of that beat. See [opening.md](opening.md). |
 | `subject` | guessed | `algorithm`, `system`, or `mixed`. It controls which renderers can be in the video. See [routing.md](routing.md). |
+| `sources` | none | The material that the video is made from, which you identify at the brief: `[{"id", "kind", "title", "path", "url"}]`. `kind` is `code`, `paper`, `design-doc`, `docs`, or `topic`. The part of a scene that comes from a document obeys the rules of a document. In a paper project with no `sources`, the paper is the one source. See [sources.md](sources.md). |
 | `brief` | none | The agreement with the user: `{"audience": "...", "length": 90, "focus": "...", "context": "...", "hook": "..."}`. `length` is in seconds. The router compares the video with it. `context` is the first thing that the opening says: where the viewer is now, and the one step from there to the subject. `hook` is the one sentence that follows it, with a star on the word or number that it turns on. The router makes sure that the brief has the two, that the opening says the hook, and that the ending returns to it. See [opening.md](opening.md). |
 | `facts` | none | The ledger: each number that the video says or shows, as `{"id", "value", "what"}`. The `facts.py` of the project calculates each one again. See [facts.md](facts.md). |
 | `claims` | none | For a paper: the decision of the video for each claim of its abstract, as `{"abstract": n, "scene": "<scene id>"}` or `{"abstract": n, "omit": "<why>"}`. `va paper` gives the claims their numbers. `va route` lists each claim with no decision. See [paper.md](paper.md). |
@@ -35,8 +36,11 @@ Where a scene `continues` the scene before it, the breath at that join is as sho
 | Field | Meaning |
 |---|---|
 | `id` | A unique kebab-case name. The tool finds diagram and Manim sources by it. |
-| `need` | The thing that the viewer must see: `question`, `source`, `trace`, `change`, `data`, `number`, `contrast`, `chart`, `quote`, `figure`, `motion`, `branching`, `math`, `structure`, `conversation`, `pipeline`, `process`, `states`, `name`, `recap`, or `credit`. The router changes it into a renderer. See [routing.md](routing.md). |
-| `kind` | Optional. The renderer (`title`, `code`, `trace`, `hyperframes`, `diagram`, `manim`, `bullets`, `credit`, `stat`, `compare`, `chart`, `quote`, `figure`). The `need` usually supplies it. If you set the two, they must agree. |
+| `need` | The thing that the viewer must see: `question`, `source`, `trace`, `change`, `data`, `number`, `contrast`, `chart`, `table`, `matrix`, `quote`, `figure`, `motion`, `branching`, `math`, `structure`, `conversation`, `pipeline`, `process`, `states`, `name`, `recap`, or `credit`. The router changes it into a renderer. See [routing.md](routing.md). |
+| `kind` | Optional. The renderer (`title`, `code`, `trace`, `hyperframes`, `diagram`, `manim`, `bullets`, `credit`, `stat`, `compare`, `chart`, `table`, `matrix`, `quote`, `figure`). The `need` usually supplies it. If you set the two, they must agree. |
+| `source` | The sources that the scene uses: one source id, a list of ids (`["rfc", "svc"]`: the decision of a doc next to the code that does it), or `null` for a picture of the video's own. With more than one source, give it on each scene. With one source, or a `file` in a source, the tool can find it. See [sources.md](sources.md). |
+| `ref` | The location in a document (`"Table 2"`, `"Figure 4"`, `"Section 3.1"`). Give it on evidence from a document, and on a scene that puts a claim of a document next to code. |
+| `after` | Evidence from a document: the id of the earlier scene that prepares it. |
 | `why` | One sentence that gives the reason for this need. The tool does not render it. It lets a person review the routing. |
 | `override` | Only when you disagree with the router: the reason, as a full phrase. It changes a routing error into a recorded note. |
 | `continues` | `true` when this scene starts on the picture where the scene before it ended. The tool removes the fade between them. `false` says that two scenes from one script do not share a picture. See [taste.md](taste.md). |
@@ -143,7 +147,7 @@ Scene fields: `type` (`architecture`, `workflow`, `sequence`, `dataflow`, `lifec
 
 Scene fields: `class` (required, the `VAScene` subclass to render), optional `script` (the default is `manim/<id>.py`. Some scenes can share one script). Beats have no cue. The script addresses beats by index. See [scene-manim.md](scene-manim.md).
 
-### `stat`, `compare`, `chart`, `quote`, `figure`
+### `stat`, `compare`, `chart`, `table`, `matrix`, `quote`, `figure`
 
 The evidence scenes show the things that the source reports. The tool draws them from the storyboard, and you build nothing. [scene-evidence.md](scene-evidence.md) has the fields, the defaults, and an example of each.
 
@@ -151,16 +155,18 @@ The evidence scenes show the things that the source reports. The tool draws them
 |---|---|---|
 | `stat` | `metrics`: one to four of `{"value", "unit", "label", "detail", "delta", "tone"}` | metrics on screen |
 | `compare` | `left` and `right`, or `panels` (two or three): each `{"label", "tone", "points"}`. `versus` | points on screen, counted across the panels in reading order |
-| `chart` | `labels` with `values`, or with `series` (one to four of `{"label", "values"}`). `chart` (`"bar"` or `"line"`), `unit`, `axis` | labels drawn until now |
+| `chart` | `labels` with `values`, or with `series` (one to four of `{"label", "values"}`). `chart` (`"bar"`, `"line"`, or `"scatter"`), `unit`, `axis`. A scatter takes `points` (or `series` of `{"label", "points"}`), each `{"x", "y", "label"}`, and `across` | labels drawn until now (for a scatter: points) |
+| `table` | `columns` (two to five), `rows` (one to six, one cell for each column), `best`, `highlight`, `caption` | rows on screen |
+| `matrix` | `rows`, `columns` (two to eight each), `values`, `scale`, `numbers`, `axis` | rows filled |
 | `quote` | `quote`, `highlight` (a phrase of it, or some phrases), `attribution` | phrases marked |
-| `figure` | `image` (a PNG, JPEG, or WebP in the project), `caption`, `callouts`: five at most of `{"label", "x", "y", "side"}` | callouts shown |
+| `figure` | `image` (a PNG, JPEG, or WebP in the project), `caption`, `crop` (`{"x", "y", "width", "height"}` in percent), `callouts`: five at most of `{"label", "x", "y", "side"}` | callouts shown |
 
 All kinds but `quote` and `figure` take an optional `title`: a line above the picture with stars on its important words.
 
 | Beat cue | Meaning |
 |---|---|
 | `show` | The number of parts of the scene that are on screen from this beat. The default is one more for each beat (the points of one panel, in a `compare`), and all parts on the last beat. |
-| `focus` | In a `chart`: the labels or series that this sentence is about. The others step back. |
+| `focus` | In a `chart`: the labels, points, or series that this sentence is about. In a `table`: rows (by their first cell) or columns. In a `matrix`: rows or columns. The others step back. |
 | `note` | A short callout below the picture during this beat: the qualification that the number needs. |
 
 ### `credit`

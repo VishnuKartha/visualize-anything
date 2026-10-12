@@ -28,6 +28,8 @@ const USAGE = `Usage: va <command> [args]
   doctor                      Report what is installed and what is missing
   init <slug> [--dir <path>]  Create .visualize/<slug>/ with a starter storyboard.json
   paper <project> <source>    Read a paper into the project (arXiv id or address, or a PDF): abstract first, then sections, figures, tables
+  sources <project>           List what each declared source holds: a design doc's or docs' sections, figures, tables, code blocks
+                              (--figures exports each figure to a PNG in figures/; a paper is read with 'va paper')
   route <project>             Review every routing decision: need → renderer, with reasons; then the prose check
   check <project>             Validate storyboard.json, its routing, and its prose (no network, no rendering)
   prose <project>             Check script.md with Vale against proselint and ai-tells
@@ -52,7 +54,7 @@ const parse = (argv) => {
   const positional = [];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--draft' || arg === '--force' || arg === '--plan') flags[arg.slice(2)] = true;
+    if (['--draft', '--force', '--plan', '--figures'].includes(arg)) flags[arg.slice(2)] = true;
     else if (['--out', '--dir', '--at', '--verify'].includes(arg)) flags[arg.slice(2)] = argv[(i += 1)];
     else if (arg.startsWith('--')) throw new VaError(`Unknown option ${arg}`);
     else positional.push(arg);
@@ -122,6 +124,7 @@ const main = async () => {
   const paths = resolveProject(positional[0]);
   const ids = positional.slice(1);
   switch (command) {
+    case 'sources': return steps.sources(paths, flags);
     case 'route': return steps.route(paths);
     case 'check': return steps.check(paths);
     case 'prose': return steps.prose(paths);

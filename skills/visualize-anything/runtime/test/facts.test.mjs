@@ -135,3 +135,7 @@ test('each viewer gets the same plan and their own instructions; only those who 
   assert.match(brief('expert'), /find its row in the facts ledger/);
   assert.match(brief('newcomer'), /where you would have stopped watching/);
 });
+
+test('a place in a document is not a number to check', () => {
+  assert.deepEqual(numbersIn('Table 2 and Figure 4, Section 3.1, but 15 percent').map((number) => number.value), [15]);
+});
