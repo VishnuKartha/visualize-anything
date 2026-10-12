@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import {mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
-import {NEEDS, analyzeRouting, cueHits, resolveRoute, scriptDrift, suggestNeed, weakTitle} from '../lib/router.mjs';
+import {NEEDS, analyzeRouting, cueHits, listenerFindings, resolveRoute, scriptDrift, suggestNeed, weakTitle} from '../lib/router.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -43,7 +43,7 @@ const LRU = [
 
 test('every need routes to a known renderer', () => {
   for (const [need, spec] of Object.entries(NEEDS)) {
-    assert.ok(['title', 'code', 'trace', 'hyperframes', 'manim', 'diagram', 'bullets', 'credit', 'stat', 'compare', 'chart', 'quote', 'figure'].includes(spec.kind), need);
+    assert.ok(['title', 'code', 'trace', 'hyperframes', 'manim', 'diagram', 'bullets', 'credit', 'stat', 'compare', 'chart', 'table', 'matrix', 'quote', 'figure'].includes(spec.kind), need);
     assert.equal(spec.kind === 'diagram', Boolean(spec.type), `${need}: only diagrams carry a type`);
   }
 });
@@ -61,7 +61,7 @@ const CREDIT = scene('credit', 'credit', ['That is LRUCache, in lru.py.'], {titl
 
 // The default shape: the picture first with the hook said over it, the code after, the name last.
 const OPEN = scene('open', 'motion', ['A full cache has to forget a key, and the entry that went in first is the wrong one to drop.', 'The entry used longest ago shifts out instead.']);
-const HOOK = {hook: 'A full cache has to *forget* a key, and the obvious choice is *wrong*.'};
+const HOOK = {context: 'Everyone has used a cache: it keeps what you asked for lately, and it has limited room.', hook: 'A full cache has to *forget* a key, and the obvious choice is *wrong*.'};
 // The same opening with the question left open for a moment before the picture answers it.
 const ASKED = {
   ...OPEN,
@@ -76,6 +76,7 @@ test('a well-routed algorithm video has no errors and nothing to review', () => 
       thumbnail: {...THUMBNAIL, from: 'open'},
       facts: [{id: 'state-fields', value: 2, what: 'fields the class keeps'}, {id: 'takeaways', value: 3, given: 'the recap has three items'}],
       vocabulary: [{word: 'entry', not: ['element', 'record'], defined: 'open'}],
+      sources: [{id: 'lru', kind: 'code', path: 'lru.py'}],
     }),
   );
   assert.equal(report.errors, 0, texts(report.rows.flatMap((entry) => entry.reasons)));
@@ -289,6 +290,38 @@ test('the ending has to return to what the opening starred', () => {
   assert.doesNotMatch(texts(credited.notes), /closing scene never comes back|ends on a credit/);
 });
 
+test('narration is checked as it is heard: pronouns to resolve, runs of numbers, a joining word as a tic', () => {
+  const said = (lines) => board('algorithm', [scene('open', 'motion', lines), LRU[1], LRU[3], LRU[4]]);
+  const clear = listenerFindings(said(['A full cache has to forget a key.', 'The key it forgets is the one used longest ago.']));
+  assert.deepEqual([clear.pronouns.length, clear.crowded.length, clear.openers.length], [0, 0, 0]);
+  const lost = listenerFindings(said(['A request that leaves is marked pending with its cache kept, so when its token comes back it rejoins.']));
+  assert.equal(lost.pronouns.length, 1);
+  assert.equal(lost.pronouns[0].scene, 'open');
+  const table = listenerFindings(said(['Starting at once gives 187, waiting for three gives 208, and waiting for four gives 191.']));
+  assert.equal(table.crowded.length, 1);
+  const tic = listenerFindings(said(['So it routes each token.', 'So the big model rests.', 'So a batch forms.', 'So the count rises.']));
+  assert.equal(tic.openers.length, 1);
+  assert.equal(tic.openers[0].word, 'so');
+  assert.ok(tic.openers[0].count >= 4);
+  const many = said(['It costs 12, then 34, then 56.', 'Later 78 and 90 and 21.', 'Then 43 and 65.']);
+  assert.ok(listenerFindings(many).numbers.said > listenerFindings(many).numbers.carries);
+  assert.match(texts(analyzeRouting(many).notes), /sentence\(s\) say 3 or more numbers[\s\S]*different numbers; a video of this length carries about 6/);
+});
+
+test('a title card names the work straight after the opening', () => {
+  const card = scene('named', 'name', ['That is what an LRU cache is for.'], {title: 'LRUCache'});
+  assert.equal(resolveRoute({need: 'name'}).kind, 'credit');
+  const notes = (scenes) => texts(analyzeRouting(board('algorithm', scenes, {brief: HOOK})).notes);
+  const placed = analyzeRouting(board('algorithm', [OPEN, card, LRU[1], LRU[3], LRU[4], CREDIT], {brief: HOOK}));
+  assert.equal(row(placed, 'named').status, 'ok');
+  assert.doesNotMatch(texts(placed.notes), /title card/);
+  // After the opening means after every scene that carries the opening's picture on.
+  const ground = scene('ground', 'motion', ['A cache keeps what you asked for lately, in limited room.', 'This one holds three keys, and all three are taken.']);
+  assert.doesNotMatch(notes([ground, {...OPEN, continues: true}, card, LRU[1], LRU[3], LRU[4]]), /title card/);
+  assert.match(notes([OPEN, LRU[1], card, LRU[3], LRU[4]]), /title card "named" is scene 3\. It goes straight after the opening \(after "open"\)/);
+  assert.match(notes([OPEN, card, LRU[1], {...card, id: 'again'}, LRU[3], LRU[4]]), /2 title cards/);
+});
+
 test('a credit goes last and stays short', () => {
   const early = analyzeRouting(board('algorithm', [LRU[0], CREDIT, ...LRU.slice(1)]));
   assert.match(texts(row(early, 'credit').reasons), /It goes last/);
@@ -337,12 +370,24 @@ test('the hook is agreed first, said in the opening, and returned to at the end'
   const cold = [OPEN, LRU[1], LRU[3], LRU[4]];
   assert.match(notes(cold), /No hook in the brief/);
   assert.match(notes(cold, {hook: 'A full cache has to forget a key.'}), /No word in the brief's hook is starred/);
-  assert.doesNotMatch(notes(cold, HOOK), /hook/i);
-  // An opening that sets up before it hooks.
-  assert.match(notes([LRU[2], LRU[1], LRU[3], LRU[4]], HOOK), /opening scene never says the hook: none of "forget", "wrong" is spoken in "order"/);
+  assert.doesNotMatch(notes(cold, HOOK), /hook|context/i);
+  // An opening that never gets to the hook.
+  assert.match(notes([LRU[2], LRU[1], LRU[3], LRU[4]], HOOK), /opening never says the hook: none of "forget", "wrong" is spoken in "order"/);
   // An ending that does not come back.
   const flat = scene('recap', 'recap', ['So, three things to remember about this cache.', 'Every read moves a key to the newest end.']);
   assert.match(notes([OPEN, LRU[1], LRU[3], flat], HOOK), /closing scene never comes back/);
+});
+
+test('the opening gives context first: it is in the brief, and the hook may land in a scene that carries the picture on', () => {
+  const notes = (scenes, brief) => texts(analyzeRouting(board('algorithm', scenes, {brief})).notes);
+  const cold = [OPEN, LRU[1], LRU[3], LRU[4]];
+  assert.match(notes(cold, {hook: HOOK.hook}), /No context in the brief/);
+  assert.match(notes(cold, {...HOOK, context: Array(50).fill('word').join(' ')}), /context runs 50 words/);
+  // Context in the first scene, the hook in the one that continues it.
+  const ground = scene('ground', 'motion', ['A cache keeps what you asked for lately, in limited room.', 'This one holds three keys, and all three are taken.']);
+  assert.doesNotMatch(notes([ground, {...OPEN, continues: true}, LRU[1], LRU[3], LRU[4]], HOOK), /never says the hook/);
+  // A scene that starts on a fresh picture is past the opening.
+  assert.match(notes([ground, {...OPEN, continues: false}, LRU[1], LRU[3], LRU[4]], HOOK), /opening never says the hook: none of "forget", "wrong" is spoken in "ground"/);
 });
 
 test('the opening is always an animation; opening on anything else is an error that needs a reason', () => {
@@ -482,4 +527,94 @@ test('numbers an evidence scene puts on screen are held to the ledger; a chart\'
   assert.match(loose, /3 number\(s\) are said or shown but are not in "facts": "71" \(bridge, on screen\), "41" \(bridge, on screen\), "36" \(speed, on screen\)/);
   const backed = board('mixed', [OPEN, chart, stat, LRU[1], LRU[4]], {facts: [{id: 'fields', value: 2}, {id: 'takeaways', value: 3}, {id: 'first', value: 71}, {id: 'last', value: 41}, {id: 'fps', value: 36}]});
   assert.doesNotMatch(texts(analyzeRouting(backed).notes), /not in "facts"/);
+});
+
+// A project `va paper` has read a paper into: three claims, one of them with a headline number.
+const PAPER = {
+  title: 'Worlds in Code',
+  abstract: 'A practice world must be faithful and realistic. We split it in two. Agents learn a task in 4 rounds.',
+  claims: [
+    {n: 1, text: 'A practice world must be faithful and realistic.', numbers: []},
+    {n: 2, text: 'We split it in two.', numbers: []},
+    {n: 3, text: 'Agents learn a task in 4 rounds.', numbers: ['4']},
+  ],
+  sections: [
+    {heading: '1 Results', kind: 'body', text: 'The renderer reaches 36.5 frames per second [ 36 ]. Crossing takes 71 seconds.', figures: [], tables: [1]},
+    {heading: 'References', kind: 'references', text: 'Baker et al. Emergent tool use. ICLR 2019, pages 44-58.', figures: [], tables: []},
+  ],
+  figures: [{n: 1, caption: 'The loop.', file: 'figures/fig-1.png'}],
+  tables: [{n: 1, caption: 'Every round.', columns: ['Round 1', '2'], rows: [['71', '68']]}],
+  licence: {url: 'http://arxiv.org/licenses/nonexclusive-distrib/1.0/', open: false},
+};
+const paperProject = () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'va-paper-'));
+  mkdirSync(path.join(dir, 'paper'));
+  writeFileSync(path.join(dir, 'paper', 'paper.json'), JSON.stringify(PAPER));
+  return dir;
+};
+
+test('a paper video is explained without its code; a trace beat that points at no line is questioned', () => {
+  const projectDir = paperProject();
+  const coded = analyzeRouting(board('mixed', [OPEN, LRU[3], LRU[4]]), {projectDir});
+  assert.equal(row(coded, 'get').status, 'error');
+  assert.match(texts(row(coded, 'get').reasons), /This is a paper video, and this scene puts code on screen/);
+  const asked = analyzeRouting(board('mixed', [OPEN, {...LRU[3], override: 'The viewer asked to see how the read is written.'}, LRU[4]]), {projectDir});
+  assert.notEqual(row(asked, 'get').status, 'error');
+  assert.match(texts(row(asked, 'get').reasons), /Code in a paper video: The viewer asked/);
+  // The same scene in a video about code is what it should be.
+  assert.doesNotMatch(texts(row(analyzeRouting(board('algorithm', [OPEN, LRU[3], LRU[4]])), 'get').reasons), /paper video/);
+  // Code held on screen while the voice talks about something else.
+  const wallpaper = scene('idle', 'trace', ['A request arrives while the model is busy.', 'So the count is compared with the threshold.'], {
+    file: 'lru.py', class: 'Idle', beats: [{say: 'A request arrives while the model is busy.', caption: ''}, {say: 'So the count is compared with the threshold.', caption: '', lines: [[3, 3]]}],
+  });
+  assert.match(texts(row(analyzeRouting(board('algorithm', [OPEN, wallpaper, LRU[4]])), 'idle').reasons), /Beat 1 of this trace scene points at no line of the code/);
+});
+
+test('a paper video accounts for every claim of the abstract: shown by a scene, or set aside with a reason', () => {
+  const projectDir = paperProject();
+  const scenes = [OPEN, LRU[1], LRU[4]];
+  const notes = (extra) => texts(analyzeRouting(board('mixed', scenes, extra), {projectDir}).notes);
+  assert.match(notes({}), /abstract makes 3 claims and the storyboard accounts for 0\. Not yet shown or set aside: 1\. "A practice world must be faithful and realistic\."/);
+  const partly = notes({claims: [{abstract: 1, scene: 'open', omit: null}, {abstract: 2, scene: null, omit: 'The split is the next video.'}]});
+  assert.match(partly, /accounts for 2\. Not yet shown or set aside: 3\. "Agents learn a task in 4 rounds\."/);
+  const all = [{abstract: 1, scene: 'open', omit: null}, {abstract: 2, scene: 'state', omit: null}, {abstract: 3, scene: 'recap', omit: null}];
+  assert.doesNotMatch(notes({claims: all}), /Not yet shown or set aside/);
+  assert.match(notes({claims: [...all, {abstract: 9, scene: 'open', omit: null}]}), /names claim 9 of the abstract, which has 3/);
+  const report = analyzeRouting(board('mixed', scenes, {claims: all}), {projectDir});
+  assert.deepEqual(report.paper, {title: 'Worlds in Code', claims: 3, shown: 3, omitted: 0});
+  // Without a paper in the project none of this applies.
+  assert.doesNotMatch(texts(analyzeRouting(board('mixed', scenes)).notes), /abstract/);
+});
+
+test('a number the abstract states is said or shown, unless its claim is set aside', () => {
+  const projectDir = paperProject();
+  const silent = [OPEN, LRU[1], scene('recap', 'recap', ['So the world is split, and that is the whole idea of it.'])];
+  const claims = (third) => [{abstract: 1, scene: 'open', omit: null}, {abstract: 2, scene: 'state', omit: null}, third];
+  const notes = (scenes, third) => texts(analyzeRouting(board('mixed', scenes, {claims: claims(third)}), {projectDir}).notes);
+  assert.match(notes(silent, {abstract: 3, scene: 'recap', omit: null}), /abstract states "4" \(claim 3\), and the video never says or shows it/);
+  assert.doesNotMatch(notes(silent, {abstract: 3, scene: null, omit: 'The learning result is the second video.'}), /never says or shows/);
+  const spoken = [OPEN, LRU[1], scene('recap', 'recap', ['So the world is split, and agents learn the task in four rounds.'])];
+  assert.doesNotMatch(notes(spoken, {abstract: 3, scene: 'recap', omit: null}), /never says or shows/);
+});
+
+test('a number said to be the paper\'s has to be in the paper; a citation marker does not vouch for one', () => {
+  const projectDir = paperProject();
+  const notes = (facts) => texts(analyzeRouting(board('mixed', [OPEN, LRU[1], LRU[4]], {facts}), {projectDir}).notes);
+  const given = (id, value) => ({id, value, given: 'the paper, Table 1'});
+  // 36.5 is in the text, 71 and 68 in a table, 2019 in the reference list; 36 is only the citation "[ 36 ]", and 58 only a page number.
+  assert.doesNotMatch(notes([given('fps', 36.5), given('first', 71), given('second', 68), given('year', 2019)]), /nowhere in the paper/);
+  assert.match(notes([given('fps', 36), given('pages', 58)]), /2 fact\(s\) marked "given" are nowhere in the paper: fps = 36, pages = 58/);
+  // A fact the oracle computes is the oracle's business, not the paper's.
+  assert.doesNotMatch(notes([{id: 'fps', value: 36}]), /nowhere in the paper/);
+});
+
+test('a paper video need not show code, and is warned before showing a figure its licence does not grant', () => {
+  const projectDir = paperProject();
+  const figure = scene('loop', 'figure', ['This is the loop as the authors drew it, from the agent round to the frame.']);
+  const report = analyzeRouting(board('mixed', [OPEN, figure, scene('recap', 'recap', ['So the world is split in two, and that is the idea.'])]), {projectDir});
+  assert.doesNotMatch(texts(report.notes), /No code scene/);
+  assert.match(texts(row(report, 'loop').reasons), /licence .* does not grant reuse/);
+  const open = paperProject();
+  writeFileSync(path.join(open, 'paper', 'paper.json'), JSON.stringify({...PAPER, licence: {url: 'https://creativecommons.org/licenses/by/4.0/', open: true}}));
+  assert.doesNotMatch(texts(row(analyzeRouting(board('mixed', [OPEN, figure, LRU[4]]), {projectDir: open}), 'loop').reasons), /licence/);
 });

@@ -9,6 +9,7 @@ import {
   manimEnv, run,
 } from './lib/util.mjs';
 import {HYPERFRAMES_VERSION, hyperframes} from './lib/hyperframes.mjs';
+import {VALE_BIN, VALE_PACKAGES, VALE_VERSION, installVale, valeReady} from './lib/prose.mjs';
 
 // Typesets one formula each way, which also downloads Manim, Typst, and the LaTeX-syntax package.
 const WARM_MATH = "from va_manim import Math; Math('x^2'); Math(r'\\frac{a}{b}', latex=True)";
@@ -26,8 +27,12 @@ const USAGE = `Usage: va <command> [args]
   setup                       Install runtime dependencies and the pinned Archify renderer
   doctor                      Report what is installed and what is missing
   init <slug> [--dir <path>]  Create .visualize/<slug>/ with a starter storyboard.json
-  route <project>             Review every routing decision: need → renderer, with reasons
-  check <project>             Validate storyboard.json and its routing (no network, no rendering)
+  paper <project> <source>    Read a paper into the project (arXiv id or address, or a PDF): abstract first, then sections, figures, tables
+  sources <project>           List what each declared source holds: a design doc's or docs' sections, figures, tables, code blocks
+                              (--figures exports each figure to a PNG in figures/; a paper is read with 'va paper')
+  route <project>             Review every routing decision: need → renderer, with reasons; then the prose check
+  check <project>             Validate storyboard.json, its routing, and its prose (no network, no rendering)
+  prose <project>             Check script.md with Vale against proselint and ai-tells
   facts <project>             Run the project's oracle (facts.py) and hold every number in the video to it
   tts <project>               Synthesize narration; write timeline.json with every beat's time budget
   diagram <project> [ids...]  Finalize + bake Archify candidates for diagram scenes
@@ -38,7 +43,7 @@ const USAGE = `Usage: va <command> [args]
   qc <project>                Check the rendered video: complete, audible, in sync, picture not frozen
   review <project>            Write the brief for an independent reviewer (--verify <report> for a follow-up round;
                               --plan before anything is built: one brief each for the newcomer, practitioner, and expert)
-  build <project>             facts → tts → diagram → manim → hyperframes → render
+  build <project>             facts → prose → tts → diagram → manim → hyperframes → render
   studio <project>            Open Remotion Studio on the project for interactive preview
 
 Options: --draft (half resolution, faster)   --force (ignore caches)   --out <file> (render target)
@@ -49,7 +54,7 @@ const parse = (argv) => {
   const positional = [];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--draft' || arg === '--force' || arg === '--plan') flags[arg.slice(2)] = true;
+    if (['--draft', '--force', '--plan', '--figures'].includes(arg)) flags[arg.slice(2)] = true;
     else if (['--out', '--dir', '--at', '--verify'].includes(arg)) flags[arg.slice(2)] = argv[(i += 1)];
     else if (arg.startsWith('--')) throw new VaError(`Unknown option ${arg}`);
     else positional.push(arg);
@@ -74,6 +79,10 @@ const setup = async () => {
     const math = await mathReady({offline: false});
     if (!math.ok) console.log(`  warning: could not prepare them now; \`va manim\` will retry on first use.\n  ${math.detail}`);
   }
+  if (!valeReady()) {
+    console.log(`Fetching Vale ${VALE_VERSION} and its rule packages (${Object.keys(VALE_PACKAGES).join(', ')}) for the prose check...`);
+    await installVale();
+  }
   console.log(`Fetching the HyperFrames renderer (${HYPERFRAMES_VERSION}) for code-change scenes...`);
   const fetched = await hyperframes(['--version'], {capture: true, allowFail: true});
   if (fetched.code !== 0) console.log('  warning: could not fetch it now; `va hyperframes` will retry on first use.');
@@ -91,6 +100,7 @@ const doctor = async () => {
   add('Archify (diagram scenes)', existsSync(ARCHIFY_BIN), existsSync(ARCHIFY_BIN) ? ARCHIFY_DIR : 'run: va setup');
   const math = has('uv') ? await mathReady({offline: true}) : {ok: false};
   add('Manim + Typst (animation scenes, formulas)', math.ok, math.ok ? 'Math() typesets formulas; no LaTeX needed' : 'run: va setup');
+  add('Vale + proselint, ai-tells (prose check on the narration)', valeReady(), valeReady() ? `${VALE_VERSION}, ${VALE_BIN}` : 'run: va setup');
   const renderer = await run('npx', ['--offline', '--yes', `hyperframes@${HYPERFRAMES_VERSION}`, '--version'], {capture: true, allowFail: true, env: {HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1'}});
   add('HyperFrames (code-change scenes)', renderer.code === 0, renderer.code === 0 ? `${HYPERFRAMES_VERSION}, render only, telemetry off` : 'fetched on first use, or run: va setup', false);
   add('LaTeX (optional)', has('latex'), has('latex') ? 'MathTex()/Tex() also work' : 'not installed, not needed: use Math() instead of MathTex()', false);
@@ -114,8 +124,11 @@ const main = async () => {
   const paths = resolveProject(positional[0]);
   const ids = positional.slice(1);
   switch (command) {
+    case 'sources': return steps.sources(paths, flags);
     case 'route': return steps.route(paths);
     case 'check': return steps.check(paths);
+    case 'prose': return steps.prose(paths);
+    case 'paper': return steps.paper(paths, positional[1]);
     case 'facts': return steps.facts(paths);
     case 'tts': return steps.tts(paths);
     case 'diagram': return steps.diagram(paths, ids, flags);

@@ -4,8 +4,9 @@ import {MONO, SANS, ramp, theme} from '../theme';
 import type {CreditScene} from '../types';
 import {parseStatement} from './Title';
 
-// The last thing in the video: what was explained, by name, and where to find it. The opening
-// never shows this; a viewer who has just understood something is the one who wants its name.
+// The name of what is explained. It is shown twice at most: as a title card straight after the
+// opening ("need": "name"), once the viewer knows what the work is for, and as the last thing in
+// the video, with where to find it. Never first: a name means nothing before its reason.
 
 export const CreditView: React.FC<{scene: CreditScene}> = ({scene}) => {
   const frame = useCurrentFrame();

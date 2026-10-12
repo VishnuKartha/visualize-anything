@@ -1,30 +1,34 @@
 # Diagram scenes (Archify)
 
-Archify turns typed JSON into a validated diagram. `va diagram` runs Archify's own quality gates on your candidate, then bakes the result into a self-contained SVG that the video can reveal, dim, and frame beat by beat.
+Archify changes typed JSON into a validated diagram. `va diagram` runs the quality gates of Archify on your candidate. Then it makes an SVG that the video can show, dim, and frame beat by beat.
 
-Use a diagram scene when the subject is a system of separate parts: services, modules, stores, queues, pipeline stages, actors. Do not use one for the control flow of a single function or algorithm; that belongs in a Manim scene, acting on the data the viewer is already watching (see [routing.md](routing.md)).
+Use a diagram scene when the subject is a system of separate parts: services, modules, stores, queues, pipeline stages, actors. Do not use one for the control flow of one function or algorithm. That goes in a Manim scene, on the data that the viewer watches (see [routing.md](routing.md)).
 
 ## Authoring the candidate
 
-Archify has its own authoring skill; follow it rather than guessing the schema. `va doctor` prints its path, normally:
+Archify has its own authoring skill. Obey it. Do not guess the schema. `va doctor` prints its path. The usual path is:
 
 ```
 ~/.visualize-anything/vendor/archify/archify/SKILL.md
 ```
 
-Read that file's "Fast authoring path" and "Type router", then the schema and example it names for your diagram type (paths are relative to that `archify/` directory). Write the candidate to `diagrams/<scene-id>.json` in the project. Do not run Archify's `finalize` yourself; `va diagram` does it and keeps the evidence in `.cache/`.
+1. Read the "Fast authoring path" and the "Type router" in that file.
+2. Read the schema and the example that it names for your diagram type. The paths are relative to that `archify/` directory.
+3. Write the candidate to `diagrams/<scene-id>.json` in the project.
 
-A diagram that reads well on an interactive page is too dense for a video frame someone sees for twenty seconds. Author for the screen:
+Do not run the `finalize` of Archify yourself. `va diagram` runs it and keeps the evidence in `.cache/`.
 
-- **Seven nodes or fewer.** Past that, text drops below a readable size at 1080p. Split a bigger system into two scenes (overview, then one region).
-- **Labels are identifiers or two or three words.** Sublabels are a short phrase. Skip `tag`, `cards`, and long descriptions; the narration carries the detail.
-- **Wide, not tall.** The diagram area is roughly 2.2:1. Five columns by two rows fills it; a tall stack leaves empty sides.
-- **Leave `meta.animation` unset.** The video drives all motion. Archify's own trace animation is ignored.
-- **Leave `meta.visual_preset` unset** so the diagram matches the rest of the video's palette.
-- **Give edges an `id`** when a beat needs to point at one, especially in sequence diagrams.
-- `meta.output` is required by the schema; any relative `.html` name works (`"<scene-id>.html"`).
+A diagram that reads well on an interactive page is too dense for a video frame that a viewer sees for twenty seconds. Write for the screen:
 
-Choose node `type` values for meaning, since they set colour: the viewer will read two orange boxes as the same kind of thing.
+- **Use seven nodes or fewer.** Above that, the text is too small to read at 1080p. Divide a larger system into two scenes: an overview, then one region.
+- **Labels are identifiers, or two or three words.** Sublabels are a short phrase. Omit `tag`, `cards`, and long descriptions. The narration gives the detail.
+- **Make it wide, not tall.** The diagram area is approximately 2.2:1. Five columns by two rows fill it. A tall stack leaves empty sides.
+- **Do not set `meta.animation`.** The video controls all motion. The tool ignores the trace animation of Archify.
+- **Do not set `meta.visual_preset`.** The diagram then has the palette of the video.
+- **Give an edge an `id`** when a beat must point at it. This is most important in sequence diagrams.
+- The schema requires `meta.output`. A relative `.html` name works (`"<scene-id>.html"`).
+
+Select the `type` values of nodes for meaning, because they set the colour. The viewer reads two orange boxes as the same kind of thing.
 
 ## Running it
 
@@ -32,7 +36,7 @@ Choose node `type` values for meaning, since they set colour: the viewer will re
 VA diagram <project> [scene-id...]
 ```
 
-On success it prints the ids you can focus:
+When it passes, it prints the ids that you can focus:
 
 ```
 diagram request-path: ok (sequence, 1044×470 units)
@@ -40,7 +44,7 @@ diagram request-path: ok (sequence, 1044×470 units)
   edges: dashboard-request, cache-read, cache-miss, profile-query, profile-rows, cache-write
 ```
 
-On failure it prints Archify's diagnostics. Repair the candidate as Archify's skill describes (its references on failed gates and layout repair apply unchanged) and rerun. A focus id that does not exist is also an error, listed with the valid ids.
+When it fails, it prints the diagnostics of Archify. Repair the candidate as the skill of Archify tells you. Its references on failed gates and layout repair apply without change. Then run the command again. A focus id that does not exist is also an error. The tool lists it with the valid ids.
 
 ## Directing it from the storyboard
 
@@ -48,27 +52,27 @@ Scene fields:
 
 | Field | Default | Meaning |
 |---|---|---|
-| `type` | from `need` | `architecture`, `workflow`, `sequence`, `dataflow`, or `lifecycle`. Supplied by the scene's `need` (`structure`, `process`, `conversation`, `pipeline`, `states`); must match the candidate. |
-| `build` | `false` | Start empty and introduce parts as beats focus them. Use it when the narration walks the diagram one part at a time. |
-| `camera` | `"follow"` | Ease toward the focused region each beat. `"static"` keeps the whole diagram in frame. |
-| `legend` | `false` | Keep Archify's legend. Usually the narration makes it redundant. |
+| `type` | from `need` | `architecture`, `workflow`, `sequence`, `dataflow`, or `lifecycle`. The `need` of the scene supplies it (`structure`, `process`, `conversation`, `pipeline`, `states`). It must agree with the candidate. |
+| `build` | `false` | Start empty and add parts when beats focus them. Use it when the narration goes through the diagram one part at a time. |
+| `camera` | `"follow"` | Move to the focused region in each beat. `"static"` keeps the full diagram in the frame. |
+| `legend` | `false` | Keep the legend of Archify. The narration usually makes it unnecessary. |
 
-Each beat's `focus` is a list of node ids and edge ids:
+The `focus` of each beat is a list of node ids and edge ids:
 
-- Focused nodes are lit; everything else dims. The camera frames the lit region.
-- Focusing an edge also lights the two nodes it connects.
-- In `architecture`, `workflow`, `dataflow`, and `lifecycle` diagrams, an edge between two lit nodes is lit automatically, and (with `build`) an edge appears once both its ends have appeared.
-- In `sequence` diagrams, messages are the story, so a message appears only when a beat focuses it by id. Walk the conversation one or two messages per beat.
-- `"focus": "all"` lights everything and pulls back to the full view. End a `build` scene on it so the viewer sees the whole picture once.
-- A beat with no `focus` lights whatever is already visible.
+- Focused nodes are lit. All other parts dim. The camera frames the lit region.
+- The focus on an edge also lights its two nodes.
+- In `architecture`, `workflow`, `dataflow`, and `lifecycle` diagrams, an edge between two lit nodes lights automatically. With `build`, an edge comes on screen after its two ends.
+- In `sequence` diagrams, the messages are the story. A message comes on screen only when a beat focuses it by id. Go through the conversation one or two messages in each beat.
+- `"focus": "all"` lights all parts and moves back to the full view. End a `build` scene on it, so that the viewer sees the full picture one time.
+- A beat with no `focus` lights the parts that are visible.
 
-A newly introduced solid edge draws itself from source to target. Dashed edges fade in.
+A new solid edge draws from its source to its target. Dashed edges fade in.
 
-A beat with no `focus` of its own follows the narration: each node is lit when its label is spoken, and nodes named later in the same sentence join it. Name nodes by their exact labels and most beats need no `focus` at all (`va stills` prints what was derived).
+A beat with no `focus` follows the narration. Each node lights when the voice says its label. Nodes named later in the same sentence join it. If you name nodes by their exact labels, most beats need no `focus`. `va stills` prints the derived focus.
 
-To set the focus by hand while a sentence is still being spoken, add `cues` to the beat (`{"at": "then the database", "focus": ["db"]}`); see [storyboard.md](storyboard.md).
+To set the focus by hand while the voice speaks a sentence, add `cues` to the beat (`{"at": "then the database", "focus": ["db"]}`). See [storyboard.md](storyboard.md).
 
-Pacing: each beat's window is printed by `va tts`. A focus change needs about a second to settle, so a beat shorter than 2.5 seconds should not introduce more than one or two new parts.
+Pace: `va tts` prints the window of each beat. A focus change needs approximately one second. Thus a beat shorter than 2.5 seconds must not add more than one or two new parts.
 
 ## Example
 

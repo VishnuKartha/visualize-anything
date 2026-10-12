@@ -64,21 +64,27 @@ export type CompareScene = Base & {kind: 'compare'; title: string | null; versus
 /** Measured values against each other: bars, or a line across an ordered axis. */
 export type ChartScene = Base & {
   kind: 'chart';
-  chart: 'bar' | 'line';
+  chart: 'bar' | 'line' | 'scatter';
   title: string | null;
   unit: string | null;
   axis: string | null;
+  /** A scatter chart's horizontal measure; null for bars and lines. */
+  across: string | null;
   labels: string[];
-  series: {label: string | null; values: number[]}[];
+  series: {label: string | null; values: number[]; points?: {x: number; y: number; label: string | null}[]}[];
 };
+/** The rows of a results table the sentence compares. The first column names each row; `best` is the source's own. */
+export type TableScene = Base & {kind: 'table'; title: string | null; columns: string[]; rows: string[][]; best: string | null; highlight: string[]; caption: string | null};
+/** A grid of values coloured by size: attention weights, a confusion matrix. `scale` is [low, high] of the colour ramp. */
+export type MatrixScene = Base & {kind: 'matrix'; title: string | null; rows: string[]; columns: string[]; values: number[][]; scale: [number, number]; numbers: boolean; axis: string | null};
 /** The source's own words. `highlights` are [first, last] word indexes of the phrases to mark. */
 export type QuoteScene = Base & {kind: 'quote'; quote: string; highlights: [number, number][]; attribution: string | null};
 /** The source's own figure, with the parts worth seeing pointed out. Callout positions are percentages of the image. */
-export type FigureScene = Base & {kind: 'figure'; image: string; aspect: number; caption: string | null; callouts: {label: string; x: number; y: number; side: 'left' | 'right' | 'above' | 'below'}[]};
+export type FigureScene = Base & {kind: 'figure'; image: string; aspect: number; crop: {x: number; y: number; width: number; height: number}; caption: string | null; callouts: {label: string; x: number; y: number; side: 'left' | 'right' | 'above' | 'below'}[]};
 
 export type Scene =
   | TitleScene | CreditScene | BulletsScene | CodeScene | TraceScene | DiagramScene | ManimScene | HyperframesScene
-  | StatScene | CompareScene | ChartScene | QuoteScene | FigureScene;
+  | StatScene | CompareScene | ChartScene | TableScene | MatrixScene | QuoteScene | FigureScene;
 
 export type ExplainerProps = {
   title: string;

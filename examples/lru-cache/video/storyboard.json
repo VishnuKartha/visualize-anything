@@ -1,6 +1,7 @@
 {
   "title": "How an LRU cache decides what to forget",
   "subject": "algorithm",
+  "sources": [{"id": "lru-cache", "kind": "code", "title": "lru_cache.py", "path": "src"}],
   "brief": {
     "audience": "programmers who have used a cache but not built one",
     "length": 95,

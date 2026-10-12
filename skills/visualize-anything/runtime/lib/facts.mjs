@@ -44,6 +44,8 @@ export const numbersIn = (text) => {
     if (/\d/.test(raw)) {
       // `log2`, `x86`, `v1.2`: part of a name, not a quantity. And an exponent is notation.
       if (/[A-Za-z_^.]/.test(before) || /[A-Za-z_]/.test(after)) continue;
+      // "Table 2", "Figure 4", "Section 3.1": a place in a document, not a quantity.
+      if (/\b(table|tables|figure|figures|fig\.?|section|sec\.?|eq\.?|equation|algorithm|alg\.?|appendix|chapter|listing|page|p\.|§)\s*$/i.test(plain.slice(Math.max(0, tokens[i].index - 12), tokens[i].index))) continue;
       let value = Number(raw.replace(/,(?=\d{3})/g, '').replace(/,$/, ''));
       let shown = raw.replace(/,$/, '');
       const scale = tokens[i + 1]?.[0].toLowerCase();
@@ -142,14 +144,17 @@ export const compareFacts = (facts, computed) =>
  * A chart's axis labels are left out: "Round 1" names a position, it does not measure anything.
  */
 const evidenceText = (scene) => {
-  if (!['stat', 'compare', 'chart', 'quote', 'figure'].includes(scene.kind)) return [];
+  if (!['stat', 'compare', 'chart', 'table', 'matrix', 'quote', 'figure'].includes(scene.kind)) return [];
   const panels = scene.panels || [scene.left, scene.right].filter(Boolean);
-  const series = scene.series || (scene.values ? [{values: scene.values}] : []);
+  const series = scene.kind === 'chart' ? scene.series || (scene.values ? [{values: scene.values}] : []) : [];
+  // A table's cells and a matrix's values are on screen; a matrix drawn as colours alone shows no number.
+  const cells = scene.kind === 'table' ? (scene.rows || []).flat() : scene.kind === 'matrix' && scene.numbers !== false ? (scene.values || []).flat() : [];
   return [
     scene.title,
     ...(scene.metrics || []).flatMap((metric) => [`${metric?.value ?? ''} ${metric?.unit ?? ''}`, metric?.label, metric?.detail, metric?.delta]),
     ...panels.flatMap((panel) => [panel?.label, ...(panel?.points || []).map((point) => (typeof point === 'string' ? point : point?.text))]),
-    ...series.flatMap((entry) => entry?.values || []),
+    ...series.flatMap((entry) => [...(entry?.values || []), ...(entry?.points || []).flatMap((point) => [point?.x, point?.y, point?.label])]),
+    ...cells,
     scene.quote,
     scene.caption,
     ...(scene.callouts || []).map((callout) => callout?.label),

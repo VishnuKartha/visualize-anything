@@ -1,38 +1,51 @@
 # House rules
 
-These are decisions about taste. Most came from watching a video this skill produced and seeing what was weak in it; the last five in the table come from the production method of [jeffs_math_explainer_videos](https://github.com/Dicklesworthstone/jeffs_math_explainer_videos), where each exists because of a video that got it wrong. What the story needs before any of this applies (the obvious approach first, a count on screen, the limit named) is in [story.md](story.md). Most are checked for you: `va route` before anything is rendered, `va manim` and `va stills` while it is built, `va qc` after. A check that fires is advice with a reason, except where it says it blocks.
+These are decisions about taste. Most came from a video that this skill made and a weakness that we saw in it. The last five rows of the table come from the production method of [jeffs_math_explainer_videos](https://github.com/Dicklesworthstone/jeffs_math_explainer_videos). Each of those rows exists because a video got it wrong.
+
+[story.md](story.md) gives the things that the story needs before these rules apply: the obvious approach first, a count on screen, and the limit named.
+
+The tools examine most rules for you:
+
+- `va route`, before a render
+- `va manim` and `va stills`, during the build
+- `va qc`, after the render
+
+A check that fires is advice with a reason, unless the table says that it blocks.
 
 | Rule | Why | Checked by |
 |---|---|---|
-| Code is never shown alone | A block of code is text to read, not an explanation | `va route` (blocks) |
-| An algorithm is animated, not flowcharted | The branch is part of the behaviour; show it acting on the data | `va route` (blocks) |
-| Open on a Manim animation, with the hook said over it | The first ten seconds decide whether the rest is watched, and a card, a chart, or a block of code is not the hook happening | `va route` (blocks) |
-| The hook is agreed before the storyboard | It is the core of the problem or the most interesting part; everything else is arranged around it | `va route` (it is in the brief, said in the opening, returned to at the end) |
-| The narration is written whole, then split | Lines written a scene at a time do not follow on from each other | `va route` (the storyboard says `script.md`, in order, and nothing else) |
-| Every scene follows on from the one before | A hook followed by a video that starts again is two videos | `va route` (scenes that start over), the reviewer |
-| The title promises a payoff | "Introduction to X" gives no reason to click | `va route` |
-| The thumbnail is five words and one picture | It is seen 120 pixels wide, beside the title | `va route`, and you: look at `thumbnail-small.png` |
-| The source is named last | The viewer who has just understood something is the one who wants its name | `va route` (placement and length) |
-| End on the picture, not a list | A slide of bullets is the title-card problem again | `va route` |
-| The ending returns to the hook | The opening made a promise; the close should cash it in | `va route` |
-| Scenes that share a picture do not blink between them | Fading the same row of slots out and back in breaks the thread | `va route` |
-| The voice explains; it does not recite | "self dot items dot move to end" is noise | `va route` |
-| No filler | "Simply", "just", "as you can see" pad the sentence and talk down | `va route` |
-| The main point is given room to land | A reveal followed at once by the next sentence is lost | `va route` |
-| Nothing under 24px | Text that has to be squinted at is not read | `va stills`, `va manim` |
-| Palette only | One off-palette blue makes the scene look pasted in | `va manim` |
-| Nothing holds still for more than six seconds | A frozen picture under a moving voice is a slide | `va qc` |
-| No seams | A cut, a jump, or a silence in the wrong place tells the viewer one thing ended and another began | `va qc`, measured on the rendered file |
-| One dataset per video | Changing the example values makes the viewer start over | you |
-| Every number is computed | A number typed into a script can be wrong without anything noticing | `va facts` (blocks the build), `va route` |
-| Always and never are tested at their edges | The case the video does not show is the one that breaks the claim | `va route`, the expert reviewer |
-| One word per idea | Two words for one thing are heard as two things | `va route` (against the storyboard's `vocabulary`) |
-| A question is left open before it is answered | The viewer who has guessed is waiting for the answer | `va route` (at least one `predict` beat, at most two a scene) |
-| Music stays under the voice | A bed that is noticed during a sentence has cost the sentence | `va render` (measured; refuses a mix closer than 16 LU) |
+| Do not show code alone | A block of code is text to read, not an explanation | `va route` (blocks) |
+| Animate an algorithm, do not draw a flowchart of it | The branch is part of the behaviour. Show it on the data | `va route` (blocks) |
+| Open on a Manim animation, and say the hook over it | The first ten seconds control whether the viewer stays. A card, a chart, or a block of code does not show the hook as it occurs | `va route` (blocks) |
+| Give the context before the hook | A hook works only for a viewer who knows the subject. Without context, a reversal is two numbers | `va route` (the brief has a `context`), the newcomer reviewer |
+| Agree the hook before the storyboard | It is the core of the problem or the most interesting part. All other parts are arranged around it | `va route` (it is in the brief, in the opening, and in the ending) |
+| Write the narration as one text, then divide it | Lines that you write one scene at a time do not continue from each other | `va route` (the storyboard says `script.md`, in order, and no other words) |
+| Each scene continues from the scene before it | A hook before a video that starts again is two videos | `va route` (scenes that start again), the reviewer |
+| The title promises a result | "Introduction to X" gives no reason to click | `va route` |
+| The thumbnail has five words and one picture | A viewer sees it 120 pixels wide, next to the title | `va route`, and you: look at `thumbnail-small.png` |
+| Name the work after the opening, on a title card | A name means nothing before its reason. After the hook, the viewer asks what this is | `va route` (position, one card at most, necessary for a paper) |
+| Name the source again last, with its location | The viewer who now understands wants to go and read it | `va route` (position and length) |
+| End on the picture, not on a list | A slide of bullets is the title-card problem again | `va route` |
+| The ending returns to the hook | The opening made a promise. The ending must keep it | `va route` |
+| Scenes that share a picture do not fade between each other | If the same row of slots fades out and in, the thread breaks | `va route` |
+| The voice explains. It does not read code aloud | "self dot items dot move to end" is noise | `va route` |
+| No filler | "Simply", "just", and "as you can see" make the sentence longer and talk down to the viewer | `va route` |
+| Vale reads the script | The writer of a sentence does not see its cliché or its machine-made phrase. A rule does | `va route`, `va prose` (Vale with `proselint` and `ai-tells`. The check must run. A finding is advice) |
+| Give the main point time | A reveal with the next sentence immediately after it is lost | `va route` |
+| No text smaller than 24px | The viewer does not read text that is too small | `va stills`, `va manim` |
+| Use only the palette | One blue that is not in the palette makes the scene look pasted in | `va manim` |
+| Nothing stays still for more than six seconds | A still picture below a voice that continues is a slide | `va qc` |
+| No seams | A cut, a jump, or a silence in the incorrect place tells the viewer that one thing ended and another started | `va qc`, measured on the rendered file |
+| One dataset in each video | If the example values change, the viewer must start again | you |
+| Calculate each number | A number that you type into a script can be wrong, and nothing detects it | `va facts` (blocks the build), `va route` |
+| Test "always" and "never" at their limits | The case that the video does not show is the case that breaks the claim | `va route`, the expert reviewer |
+| One word for each idea | The viewer hears two words for one thing as two things | `va route` (against the `vocabulary` of the storyboard) |
+| Leave a question open before you answer it | The viewer who made a guess waits for the answer | `va route` (one `predict` beat or more, two at most in a scene) |
+| The music stays below the voice | If the viewer notices the music during a sentence, the sentence is lost | `va render` (measured. It refuses a mix nearer than 16 LU) |
 
 ## End on the picture
 
-The recap is not a slide of text. Each takeaway is shown beside the moment that proved it: the earlier scene itself, frozen at that frame.
+The recap is not a slide of text. It shows each takeaway next to the moment that proved it: the earlier scene, stopped at that frame.
 
 ```json
 {
@@ -54,17 +67,20 @@ The recap is not a slide of text. Each takeaway is shown beside the moment that 
 }
 ```
 
-- `from` names an earlier scene with a picture; `beat` picks the beat whose final frame to show (default: the scene's last). The picture changes as each takeaway arrives.
-- A plain string item is shown beside the last picture before the recap, or the scene named by `"over"`.
-- Three or four takeaways. Each is a claim, not a topic: "Each pass halves the range", not "Halving".
+- `from` names an earlier scene that has a picture. `beat` selects the beat whose last frame the recap shows. The default is the last beat of the scene. The picture changes when each takeaway arrives.
+- An item that is only a string shows next to the last picture before the recap, or next to the scene that `"over"` names.
+- Use three or four takeaways. Each one is a claim, not a topic: "Each pass halves the range", not "Halving".
 
 ## Return to the hook
 
-Whatever the hook starred, the last scene says again. If the hook was `A *million* sorted items, searched in *twenty* looks.`, the closing line is "And that is why a million items take only about twenty passes." The viewer was promised an explanation of that number; ending on it tells them they got one.
+The last scene says the starred words of the hook again. If the hook was `A *million* sorted items, searched in *twenty* looks.`, the closing line is "And that is why a million items take only about twenty passes." The opening promised an explanation of that number. The ending tells the viewer that they got it.
 
 ## Name the source last
 
-The opening does not say what is being explained by name, and does not point anywhere. The last scene does: a `credit` scene after the recap, where the name animates in with one line under it saying where to find it.
+The video does not start with the name of the work. It does not point to a location at the start. The name arrives two times.
+
+1. On a title card immediately after the opening (`"need": "name"`). The context and the hook give the purpose of the work first. See [opening.md](opening.md), "Then name it".
+2. In the last scene: a `credit` scene after the recap. The name animates in, with one line below it that tells where to find the work.
 
 ```json
 {
@@ -78,83 +94,215 @@ The opening does not say what is being explained by name, and does not point any
 }
 ```
 
-- `title` is the name as someone would type it into a search box: the paper's title, the function, the repository.
-- `subtitle` is enough to find it: authors and year, a file path, a short address. It is read off the screen, so it has to be short enough to copy by eye.
-- One spoken line that says the name. The explanation is over; anything past about eight seconds is flagged.
-- The recap still returns to the hook. The credit comes after the ending, not instead of it.
+- `title` is the name as a person types it into a search box: the title of the paper, the function, the repository.
+- `subtitle` is sufficient to find it: the authors and the year, a file path, a short address. The viewer reads it from the screen. Make it short, so that they can copy it by eye.
+- Use one spoken line that says the name. The explanation is complete. The router flags a credit longer than approximately eight seconds.
+- The recap still returns to the hook. The credit comes after the ending. It does not replace the ending.
 
 ## One picture, carried through
 
-When consecutive scenes show the same thing (one row of slots through `state`, `get`, and `put`), mark each later one `"continues": true`. The fade between them is dropped, so the picture stays put while the code beside it changes.
+When consecutive scenes show the same thing (one row of slots through `state`, `get`, and `put`), mark each later scene `"continues": true`. The tool removes the fade between them. The picture stays while the code next to it changes.
 
-For this to work the second scene must start on exactly the frame the first ended on. In the Manim script, build the opening picture and put it on screen with `self.appear(...)` instead of fading it in; it fades in normally when the scene does not continue anything. Build both scenes' pictures with the same helper functions so they cannot drift apart.
+The second scene must start on the exact frame where the first scene ended. In the Manim script:
 
-When two scenes are drawn by the same script but show different pictures, say so with `"continues": false`.
+- Build the opening picture and put it on screen with `self.appear(...)`. Do not fade it in. When the scene does not continue another scene, `appear` fades it in normally.
+- Build the pictures of the two scenes with the same helper functions. Then they cannot become different.
+
+When the same script draws two scenes with different pictures, set `"continues": false`.
 
 ## No seams
 
-A seam is a place where the video stops being one continuous thing. `va qc` measures the rendered file for five kinds, and the same file always gets the same answer.
+A seam is a place where the video stops being one continuous thing. `va qc` measures the rendered file for five kinds of seam. The same file always gets the same result.
 
-| Seam | How it is measured | The usual cause, and the fix |
+| Seam | How it is measured | The usual cause, and the correction |
 |---|---|---|
-| A cut | One frame in which more than 2% of the picture changes, at least twice the change in the frames either side. A fade or a move changes several frames a little; a cut changes one a lot | Something large added or removed with `self.add` / `self.remove`: fade or transform it. At a join: a scene that does not fade |
-| A jump at a carried-on join | The last frame of one scene against the first frame of the next, where the second is marked `continues`. They must be 99% alike in the picture they share | The second scene did not start on the frame the first ended on. Build both with the same helpers and open with `self.appear(...)` |
-| The voice stopping where the picture carries on | More than one second of silence across a `continues` join | A `pause` or `hold` at that join |
-| Dead air | Three seconds of silence anywhere | A long `pause` or `hold` |
-| A step in the voice | One line more than 4 dB louder or quieter than the rest | The speech engine; reword the line or run `va tts` again |
+| A cut | One frame in which more than 2% of the picture changes, and the change is two times or more that of the adjacent frames. A fade or a move changes many frames a small quantity. A cut changes one frame a large quantity | You added or removed a large object with `self.add` or `self.remove`. Fade it or transform it. At a join: a scene that does not fade |
+| A jump at a join that continues | The last frame of one scene against the first frame of the next scene, where the second is marked `continues`. The shared picture must be 99% the same | The second scene did not start on the last frame of the first scene. Build the two scenes with the same helpers and open with `self.appear(...)` |
+| The voice stops where the picture continues | More than one second of silence across a `continues` join | A `pause` or a `hold` at that join |
+| Dead air | Three seconds of silence at any position | A long `pause` or `hold` |
+| A step in the voice | One line more than 4 dB louder or quieter than the others | The speech engine. Write the line again or run `va tts` again |
 
 It also reports an opening with nothing on screen for two seconds.
 
-What makes a join seamless is built in, so most videos pass without effort: scenes fade through the backdrop; a `continues` join drops the fade, shortens the breath to the pause between two beats, and fades the code and the heading across while the animation holds; the recap cross-fades its pictures. A finding means something in the storyboard or a script worked against that.
+The tool makes joins without seams automatically, so most videos pass:
 
-What these checks cannot see is a seam in the story: a scene that redraws from nothing what the last scene had already built, or a first line that does not follow from the line before. The second is prevented at the source, by writing the narration whole in `script.md` before it is split, and `va route` holds the storyboard to that script. The first is the reviewer's.
+- Scenes fade through the backdrop.
+- A `continues` join removes the fade. It makes the breath as short as the pause between two beats. It fades the code and the heading across the join while the animation holds.
+- The recap fades between its pictures.
+
+A finding tells you that the storyboard or a script worked against this.
+
+These checks cannot see a seam in the story:
+
+- A scene that draws again from nothing a thing that the last scene built. The reviewer finds this.
+- A first line that does not continue from the line before it. You prevent this at the source: write the narration as one text in `script.md` before you divide it. `va route` holds the storyboard to that script.
 
 ## The voice explains
 
-Narration says what a line does. The line is on screen; reading it aloud adds nothing.
+The narration says what a line does. The line is on screen. If the voice reads it aloud, the voice adds nothing.
 
-| Reciting | Explaining |
+| Reading aloud | Explaining |
 |---|---|
 | "Then self dot items dot move to end key is called." | "A hit calls `move_to_end`, which sends the key to the newest end." |
 | "If len of self dot items is greater than self dot capacity..." | "If that pushed us over capacity..." |
 
-Naming one identifier is good: it moves the highlight to its line. Reciting an expression is not.
+It is good to name one identifier, because that moves the highlight to its line. Do not read an expression aloud.
 
-Cut filler wherever it appears: simply, just, basically, obviously, clearly, actually, really, very, essentially, of course, kind of, sort of, as you can see, take a look, in order to, it is worth noting. If the sentence means the same without the word, the word goes.
+Remove filler: simply, just, basically, obviously, clearly, actually, really, very, essentially, of course, kind of, sort of, as you can see, take a look, in order to, it is worth noting. If the sentence means the same without the word, remove the word.
+
+### The narration is not Simplified Technical English
+
+This guide uses a controlled language. The narration does not. A viewer hears the narration one time, at the speed of speech. Write it as a good teacher speaks to one person:
+
+- **Write for the ear.** Read each line aloud. If you cannot say it in one breath, cut it.
+- **Change the length of the sentences.** A short sentence after two longer sentences gives the point its weight. Sentences of the same length sound like a list.
+- **Let sentences lean on each other.** Use "but", "so", and "and then" to join them. One sentence makes the viewer want the next.
+- **Use plain, warm words.** Use contractions where a person uses them. Speak to the viewer, not about the subject.
+- **Use the concrete thing.** "A jumps to the newest end" is better than "the entry is repositioned".
+- **Keep the surprise.** A turn ("It should be faster. It was slower.") is the reason that the viewer listens.
+
+Do not apply the 20-word limit, the approved-word list, or the one-instruction rule to a `say` line. Apply the rules of this section, of "Write for a listener" below, and of [opening.md](opening.md), "Make it flow".
+
+## Write for a listener
+
+A reader can look back. A listener cannot. The viewer hears each sentence one time, at the speed of speech, while they also watch a picture. A script can be correct and clean and still lose them. These rules come from a script that did.
+
+| Rule | Why | Checked by |
+|---|---|---|
+| Name the subject | A listener cannot look back to find what "it" refers to | `va route` (three pronouns or more in a sentence), the newcomer reviewer |
+| Give each word when the viewer needs it | The argument stops at the first word that the viewer does not have | the newcomer reviewer |
+| Explain the idea that the mechanism depends on | A viewer who does not know why a batch is good cannot follow why a wait for a batch is good | the practitioner reviewer |
+| One word has one meaning | "Model" for a language model and then for a formula is two things with one name | the practitioner reviewer, `vocabulary` |
+| Say the point | Do not make the listener do arithmetic to find the claim | the newcomer reviewer |
+| Say why it is important | A number without a reason to care is noise | the newcomer reviewer |
+| Say few numbers | A listener keeps three or four numbers from a video | `va route` (numbers in a sentence, numbers in the video) |
+| Ask before you answer | An answer to a question that nobody asked is a fact. An answer to a question that the viewer has is a relief | `va route` (`predict`), the reviewer |
+| Use one concrete example | A thing that the viewer can picture holds the abstract statement | the newcomer reviewer |
+| Change how sentences start | The same first word again and again is a tic when a person hears it | `va route` (the same joining word more than three times) |
+| Cut an idea, not the joining words | A script that is cut word by word becomes notes | you |
+| A claim is as wide as its evidence | One measured case does not prove the general statement | the expert reviewer. See [paper.md](paper.md) |
+
+### Name the subject
+
+Use the noun. Use a pronoun only when one thing can be the referent, and that thing is the subject of the sentence before. If two nouns come before the pronoun, the listener must guess.
+
+| A pronoun to resolve | The subject named |
+|---|---|
+| "The small model's step takes 6 milliseconds and the big one's almost 28, so it idles for most of each step." | "The small model finishes its step in 6 milliseconds. The big model needs almost 28. So the small model sits idle while it waits." |
+| "A request that leaves is marked pending, with its cache kept, so when its token comes back it rejoins the batch." | "When a request goes to the big model, the small model keeps that request's cache. The token comes back, and the request picks up where it left off." |
+| "Too few, and batches stay small. Too many, and the small model runs out of work. So how many?" | "Wait for too few requests, and the batch is hardly a batch. Wait for too many, and the small model has nothing to do. So how many requests should the big model wait for?" |
+
+"That", "this", and "they" at the start of a sentence have the same problem. Say what "that" is: not "That is one line", but "That rule is one line".
+
+### Give each word when the viewer needs it
+
+Before you divide the script, list each term that the argument uses. For each term, find the sentence that gives it to the viewer. If there is none, add one clause at the first use.
+
+- A term needs only a clause: "a token, which is a word or a piece of one".
+- An idea that a mechanism depends on needs a sentence and a picture. If the video explains a wait for a batch, it must first say what a batch is and why a larger batch is better. This is the idea that a writer most frequently forgets, because the writer knows it.
+- Do not use one word for two things. If "model" is the language model, the formula of the authors is "their formula" or "their calculation". List the word in `vocabulary` with the words that it must not be.
+- Do not change the word for a thing. "Questions" in one paragraph and "requests" in the next are two things to a listener. If the word must change, say so one time: "each question, or request, as the server calls it".
+
+### Say the point, and say why it is important
+
+Do not give two numbers and let the listener compare them. Say the comparison.
+
+| The listener does the work | The script does the work |
+|---|---|
+| "R2R's published code made about 90 tokens a second. The big model alone made 145." | "R2R's published code came out slower than using the big model for everything: about 90 tokens a second, against 145." |
+| "The model itself ran for 1.56 milliseconds: 4.2 percent of the step." | "Of every step, the model itself was running for about four percent. The rest was bookkeeping." |
+
+Say early why the viewer cares. "The big model is better, but it is slow and it costs more to run" is one sentence. Without it, "send fewer tokens to the big model" has no purpose.
+
+### Say few numbers
+
+Select the three or four numbers that are the story. Say those. Show the others on screen and do not say them: a chart can hold six values while the voice says one.
+
+- Say one number in a sentence. Three numbers in a sentence are a table that a person reads aloud.
+- Use round numbers in speech: "about four percent", not "4.2 percent". The picture shows the exact value.
+- Give a number its meaning in the same sentence: slower or faster, more or less, than what.
+
+`va route` counts the different numbers in the narration. It tells you when the video says more than a listener can keep.
+
+### Ask before you answer, and use one concrete example
+
+Find the question that the viewer has at each turn, and say it before you answer. "So why was it slower?" is better than "The routing was not the problem." Do not give the question to the source ("the paper sets out to show why"). Ask the viewer.
+
+Give one example that the viewer can picture, early, and return to it. For "most tokens are easy": show a real sentence, where "the" and "of" are easy and the one number in the answer is hard. One example does more than three abstract statements.
+
+### Change how sentences start, and cut ideas
+
+- Do not start more than three sentences with the same joining word ("So", "But", "And"). Let some sentences continue with no joining word.
+- Do not give each paragraph the same shape: a claim, then "but", then a number.
+- Do not read a list of steps aloud ("matches, locks, updates, and unlocks"). The picture shows the steps. The voice says what they add up to.
+- When the script is too long, remove an idea. Do not remove articles, subjects, and joining words to save seconds. A script that reads as notes was cut this way. A video that explains two things well is better than a video that names five.
+
+## Vale reads the script
+
+[Vale](https://vale.sh) is a linter for prose. `va route`, `va check`, `va build`, and `va prose` run it on `script.md` with two rule packages:
+
+| Package | It finds | Source |
+|---|---|---|
+| `proselint` | The faults that editors name: clichés, redundancy, hedging, mixed metaphors, jargon | [vale.sh/explorer/proselint](https://vale.sh/explorer/proselint) |
+| `ai-tells` | The phrases and shapes that mark machine-written text: stock openers, sets of three, empty emphasis, absolute claims | [vale.sh/explorer/ai-tells](https://vale.sh/explorer/ai-tells) |
+
+`va setup` installs Vale and the two packages. They are pinned to one release each. The files are in `~/.visualize-anything/`.
+
+```
+Prose: script.md against proselint and ai-tells. 2 finding(s): ...
+  error      line 5 · route beat 1          AI tricolon: '...'. Restructure or vary the count.  (ai-tells.VerbTricolon)
+  error      line 25 · credit beat 1        AI punctuation: ': Efficient'. Lowercase the word after the colon unless it is a proper noun.  (ai-tells.ColonUsage)
+```
+
+Read each finding. Then do one of these:
+
+- **Rewrite the sentence.** Most findings point at a sentence that a person would not say. Say the concrete thing.
+- **Leave the sentence.** The rules are for written text, and the narration is for the ear. A rule can be wrong about a literal statement ("a request that reaches the big model"), the title of a paper, or a name.
+
+To stop the report of a finding that you leave, turn the rule off for that line in `script.md`. Use Vale comments, and give the reason. `va route` ignores comments when it compares the script with the storyboard.
+
+```markdown
+<!-- The title of the paper has a colon. -->
+<!-- vale ai-tells.ColonUsage = NO -->
+The paper is TokenRouter: Efficient Serving System for Token-Level LLM Routing.
+<!-- vale ai-tells.ColonUsage = YES -->
+```
+
+Do not turn a package off for the full script. Do not rewrite a good spoken line only to make the report empty. A finding is advice. The check must run: without Vale, the commands stop.
 
 ## Let it land
 
-One or two moments in a video are the point: the comparison that finds the target, the eviction, the number that makes the claim. Give that beat `"land": true`. The voice waits 0.7 seconds longer after it before going on, and the picture holds.
+One or two moments in a video are the point: the comparison that finds the target, the eviction, the number that makes the claim. Give that beat `"land": true`. The voice waits 0.7 seconds longer after it, and the picture holds.
 
-Use it once or twice. Every beat landing is no beat landing.
+Use it one or two times. If each beat lands, no beat lands.
 
 ## Readable, and in one palette
 
-- Nothing on screen is smaller than 24px at 1080p. `va stills` measures title, code, and recap text and outlines anything smaller.
-- In a Manim script, the floor is `font_size=28` full-frame and `font_size=36` in a trace panel, which is shown smaller. `TEXT_SCALE` is 1.3 inside a trace panel and 1 otherwise; multiply by it when a script serves both.
-- A trace scene's code is at most 16 lines of 50 columns, so it fits at 24px.
-- Manim scenes use the colours `va_manim` provides and no others. Not `BLUE`, not `WHITE`, not a hex value of your own. `va manim` reports any it finds.
+- Nothing on screen is smaller than 24px at 1080p. `va stills` measures the title, code, and recap text. It puts an outline on smaller text.
+- In a Manim script, the minimum is `font_size=28` in a full frame and `font_size=36` in a trace panel, which shows smaller. `TEXT_SCALE` is 1.3 in a trace panel and 1 in a full frame. Multiply by it when a script is for the two layouts.
+- The code of a trace scene has 16 lines of 50 columns at most. Then it fits at 24px.
+- Manim scenes use only the colours of `va_manim`. Do not use `BLUE`, `WHITE`, or your own hex value. `va manim` reports each one that it finds.
 
 ## One dataset
 
-Pick the concrete example once (the list `3, 8, 15, 23, 42, 57, 61` and the target `57`; the keys `A`, `B`, `C`) and use it in every scene. A viewer who has learned where 57 sits does not want a new list in the next scene. Nothing checks this; it is yours to hold.
+Select the concrete example one time: the list `3, 8, 15, 23, 42, 57, 61` and the target `57`, or the keys `A`, `B`, `C`. Use it in each scene. A viewer who knows where 57 is does not want a new list in the next scene. No tool examines this. You must hold it.
 
 ## Ask, then wait
 
-A question the narration answers in the same breath is decoration. Mark the beat that asks it `"predict": true`: the beat ends on the question, the voice waits a second and a half longer, the picture holds, and the next beat of the same scene answers.
+A question that the narration answers in the same breath is decoration. Mark the beat that asks the question `"predict": true`. The beat ends on the question. The voice waits one and a half seconds longer. The picture holds. The next beat of the same scene answers.
 
 ```json
 {"say": "Two passes for seven items, because every pass throws away half of what is left. So how many for a million?", "predict": true},
 {"say": "A list of n items needs about log base two of n passes. For a million items, that is twenty."}
 ```
 
-- Ask only what the viewer can work out from what they have just seen. "So how many for a million?" comes after two scenes of halving. A question they have no way to answer makes them feel behind, which is the opposite of the point.
-- The picture holds on what they need to answer it. Do not animate the answer in during the pause.
-- One or two in a video. `va route` asks for one in anything over 45 seconds and questions a scene with more than two.
+- Ask only a question that the viewer can answer from the last pictures. "So how many for a million?" comes after two scenes of halving. A question that they cannot answer makes them feel behind.
+- The picture holds on the things that they need for the answer. Do not animate the answer during the pause.
+- Use one or two in a video. `va route` asks for one in a video longer than 45 seconds. It questions a scene with more than two.
 
 ## One word per idea
 
-Pick the word for each idea once and list it in the storyboard, with the words it must not also be called and the scene that explains it:
+Select the word for each idea one time. List it in the storyboard, with the words that it must not also be and the scene that explains it:
 
 ```json
 "vocabulary": [
@@ -163,24 +311,26 @@ Pick the word for each idea once and list it in the storyboard, with the words i
 ]
 ```
 
-A writer varies words to avoid repeating them; a listener hears a new word and looks for the new thing it names. `va route` flags a beat that uses a word from a `not` list, and a beat that says the word before the scene named in `defined`. A term that would be said once is replaced by plain words and left out of the list.
+A writer changes words so that they do not repeat. A listener hears a new word and looks for the new thing that it names. `va route` flags a beat that uses a word from a `not` list. It also flags a beat that says the word before the scene in `defined`. If a term occurs only one time, use plain words and omit it from the list.
 
 ## Music stays under the voice
 
-There is no music unless you bring some: `"music": "bed.mp3"` in the storyboard, a path in the project. Nothing is synthesized and no track ships with the skill. What the skill decides is where the bed sits, because that is not a matter of taste:
+There is no music unless you supply it: `"music": "bed.mp3"` in the storyboard, a path in the project. The skill does not synthesize music and does not include a track. The skill decides the level of the music, because that is not a decision about taste:
 
 | | Level |
 |---|---|
-| While the voice speaks | 18 LU under it (`"under"`; 16 is the least allowed) |
-| In a silence of two seconds or more | 10 LU under it (`"gap"`) |
-| Pauses shorter than two seconds | still down: the bed does not pump between sentences |
+| While the voice speaks | 18 LU below it (`"under"`. 16 is the minimum) |
+| In a silence of two seconds or more | 10 LU below it (`"gap"`) |
+| Pauses shorter than two seconds | The music stays down. It does not go up and down between sentences |
 
-The narration's timeline is known before the bed is laid, so it is ducked ahead of each sentence (down 0.08 seconds before the first word, back up over 1.2 seconds after the last), not in reaction to it. While it is down, its low-mids, the band from 1 to 4 kHz where consonants are, and its top are cut. `va render` then measures the result: how far the bed actually sits under the voice where the voice speaks, and the true peak of the mix. Closer than 16 LU, or over -1 dBTP, fails the render.
+The tool knows the timeline of the narration before it adds the music. It decreases the music before each sentence: down 0.08 seconds before the first word, and up again during 1.2 seconds after the last word. While the music is down, the tool cuts its low-mids, its top, and the band from 1 to 4 kHz, where the consonants are.
 
-Choose a bed that holds still: sustained chords, slow movement, no melody. A melody under speech competes with the words whatever its level. And listen to it once at low volume on laptop speakers; the measurement can rule a mix out, not in.
+`va render` then measures the result: the distance of the music below the voice where the voice speaks, and the true peak of the mix. A distance smaller than 16 LU, or a peak above -1 dBTP, fails the render.
+
+Select music that stays still: sustained chords, slow movement, no melody. A melody below speech competes with the words at all levels. Listen to it one time at low volume on laptop speakers. The measurement can reject a mix. It cannot approve one.
 
 ## Left undecided
 
-One choice is deliberately not made here, because it depends on where the video will be watched:
+The skill does not make one decision, because it depends on where people watch the video:
 
-- **Captions.** They are burned in along the bottom (`"captions": false` turns them off; subtitle files are written either way).
+- **Captions.** The tool burns them in along the bottom. `"captions": false` turns them off. The tool writes the subtitle files in the two cases.

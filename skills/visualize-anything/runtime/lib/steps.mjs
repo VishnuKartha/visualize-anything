@@ -5,12 +5,15 @@ import {withRenderer} from './remotion-api.mjs';
 import {compareFacts, parseOracle, unbackedNumbers} from './facts.mjs';
 import {analyzeRouting, formatRouting, scriptProse} from './router.mjs';
 import {HYPERFRAMES_VERSION, planCodeChange, renderComposition, writeAuthored, writeCodeChange} from './hyperframes.mjs';
-import {BED, brightIn, concatVideos, firstBright, frameChanges, frameSimilarity, frozenStretches, loudness, mixBed, mixNarration, mux, probeStreams, silences, subtitleFiles} from './media.mjs';
+import {BED, brightIn, concatVideos, firstBright, frameChanges, frameSimilarity, frozenStretches, loudness, mixBed, mixNarration, mux, pictureFill, probeStreams, silences, sparseStretch, subtitleFiles} from './media.mjs';
 import {findSeams} from './seams.mjs';
+import {loadPaper, paperFindings} from './paper.mjs';
+import {formatProse, lintProse} from './prose.mjs';
+import {SOURCE_KINDS, inventory, isDocument} from './sources.mjs';
 import {VIEWERS, planBrief, viewerContracts} from './viewers.mjs';
 import {EVIDENCE, HAS_PICTURE, SETTLED, buildSteps, buildTimeline, captionPhrases, loadStoryboard, loadTimeline, resolveCode, resolveVersions, speakable, withAutoCues} from './storyboard.mjs';
 import {
-  ARCHIFY_BIN, MANIM_UV_ARGS, RUNTIME_DIR, TYPST_SPEC, fail, ffprobeDuration, fmtSeconds, manimEnv, readJson, run, sha, writeJson,
+  ARCHIFY_BIN, MANIM_UV_ARGS, RUNTIME_DIR, TYPST_SPEC, fail, ffprobeDuration, fmtSeconds, has, manimEnv, readJson, run, sha, writeJson,
 } from './util.mjs';
 
 const THEME = readJson(path.join(RUNTIME_DIR, 'theme.json'));
@@ -71,16 +74,33 @@ const pick = (scenes, kind, only) => {
 // ---------------------------------------------------------------------------------------------
 // check
 
-/** The router's verdict on every scene, and on the sequence as a whole. */
-export const route = (paths) => {
+/**
+ * The narration as prose: script.md run through Vale's proselint and ai-tells packages. The findings
+ * are advice, like a routing review. That the check runs is not: without Vale this fails.
+ */
+export const prose = async (paths) => {
+  const file = path.join(paths.dir, 'script.md');
+  if (!existsSync(file)) {
+    log('Prose: no script.md in this project, so there is no narration to check. Write the script whole before the storyboard.');
+    return [];
+  }
+  const {storyboard} = load(paths, {gate: false});
+  const findings = await lintProse(file);
+  log(formatProse(findings, {lines: readFileSync(file, 'utf8').split('\n'), storyboard}));
+  return findings;
+};
+
+/** The router's verdict on every scene, and on the sequence as a whole; then the prose check on the script. */
+export const route = async (paths) => {
   const {storyboard} = load(paths, {gate: false});
   const report = routingOf(paths, storyboard);
   log(formatRouting(report));
   if (report.errors) process.exitCode = 1;
+  await prose(paths);
   return report;
 };
 
-export const check = (paths) => {
+export const check = async (paths) => {
   const {storyboard, warnings} = load(paths, {gate: false});
   const counts = {};
   for (const scene of storyboard.scenes) counts[scene.kind] = (counts[scene.kind] || 0) + 1;
@@ -92,8 +112,34 @@ export const check = (paths) => {
   log(`storyboard ok: ${storyboard.scenes.length} scenes (${Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(', ')}), ${beats} beats, ${words} words ≈ ${Math.round(words / 2.6)}s of narration.`);
   warn(warnings);
   log('');
-  route(paths);
+  await route(paths);
   return storyboard;
+};
+
+// ---------------------------------------------------------------------------------------------
+// paper
+
+/** Read a paper into the project: its abstract and what it claims, its sections, figures, and tables. */
+export const paper = async (paths, source) => {
+  if (!source) fail('Usage: va paper <project> <source>, where the source is an arXiv id (2610.12374), an arXiv address, or the path of a PDF.');
+  const out = path.join(paths.dir, 'paper');
+  const result = await run('uv', ['run', '--quiet', path.join(RUNTIME_DIR, 'python', 'paper.py'), '--source', source, '--out', out], {capture: true, allowFail: true});
+  if (result.code !== 0) fail(`Could not read the paper.\n${(result.stderr || result.stdout).trim().split('\n').slice(-8).join('\n')}`);
+  const read = loadPaper(paths.dir);
+  if (!read) fail(`paper.py finished but wrote no usable ${path.join(out, 'paper.json')}.`);
+  const body = read.sections.filter((section) => section.kind === 'body');
+  log(`paper: ${read.title}`);
+  log(`  read from ${read.read_from}: ${body.length} sections, ${read.figures.filter((figure) => figure.file).length} of ${read.figures.length} figures saved, ${read.tables.length} tables.`);
+  log('');
+  log('  The abstract, claim by claim. Plan the video from these before anything in the body:');
+  for (const claim of read.claims) log(`    ${String(claim.n).padStart(2)}. ${claim.text}${claim.numbers.length ? `   [states ${claim.numbers.join(', ')}]` : ''}`);
+  log('');
+  if (read.read_from === 'PDF' && !read.tables.length) log('  No tables could be read from the PDF (only ruled tables are found). Copy the rows you need from the paper by hand, and give each number a "given" that names its table.');
+  if (read.licence?.open === false) log(`  Licence: ${read.licence.url}. That lets arXiv distribute the paper; it does not let you reproduce its figures. Read them, and draw your own.`);
+  else if (read.licence?.open) log(`  Licence: ${read.licence.url}. Its figures may be shown with credit; say where each is from in its caption.`);
+  else log('  Licence: unknown. Check what the authors allow before showing any of its figures.');
+  log(`  Read ${path.relative(process.cwd(), path.join(out, 'paper.md'))} next. Then account for every claim above in the storyboard's "claims"; \`va route\` holds you to it.`);
+  return read;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -101,7 +147,8 @@ export const check = (paths) => {
 
 // The oracle is a script in the project that computes every fact again by running the real code.
 const ORACLES = [
-  ['facts.py', (file) => ['uv', ['run', '--quiet', '--no-project', 'python', file]]],
+  // Run as a script, so inline metadata (`# /// script` with `dependencies = ["numpy"]`) is honoured.
+  ['facts.py', (file) => ['uv', ['run', '--quiet', '--no-project', file]]],
   ['facts.mjs', (file) => [process.execPath, [file]]],
 ];
 const shown = (value) => (typeof value === 'string' ? `"${value}"` : String(value));
@@ -147,6 +194,10 @@ export const facts = async (paths) => {
   if (loose.length) {
     log(`  ${loose.length} number(s) said or shown with no fact behind them: ${loose.map((number) => `"${number.text}" (${number.where})`).join(', ')}.`);
   }
+  // A number said to come from the paper has to be in the paper as it was read.
+  const read = loadPaper(paths.dir);
+  const strays = read ? paperFindings(storyboard, read).notInPaper : [];
+  if (strays.length) log(`  ${strays.length} "given" number(s) are nowhere in the paper as read: ${strays.map((fact) => `${fact.id} = ${fact.value}`).join(', ')}. Write the number the way the paper does, or say in "given" where else it comes from.`);
   if (bad.length) log(`  ${bad.length} fact(s) do not hold. Fix the narration and the picture to match the code, or fix the oracle if it is the one that is wrong; never the other way round.`);
   else if (declared.length && !loose.length) log('  every number in the video is computed, and the computation agrees.');
   const ok = bad.length === 0;
@@ -273,6 +324,8 @@ export const diagram = async (paths, only = [], {force = false} = {}) => {
 const manimAsset = (paths, scene) => path.join(paths.assets, `${scene.id}.mp4`);
 
 // Colours Manim defines that are not in the video's palette. ORANGE is absent: va_manim redefines it.
+// How much of its frame a drawing should fill, and for how long it may fall short before it is reported.
+const SPARSE = {panel: 0.35, frame: 0.12, seconds: 4};
 const OFF_PALETTE = /\b(?:PURE_)?(?:BLUE|RED|GREEN|YELLOW|PURPLE|PINK|TEAL|GOLD|MAROON|WHITE|BLACK|GR[AE]Y)(?:_[A-E])?\b/g;
 
 // Manim classes that typeset with LaTeX unless told otherwise, and what the kit has in their place.
@@ -414,6 +467,13 @@ export const manim = async (paths, only = [], {force = false, draft = false} = {
     if (late.length) {
       log(`  ${late.length} word anchor(s) were reached after the word was spoken — shorten the animations before them:`);
       late.forEach((line) => log(`    ${line.replace('VA_LATE ', '')}`));
+    }
+    // A drawing that keeps to one corner of its frame looks unfinished. A trace panel has nothing laid over it,
+    // so it should be filled; a full frame gives up its top and bottom to the heading and the captions.
+    const least = beside ? SPARSE.panel : SPARSE.frame;
+    const sparse = sparseStretch(await pictureFill(asset), least);
+    if (sparse && sparse.end - sparse.start >= SPARSE.seconds) {
+      log(`  warning: from ${sparse.start.toFixed(1)}s to ${sparse.end.toFixed(1)}s the drawing fills at most ${Math.round(sparse.share * 100)}% of ${beside ? 'its panel' : 'the frame'} (a full one fills ${Math.round(least * 100)}% or more). Build the whole layout first and centre it, make its parts larger, and put what arrives later where it leaves no hole.`);
     }
     // The clip plays under the caption strip and the scene heading; see whether it draws there.
     const ranges = (list) => list.map((range) => `${range.start.toFixed(1)}–${range.end.toFixed(1)}s`).join(', ');
@@ -629,7 +689,11 @@ export const buildProps = async (paths) => {
     } else if (scene.kind === 'compare') {
       scenes.push({...base, title: scene.title, versus: scene.versus, panels: scene.panels});
     } else if (scene.kind === 'chart') {
-      scenes.push({...base, chart: scene.chart, title: scene.title, unit: scene.unit, axis: scene.axis, labels: scene.labels, series: scene.series});
+      scenes.push({...base, chart: scene.chart, title: scene.title, unit: scene.unit, axis: scene.axis, across: scene.across ?? null, labels: scene.labels, series: scene.series});
+    } else if (scene.kind === 'table') {
+      scenes.push({...base, title: scene.title, columns: scene.columns, rows: scene.rows, best: scene.best, highlight: scene.highlight, caption: scene.caption});
+    } else if (scene.kind === 'matrix') {
+      scenes.push({...base, title: scene.title, rows: scene.rows, columns: scene.columns, values: scene.values, scale: scene.scale, numbers: scene.numbers, axis: scene.axis});
     } else if (scene.kind === 'quote') {
       scenes.push({...base, quote: scene.quote, highlights: scene.highlights, attribution: scene.attribution});
     } else if (scene.kind === 'figure') {
@@ -640,7 +704,9 @@ export const buildProps = async (paths) => {
       if (!existsSync(path.join(paths.assets, name))) copyFileSync(source, path.join(paths.assets, name));
       const {width, height} = await probeStreams(source);
       if (!width || !height) fail(`Scene "${scene.id}": could not read the size of ${source}. Is it an image?`);
-      scenes.push({...base, image: `assets/${name}`, aspect: width / height, caption: scene.caption, callouts: scene.callouts});
+      // A crop shows one region of the figure, at that region's own shape.
+      const crop = scene.crop || {x: 0, y: 0, width: 100, height: 100};
+      scenes.push({...base, image: `assets/${name}`, aspect: (width * crop.width) / (height * crop.height), crop, caption: scene.caption, callouts: scene.callouts});
     }
   }
   if (missing.length) fail(`Not ready to render. Missing:\n  - ${missing.join('\n  - ')}`);
@@ -980,14 +1046,14 @@ export const stills = async (paths, only = [], {at} = {}) => {
   else if (findings.length) {
     log(`layout: ${findings.reduce((sum, entry) => sum + entry.issues.length, 0)} issue(s), outlined in red on the sheets:`);
     for (const entry of findings) entry.issues.forEach((issue) => log(`  ${entry.label}: ${issue}`));
-  } else log('layout: nothing runs off the frame, collides, or is cut off in the measured scenes (every kind drawn by Remotion: title, code, bullets, stat, compare, chart, quote, figure).');
+  } else log('layout: nothing runs off the frame, collides, or is cut off in the measured scenes (every kind drawn by Remotion: title, code, bullets, stat, compare, chart, table, matrix, quote, figure).');
   return {dir, findings};
 };
 
 // ---------------------------------------------------------------------------------------------
 // review
 
-const RENDERER_NAME = {title: 'opening statement', credit: 'end card', code: 'code', trace: 'code + animation', hyperframes: 'HyperFrames clip', manim: 'animation', diagram: 'diagram', bullets: 'bullets', stat: 'number', compare: 'side-by-side panels', chart: 'chart', quote: 'quote', figure: "the source's figure"};
+const RENDERER_NAME = {title: 'opening statement', credit: 'end card', code: 'code', trace: 'code + animation', hyperframes: 'HyperFrames clip', manim: 'animation', diagram: 'diagram', bullets: 'bullets', stat: 'number', compare: 'side-by-side panels', chart: 'chart', table: 'table', matrix: 'matrix', quote: 'quote', figure: "the source's figure"};
 
 /**
  * Everything an independent reviewer needs, in one file: what the video is for, what is said and
@@ -1023,18 +1089,25 @@ export const review = async (paths, {verify, plan} = {}) => {
   const out = [];
   out.push(`# Review brief, round ${round}: ${storyboard.title}`, '');
   out.push(
-    'You are reviewing a narrated code explainer video. You did not make it, and nobody will tell you what was intended beyond this page. Judge what is on screen and what was measured.',
+    'You are reviewing a narrated explainer video. You did not make it, and nobody will tell you what was intended beyond this page. Judge what is on screen and what was measured.',
     '',
   );
   out.push('## What the video is for', '');
   out.push(`- Subject: ${routing.subject}${storyboard.brief?.audience ? `; audience: ${storyboard.brief.audience}` : ''}${storyboard.brief?.focus ? `; focus: ${storyboard.brief.focus}` : ''}`);
+  // What it is made from, whole: a paper's claims are judged against the paper, not only the lines on screen.
+  const root = path.resolve(paths.dir, storyboard.sourceRoot);
+  for (const source of storyboard.sources) {
+    out.push(`- Made from: ${source.title || source.id} (${source.kind})${source.path ? `, at ${path.resolve(root, source.path)}` : ''}${source.url ? `, ${source.url}` : ''}. Read it before you judge what the video says about it.`);
+  }
   out.push(`- Length: ${fmtSeconds(props.totalFrames / props.fps)}${storyboard.brief?.length ? ` (asked for about ${storyboard.brief.length}s)` : ''}`);
-  if (storyboard.brief?.hook) out.push(`- The hook it means to open on: ${storyboard.brief.hook.replace(/\*/g, '')}`);
+  if (storyboard.brief?.context) out.push(`- The context it means to give first: ${storyboard.brief.context}`);
+  if (storyboard.brief?.hook) out.push(`- The hook it means to land after that: ${storyboard.brief.hook.replace(/\*/g, '')}`);
   out.push('');
   out.push('| # | Starts | Scene | Viewer needs to see | Shown as | Why |', '|---|---|---|---|---|---|');
   props.scenes.forEach((scene, index) => {
     const source = authored.get(scene.id);
-    out.push(`| ${index + 1} | ${clock(scene.from / props.fps)} | ${scene.id} | ${source.need || '(not declared)'} | ${RENDERER_NAME[scene.kind]} | ${source.why || ''} |`);
+    const drawn = routing.rows.find((entry) => entry.id === scene.id)?.sources || [];
+    out.push(`| ${index + 1} | ${clock(scene.from / props.fps)} | ${scene.id} | ${source.need || '(not declared)'} | ${RENDERER_NAME[scene.kind]}${storyboard.sources.length > 1 && drawn.length ? ` (from ${drawn.join(' + ')})` : ''} | ${source.why || ''} |`);
   });
   out.push('', '## What the voice says, and when', '');
   for (const scene of props.scenes) {
@@ -1108,14 +1181,17 @@ const reviewPlan = async (paths) => {
   const scriptFile = path.join(paths.dir, 'script.md');
   const script = existsSync(scriptFile) ? scriptProse(readFileSync(scriptFile, 'utf8')).replace(/\s+/g, ' ') : '';
   const root = path.resolve(paths.dir, storyboard.sourceRoot);
-  const sources = [...new Set(storyboard.scenes.flatMap((scene) => [scene.file, ...(scene.versions || []).map((version) => version.file)]).filter(Boolean))].map((file) => path.resolve(root, file));
+  const quoted = [...new Set(storyboard.scenes.flatMap((scene) => [scene.file, ...(scene.versions || []).map((version) => version.file)]).filter(Boolean))].map((file) => path.resolve(root, file));
+  // A document the video is made from is read whole by the reviewers, not only the lines it quotes.
+  const declared = storyboard.sources.map((source) => (source.path ? path.resolve(root, source.path) : source.url)).filter(Boolean);
+  const sources = [...new Set([...declared, ...quoted])];
 
   log('');
   log(`review: plan round ${round}, one brief per viewer. Give each to its own fresh agent, and nothing else:`);
   const briefs = Object.keys(VIEWERS).map((viewer) => {
     const briefPath = path.join(reviewDir, `plan-${round}-${viewer}.md`);
     const reportPath = path.join(reviewDir, `plan-${round}-${viewer}-report.md`);
-    writeFileSync(briefPath, planBrief({viewer, storyboard, script, routingText: formatRouting(routing), ledger, sources, reportPath}));
+    writeFileSync(briefPath, planBrief({viewer, storyboard, script, routingText: formatRouting(routing), ledger, sources, drawn: Object.fromEntries(routing.rows.map((entry) => [entry.id, entry.sources])), reportPath, paper: loadPaper(paths.dir)}));
     log(`  ${VIEWERS[viewer].name.padEnd(16)} ${briefPath}`);
     return {viewer, briefPath, reportPath};
   });
@@ -1133,11 +1209,128 @@ export const build = async (paths, options = {}) => {
   // A number that does not hold is cheapest to find before anything is recorded or drawn.
   const ledger = await facts(paths);
   if (!ledger.ok) fail('The facts do not hold, so nothing was built. Fix what `va facts` lists and run the build again.');
+  await prose(paths);
   await tts(paths);
   await diagram(paths, [], options);
   await manim(paths, [], options);
   await hyperframes(paths, [], options);
   return render(paths, options);
+};
+
+// ---------------------------------------------------------------------------------------------
+// sources
+
+// Tools that turn a figure's PDF or EPS into a PNG, best first. Each takes (input, output) and renders page one at about 300 dpi.
+const RASTERIZERS = [
+  ['pdftoppm', (input, output) => ['-png', '-r', '300', '-singlefile', input, output.replace(/\.png$/, '')]],
+  ['mutool', (input, output) => ['draw', '-r', '300', '-o', output, input, '1']],
+  ['magick', (input, output) => ['-density', '300', `${input}[0]`, output]],
+  ['gs', (input, output) => ['-q', '-dSAFER', '-dBATCH', '-dNOPAUSE', '-dEPSCrop', '-sDEVICE=png16m', '-r300', '-dFirstPage=1', '-dLastPage=1', `-sOutputFile=${output}`, input]],
+  ['sips', (input, output) => ['-s', 'format', 'png', input, '--out', output]],
+];
+const RASTER = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+
+/** Text of a PDF, for a paper that comes only as one. */
+const pdfText = async (file) => {
+  if (has('pdftotext')) return (await run('pdftotext', ['-layout', file, '-'], {capture: true, allowFail: true})).stdout;
+  if (has('gs')) return (await run('gs', ['-q', '-dSAFER', '-dBATCH', '-dNOPAUSE', '-sDEVICE=txtwrite', '-sOutputFile=-', file], {capture: true, allowFail: true})).stdout;
+  return null;
+};
+
+/**
+ * What each source holds, read before a word is written: for a document, its sections, figures (and
+ * the files behind them), tables, algorithms, and code listings, each with where it is; for a PDF
+ * alone, its text. `--figures` exports every figure to a PNG in the project, ready for a figure scene.
+ */
+export const sources = async (paths, {figures: exportFigures = false} = {}) => {
+  const {storyboard} = load(paths, {gate: false});
+  if (!storyboard.sources.length) {
+    fail(`No "sources" in the storyboard. Say what the video is made from first: [{"id": "...", "kind": "${Object.keys(SOURCE_KINDS).join('" | "')}", "path": "...", "url": "..."}].`);
+  }
+  const root = path.resolve(paths.dir, storyboard.sourceRoot);
+  const report = {};
+  for (const source of storyboard.sources) {
+    log(`${source.id} (${source.kind}${isDocument(source) ? ', document rules apply' : ''})${source.title ? `: ${source.title}` : ''}`);
+    log(`  ${SOURCE_KINDS[source.kind].says}`);
+    if (!source.path) {
+      log(`  no "path": nothing on disk to list${source.url ? ` (read it at ${source.url})` : ''}.`);
+      if (source.kind === 'paper' && /arxiv\.org\/(abs|pdf)\//.test(source.url || '')) {
+        log(`  An arXiv paper's LaTeX source has its figures, tables, and any code as files: download https://arxiv.org/e-print/${source.url.split(/\/(abs|pdf)\//)[2].replace(/\.pdf$/, '')}, unpack it into its own folder, and set "path".`);
+      }
+      log('');
+      continue;
+    }
+    // A paper is read in by `va paper`: its abstract, sections, tables, figures, and licence, in paper/.
+    if (source.kind === 'paper') {
+      log(`  Read it in with \`va paper <project> ${source.url || source.path}\`; then read paper/paper.md. See references/paper.md.\n`);
+      continue;
+    }
+    const found = inventory(source, root);
+    report[source.id] = found;
+    if (found.missing) {
+      log(`  path not found: ${path.resolve(root, source.path)}\n`);
+      continue;
+    }
+    if (found.pdf) {
+      // A PDF alone: its text, with the characters that extraction gets wrong pointed out.
+      const text = await pdfText(found.pdf);
+      if (text === null) log('  A PDF, and no pdftotext or gs to read it with. Install poppler, or get the LaTeX source.');
+      else {
+        const out = path.join(paths.cache, 'sources', `${source.id}.txt`);
+        mkdirSync(path.dirname(out), {recursive: true});
+        writeFileSync(out, text);
+        log(`  A PDF: its text is in ${out} (${text.split('\n').length} lines). Quote from there with "file" and "range".`);
+        const soft = (text.match(/\u00ad/g) || []).length;
+        if (soft) log(`  warning: ${soft} soft hyphen(s) (U+00AD). Some PDFs encode a minus sign that way: check every one in a line you quote.`);
+        log('  Figures, tables, and listings cannot be told apart in a PDF. If it is on arXiv, get the LaTeX source instead.');
+      }
+      log('');
+      continue;
+    }
+    if (!isDocument(source)) {
+      log(`  ${found.files.length} file(s).\n`);
+      continue;
+    }
+    const where = (item) => `${item.file}:${item.range ? `${item.range[0]}-${item.range[1]}` : item.line}`;
+    if (found.sections.length) log(`  Sections: ${found.sections.filter((section) => section.depth === 1).map((section) => section.title).join(' · ')}`);
+    log(`  Figures (${found.figures.length}): show the source's own with a "figure" scene; do not redraw one it already drew.`);
+    for (const figure of found.figures) {
+      log(`    ${figure.ref}${figure.label ? ` [${figure.label}]` : ''}  ${where(figure)}  ${figure.caption ? `"${figure.caption.slice(0, 90)}${figure.caption.length > 90 ? '...' : ''}"` : '(no caption)'}`);
+      figure.exported = [];
+      for (const [index, file] of (figure.paths || []).entries()) {
+        if (!file) {
+          log(`      ${figure.images[index]}: not found on disk`);
+          continue;
+        }
+        const target = path.join(paths.dir, 'figures', `${source.id}-${path.basename(file).replace(/\.[^.]+$/, '')}.png`);
+        if (exportFigures) {
+          mkdirSync(path.dirname(target), {recursive: true});
+          const ext = path.extname(file).toLowerCase();
+          if (RASTER.includes(ext)) copyFileSync(path.resolve(root, file), target.replace(/\.png$/, ext));
+          else {
+            const tool = RASTERIZERS.find(([name]) => has(name));
+            if (!tool) {
+              log(`      ${file}: no pdftoppm, mutool, magick, gs, or sips to turn it into a PNG`);
+              continue;
+            }
+            await run(tool[0], tool[1](path.resolve(root, file), target), {capture: true, allowFail: true});
+          }
+        }
+        const made = [target, target.replace(/\.png$/, path.extname(file).toLowerCase())].find((candidate) => existsSync(candidate));
+        if (made) figure.exported.push(path.relative(paths.dir, made));
+        log(`      ${file}${made ? ` → ${path.relative(paths.dir, made)}` : exportFigures ? ' (export failed)' : ''}`);
+      }
+    }
+    if (!exportFigures && found.figures.some((figure) => (figure.paths || []).some(Boolean))) log('    Run `va sources <project> --figures` to export them as PNGs into figures/.');
+    log(`  Tables (${found.tables.length}): a "table" of the rows the sentence compares, or a "chart" of the values; say which with "ref".`);
+    for (const table of found.tables) log(`    ${table.ref}${table.label ? ` [${table.label}]` : ''}  ${where(table)}  ${table.caption ? `"${table.caption.slice(0, 90)}"` : ''}`);
+    log(`  Algorithms and listings (${found.listings.length}): the only parts of a document to show as code.`);
+    for (const listing of found.listings) log(`    ${listing.env}  ${where(listing)}`);
+    if (found.code.length) log(`  Code shipped with it (${found.code.length}): ${found.code.slice(0, 8).join(', ')}${found.code.length > 8 ? ', ...' : ''}. Real code reads better than an algorithm block: quote it.`);
+    log('');
+  }
+  writeJson(path.join(paths.cache, 'sources.json'), report);
+  return report;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -1150,7 +1343,8 @@ export const init = (slug, {dir} = {}) => {
   for (let n = 2; existsSync(target); n += 1) target = path.join(base, `${slug}-${n}`);
   mkdirSync(path.join(target, 'diagrams'), {recursive: true});
   mkdirSync(path.join(target, 'manim'), {recursive: true});
-  writeFileSync(path.join(target, '.gitignore'), 'public/\n.cache/\nout/\ntimeline.json\n');
+  // paper/ is somebody else's paper, read in by `va paper`: fetched again when needed, never republished from here.
+  writeFileSync(path.join(target, '.gitignore'), 'public/\n.cache/\nout/\ntimeline.json\npaper/\n');
   writeFileSync(
     path.join(target, 'script.md'),
     [
@@ -1158,7 +1352,7 @@ export const init = (slug, {dir} = {}) => {
       '     Read it aloud from top to bottom. Then split it: a paragraph becomes a scene, a sentence or two becomes a beat.',
       '     `va route` checks that the storyboard says these words, in this order, and nothing else. -->',
       '',
-      'Replace this with the hook, said over the picture that shows it: the most surprising thing, or the problem with the obvious way.',
+      'Replace this with the opening: a sentence or two from where the viewer already is, then the hook, said over the picture that shows it.',
       '',
     ].join('\n'),
   );
@@ -1194,17 +1388,19 @@ export const init = (slug, {dir} = {}) => {
       audience: 'Who is watching, and what they already know.',
       length: 90,
       focus: 'The one question the video answers.',
+      context: 'Where the viewer already is, and the one step from there to the subject: what the opening says first.',
       hook: 'The core of the problem, or the most *surprising* thing about the answer, in one sentence.',
     },
     facts: [],
     vocabulary: [],
+    sources: [],
     scenes: [
       {
         id: 'open',
         need: 'motion',
-        why: 'Opening: the picture that shows the problem, with the hook said over it.',
+        why: 'Opening: the picture the viewer already knows, then the hook said over what happens to it.',
         class: 'Open',
-        beats: [{say: 'Replace this with the hook, said over the picture that shows it: the most surprising thing, or the problem with the obvious way.'}],
+        beats: [{say: 'Replace this with the opening: a sentence or two from where the viewer already is, then the hook, said over the picture that shows it.'}],
       },
     ],
   });

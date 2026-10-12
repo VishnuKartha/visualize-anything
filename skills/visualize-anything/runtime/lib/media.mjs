@@ -247,6 +247,31 @@ export const silences = async (file, {minSeconds = 0.6, noise = -38} = {}) => {
 };
 
 /**
+ * How much of the frame the drawing occupies over time: the bounding box of everything brighter than
+ * the backdrop, as a share of the frame, sampled `fps` times a second. A picture that sits in one
+ * corner of its panel reads as unfinished however correct it is.
+ */
+export const pictureFill = async (file, {fps = 2, threshold = 70} = {}) => {
+  const stream = await probeStreams(file);
+  const {stderr} = await run('ffmpeg', ['-hide_banner', '-i', file, '-an', '-vf', `fps=${fps},format=gray,bbox=min_val=${threshold}`, '-f', 'null', '-'], {capture: true});
+  const frame = (stream?.width || 1) * (stream?.height || 1);
+  return [...stderr.matchAll(/ w:(\d+) h:(\d+)/g)].map((match, index) => ({time: index / fps, share: (Number(match[1]) * Number(match[2])) / frame}));
+};
+
+/** The longest stretch, after the picture has had `settle` seconds to arrive, in which it fills less than `least` of the frame. */
+export const sparseStretch = (samples, least, {settle = 1} = {}) => {
+  let best = null;
+  let run = null;
+  for (const sample of samples) {
+    if (sample.time >= settle && sample.share < least) {
+      run = run ? {...run, end: sample.time, share: Math.max(run.share, sample.share)} : {start: sample.time, end: sample.time, share: sample.share};
+      if (!best || run.end - run.start > best.end - best.start) best = run;
+    } else run = null;
+  }
+  return best;
+};
+
+/**
  * How much the picture changes at each frame, compared with the frame before: the mean difference
  * in brightness over every pixel, 0 for an identical frame, 1 for black to white. `crop` keeps the
  * captions and progress bar, which always move, out of the measure.
