@@ -16,10 +16,13 @@ before any diagram, animation, or render.
 Per-beat audio is cached by (text, voice, rate, pitch) in the job's cache
 directory, so re-runs only synthesize beats whose wording changed.
 
-Edge TTS is an online service. When it is unavailable, VA_TTS_ENGINE=franken
-synthesizes on this machine instead: `franken_tts` speaks each beat, and
-`franken_whisper` listens to the result to time its words. VA_TTS_VOICE names
-the local voice (default "matt"); the storyboard's rate is applied as tempo.
+Edge TTS is an online service. When it is unavailable, VA_TTS_ENGINE=kokoro
+synthesizes on this machine instead: Kokoro (kokoro_say.py, next to this file)
+speaks each beat. Its words are timed by `franken_whisper` listening to the
+clip when that is installed, and otherwise estimated from the text and the
+pauses in the clip (VA_TTS_TIMING=listen or estimate forces one). VA_TTS_VOICE
+names the Kokoro voice (default "am_michael"); the storyboard's rate becomes
+Kokoro's speed.
 A voice written `say:<name>` (e.g. `say:Samantha`) is spoken by macOS `say`
 instead, offline. It reports no word timings, so each word is given a share of
 the clip in proportion to its length: captions and word-anchored cues land
@@ -45,17 +48,21 @@ TICKS_PER_SECOND = 10_000_000  # edge-tts reports offsets in 100ns units
 # The service answers 403 when it is asked too often; fewer at once, and a longer wait each time.
 CONCURRENCY = 2
 ATTEMPTS = 6
-ENGINE = os.environ.get("VA_TTS_ENGINE", "edge")  # "edge": Microsoft's online voices. "franken": local.
+ENGINE = os.environ.get("VA_TTS_ENGINE", "edge")  # "edge": Microsoft's online voices. "kokoro": local.
+KOKORO = Path(__file__).with_name("kokoro_say.py")
+KOKORO_VOICE = re.compile(r"[a-z][fm]_[a-z]+")  # af_heart, am_michael, bm_george, ...
 LEAD_TRIM = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.04"
 LEVEL = "loudnorm=I=-19:TP=-2:LRA=11"
-LOCAL_VOICES = {"matt", "james", "leo", "robert", "judy", "aria", "ember", "liam", "anthony", "russell", "steve", "daniel",
-                "meryl", "laurence", "jack", "michael", "jodie", "denzel"}
+PAUSE_LEVEL, PAUSE_LENGTH = "-38dB", 0.11  # what counts as a pause when word timings are estimated
+# Where a local clip's word timings come from. "listen": franken_whisper hears the clip, which is exact.
+# "estimate": from the text and the pauses, with no recogniser. Unset: listen if franken_whisper is installed.
+TIMING = os.environ.get("VA_TTS_TIMING") or ("listen" if shutil.which("franken_whisper") else "estimate")
 
 
 def cache_key(text: str, voice: str, rate: str, pitch: str) -> str:
     obj = {"text": text, "voice": voice, "rate": rate, "pitch": pitch}
     if ENGINE != "edge":
-        obj["engine"] = ENGINE  # edge keys stay as they were, so its cache survives
+        obj["engine"], obj["timing"] = ENGINE, TIMING  # edge keys stay as they were, so its cache survives
     return hashlib.sha256(json.dumps(obj, sort_keys=True).encode()).hexdigest()[:32]
 
 
@@ -124,7 +131,7 @@ async def synthesize(text: str, voice: str, rate: str, pitch: str, mp3: Path, me
             await asyncio.sleep(2 ** attempt + random.random() * 2)  # 1, 2, 4, 8, 16 seconds, plus jitter
     hint = ""
     if "403" in str(last_error):
-        hint = ' The service refused every attempt. If it is down for everyone (it was from 2026-10-11, edge-tts issue #490), narrate on this machine until it is back: VA_TTS_ENGINE=franken (franken_tts, with timed words), or "voice": "say:Samantha" in the storyboard (macOS `say`, nothing to install).'
+        hint = ' The service refused every attempt. If it is down for everyone (it was from 2026-10-11, edge-tts issue #490), narrate on this machine until it is back: VA_TTS_ENGINE=kokoro (Kokoro, a local model, with timed words), or "voice": "say:Samantha" in the storyboard (macOS `say`, nothing to install).'
     raise RuntimeError(f"TTS failed for {text[:60]!r}: {last_error}.{hint}")
 
 
@@ -179,23 +186,94 @@ def align(text: str, heard: list[dict], duration: float) -> list[dict]:
     return [{"text": word, "start": round(start, 3), "end": round(min(end, duration), 3)} for word, (start, end) in zip(written, spans)]
 
 
+def voiced(audio: Path, duration: float) -> list[tuple[float, float]]:
+    """The stretches of a clip in which someone is speaking: what is left between its silences."""
+    probe = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(audio), "-af", f"silencedetect=noise={PAUSE_LEVEL}:d={PAUSE_LENGTH}", "-f", "null", "-"],
+                           capture_output=True, text=True)
+    starts = [float(x) for x in re.findall(r"silence_start: (-?[\d.]+)", probe.stderr)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", probe.stderr)]
+    stretches, at = [], 0.0
+    for start, end in zip(starts, ends + [duration] * (len(starts) - len(ends))):
+        if start - at > 0.05:
+            stretches.append((at, start))
+        at = end
+    if duration - at > 0.05:
+        stretches.append((at, duration))
+    return stretches or [(0.0, duration)]
+
+
+def _weight(word: str) -> float:
+    """About how long a word takes to say: its letters, and a digit is a word of its own."""
+    return 1 + len(re.findall(r"[A-Za-z]", word)) + 4.5 * len(re.findall(r"\d", word))
+
+
+def estimate(text: str, audio: Path, duration: float) -> list[dict]:
+    """Word timings with no recogniser. A synthetic voice keeps a steady pace and pauses at its
+    punctuation, so: find the pauses in the clip, match the phrases of the text to the stretches of
+    speech between them, and space each phrase's words through its stretch by their length."""
+    written = text.split()
+    phrases, current = [], []
+    for word in written:
+        current.append(word)
+        if re.search(r"[,.;:?!\u2014]$", word):
+            phrases.append(current)
+            current = []
+    if current:
+        phrases.append(current)
+    stretches = voiced(audio, duration)
+    # More stretches than phrases: the voice paused inside a phrase. Close the shortest pauses.
+    while len(stretches) > len(phrases):
+        gaps = [stretches[i + 1][0] - stretches[i][1] for i in range(len(stretches) - 1)]
+        i = gaps.index(min(gaps))
+        stretches[i:i + 2] = [(stretches[i][0], stretches[i + 1][1])]
+    # Fewer stretches than phrases: some punctuation was not paused at. Group the phrases into the
+    # stretches so that each group's share of the words is nearest its stretch's share of the speech.
+    weights = [sum(_weight(word) for word in phrase) for phrase in phrases]
+    total_w, total_s = sum(weights), sum(end - start for start, end in stretches)
+    n, m = len(phrases), len(stretches)
+    cost = [[float("inf")] * (m + 1) for _ in range(n + 1)]
+    cut = [[0] * (m + 1) for _ in range(n + 1)]
+    cost[0][0] = 0.0
+    for j in range(1, m + 1):
+        share = (stretches[j - 1][1] - stretches[j - 1][0]) / total_s
+        for i in range(j, n - (m - j) + 1):
+            for k in range(j - 1, i):
+                here = cost[k][j - 1] + abs(sum(weights[k:i]) / total_w - share)
+                if here < cost[i][j]:
+                    cost[i][j], cut[i][j] = here, k
+    groups, i = [], n
+    for j in range(m, 0, -1):
+        groups.append((cut[i][j], i))
+        i = cut[i][j]
+    words = []
+    for (first, last), (start, end) in zip(reversed(groups), stretches):
+        said = [word for phrase in phrases[first:last] for word in phrase]
+        whole, at = sum(_weight(word) for word in said), start
+        for word in said:
+            length = (end - start) * _weight(word) / whole
+            words.append({"text": word, "start": round(at, 3), "end": round(at + length, 3)})
+            at += length
+    return words
+
+
 def speak_locally(text: str, voice: str, rate: str, mp3: Path, meta: Path) -> None:
-    """One beat, synthesized on this machine by franken_tts and timed by franken_whisper."""
-    for tool in ("franken_tts", "franken_whisper"):
-        if not shutil.which(tool):
-            raise RuntimeError(f"VA_TTS_ENGINE=franken needs `{tool}` on the PATH")
+    """One beat, synthesized on this machine by Kokoro, with its words timed by ear or by estimate."""
+    if TIMING == "listen" and not shutil.which("franken_whisper"):
+        raise RuntimeError("VA_TTS_TIMING=listen needs `franken_whisper` on the PATH; unset it to estimate the word timings instead")
     wav, part = mp3.with_suffix(".wav"), mp3.with_name(mp3.stem + ".part.mp3")
-    subprocess.run(["franken_tts", "say", "-", "-o", str(wav), "--voice", voice], input=text, capture_output=True, text=True, check=True)
     change = re.fullmatch(r"([+-]\d+)%", rate or "")
-    tempo = 1 + int(change.group(1)) / 100 if change else 1.0
-    # franken_tts leads each clip with about a third of a second of silence and speaks some 14 dB below
-    # the Edge voices. Trim the first, so beats join as they do with Edge, and level the second.
-    chain = [LEAD_TRIM, *([f"atempo={tempo:.3f}"] if abs(tempo - 1) > 1e-3 else []), LEVEL]
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-filter:a", ",".join(chain), "-ar", "24000",
+    speed = 1 + int(change.group(1)) / 100 if change else 1.0
+    spoken = subprocess.run(["uv", "run", "--quiet", str(KOKORO), "--voice", voice, "--speed", f"{speed:.3f}", "--out", str(wav)],
+                            input=text, capture_output=True, text=True)
+    if spoken.returncode != 0:
+        raise RuntimeError((spoken.stderr or spoken.stdout).strip().splitlines()[-1])
+    # A local clip may lead with silence and sits at its own level. Trim the first, so beats join as they
+    # do with Edge, and bring the second to about where the Edge voices are.
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-filter:a", f"{LEAD_TRIM},{LEVEL}", "-ar", "24000",
                     "-codec:a", "libmp3lame", "-q:a", "2", str(part)], check=True)
     wav.unlink()
     duration = ffprobe_duration(part)
-    words = align(text, listen(part), duration)
+    words = align(text, listen(part), duration) if TIMING == "listen" else estimate(text, part, duration)
     part.replace(mp3)
     meta.write_text(json.dumps({"duration": round(duration, 3), "words": words}))
 
@@ -213,13 +291,13 @@ async def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     voice, rate, pitch = job["voice"], job.get("rate", "+0%"), job.get("pitch", "+0Hz")
     # A `say:` voice is the storyboard's own choice, so it wins over VA_TTS_ENGINE.
-    local = ENGINE == "franken" and not voice.startswith("say:")
+    local = ENGINE == "kokoro" and not voice.startswith("say:")
     speaker = voice  # who is heard; the manifest keeps the storyboard's `voice`, which the timeline is checked against
     if local:
-        # The storyboard names an Edge voice by default; a local run takes VA_TTS_VOICE, or a local name if the storyboard has one.
-        speaker = os.environ.get("VA_TTS_VOICE") or (voice if voice in LOCAL_VOICES else "matt")
-    elif ENGINE not in ("edge", "franken"):
-        raise RuntimeError(f'VA_TTS_ENGINE is "{ENGINE}"; it must be "edge" or "franken"')
+        # The storyboard names an Edge voice by default; a local run takes VA_TTS_VOICE, or a Kokoro name if the storyboard has one.
+        speaker = os.environ.get("VA_TTS_VOICE") or (voice if KOKORO_VOICE.fullmatch(voice) else "am_michael")
+    elif ENGINE not in ("edge", "kokoro"):
+        raise RuntimeError(f'VA_TTS_ENGINE is "{ENGINE}"; it must be "edge" or "kokoro"')
 
     semaphore = asyncio.Semaphore(1 if local else CONCURRENCY)  # one local model at a time
     generated = 0
