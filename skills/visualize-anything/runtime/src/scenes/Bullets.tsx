@@ -2,7 +2,7 @@ import type React from 'react';
 import {useContext} from 'react';
 import {AbsoluteFill, Freeze, useCurrentFrame} from 'remotion';
 import {StageContext} from '../StageContext';
-import {MONO, SANS, STAGE, beatAt, ramp, theme} from '../theme';
+import {MONO, SANS, STAGE, beatAt, glide, lerp, ramp, theme} from '../theme';
 import type {BulletsScene, Scene, Shot} from '../types';
 
 // A recap is not a slide of text. Each takeaway arrives beside the moment that proved it: the
@@ -64,7 +64,8 @@ export const BulletsView: React.FC<{scene: BulletsScene}> = ({scene}) => {
   const shot = shotAt(current);
   const before = current > 0 ? shotAt(current - 1) : null;
   const pictured = Boolean(shot) && scenes.length > 0;
-  const swap = ramp(frame, scene.steps[current]?.cue ?? 0, 14);
+  // How far the step has come. Eased in as well as out: a picture is large and bright, and the list dims with it.
+  const swap = glide(frame, scene.steps[current]?.cue ?? 0, 14);
   const same = before && shot && before.scene === shot.scene && before.frame === shot.frame;
   // Each picture sits in a panel of its own shape. Two of different shapes cross-fade; neither is resized.
   const panel = (of: Shot): React.CSSProperties => {
@@ -81,9 +82,12 @@ export const BulletsView: React.FC<{scene: BulletsScene}> = ({scene}) => {
         // An item enters at the cue of the first step that includes it.
         const firstStep = counts.findIndex((count) => count > index);
         const enter = firstStep < 0 ? 0 : ramp(frame, scene.steps[firstStep]?.cue ?? 0, 16);
-        const isNew = index >= previousCount && index < counts[current];
-        const settled = counts[current] === previousCount;
-        const emphasis = isNew || settled ? 1 : 0.5;
+        // The takeaways a step adds read at full strength and the earlier ones dim behind them, over the swap and not at its first frame.
+        const emphasisIn = (step: number) => {
+          const shownBefore = step > 0 ? counts[step - 1] : 0;
+          return counts[step] === shownBefore || (index >= shownBefore && index < counts[step]) ? 1 : 0.5;
+        };
+        const emphasis = index < previousCount ? lerp(emphasisIn(current - 1), emphasisIn(current), swap) : emphasisIn(current);
         return (
           <div key={item} style={{display: 'flex', alignItems: 'baseline', gap: 24, opacity: enter * emphasis, translate: `${(1 - enter) * 40}px 0`}}>
             <span style={{fontFamily: MONO, fontSize: size * 0.7, fontWeight: 600, color: theme.accent, minWidth: 48}}>{String(index + 1).padStart(2, '0')}</span>

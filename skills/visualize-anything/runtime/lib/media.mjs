@@ -272,20 +272,30 @@ export const sparseStretch = (samples, least, {settle = 1} = {}) => {
 };
 
 /**
- * How much of the picture changes at each frame, compared with the frame before: 0 for none, 1 for
- * all of it. `crop` keeps the captions and progress bar, which always move, out of the measure.
+ * How much the picture changes at each frame, compared with the frame before: the mean difference
+ * in brightness over every pixel, 0 for an identical frame, 1 for black to white. `crop` keeps the
+ * captions and progress bar, which always move, out of the measure.
  */
 export const frameChanges = async (file, {crop = 'iw:ih*0.80:0:0'} = {}) => {
+  // Each frame is laid beside the one before it (the first beside itself) and the two are
+  // subtracted. ffmpeg's own `scene` score is not this: it is the smaller of the difference and
+  // how much the difference itself changed, which is zero for every frame of an even fade but its
+  // first, so a fade measures as one frame changing alone.
   const {stdout} = await run(
     'ffmpeg',
-    ['-v', 'error', '-i', file, '-an', '-vf', `crop=${crop},select='gte(scene,0)',metadata=mode=print:key=lavfi.scene_score:file=-`, '-f', 'null', '-'],
+    [
+      '-v', 'error', '-i', file, '-an', '-filter_complex',
+      `[0:v]crop=${crop},split[now][held];[held]tpad=start=1:start_mode=clone[before];` +
+        '[now][before]msad=shortest=1,metadata=mode=print:key=lavfi.msad.msad.Y:file=-',
+      '-f', 'null', '-',
+    ],
     {capture: true},
   );
   const found = [];
   let time = null;
   for (const line of stdout.split('\n')) {
     const at = line.match(/pts_time:([\d.]+)/);
-    const score = line.match(/scene_score=([\d.]+)/);
+    const score = line.match(/msad\.Y=([\d.]+)/);
     if (at) time = Number(at[1]);
     if (score && time !== null) found.push({time, score: Number(score[1])});
   }
