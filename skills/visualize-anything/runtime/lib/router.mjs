@@ -6,6 +6,7 @@ import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {absolutesIn, numbersIn, unbackedNumbers, vocabularyFindings} from './facts.mjs';
 import {loadPaper, paperFindings} from './paper.mjs';
+import {REF_PATTERN, SOURCE_KINDS, inventory, isDocument, isProseFile, namedSources, ownerOf, proseShare, sourcesOf} from './sources.mjs';
 import {speakable} from './speech.mjs';
 
 // A listener hears each sentence once, at the speed of speech, and cannot look back. These are the
@@ -54,7 +55,9 @@ export const NEEDS = {
   data: {kind: 'hyperframes', family: 'frame', says: 'numbers that need a picture designed for them: a composition you write'},
   number: {kind: 'stat', family: 'frame', says: 'the one number the claim rests on, or a few side by side'},
   contrast: {kind: 'compare', family: 'frame', says: 'two or three alternatives, each with what it gets right and what it costs'},
-  chart: {kind: 'chart', family: 'frame', says: 'measured values against each other: bars, or a line across rounds'},
+  chart: {kind: 'chart', family: 'frame', says: 'measured values against each other: bars, a line across rounds, or a scatter of trade-offs'},
+  table: {kind: 'table', family: 'frame', says: "the rows of a results table the sentence compares, with the source's own row marked"},
+  matrix: {kind: 'matrix', family: 'frame', says: 'a grid of values coloured by size: attention weights, a confusion matrix'},
   quote: {kind: 'quote', family: 'frame', says: "the source's own words, when the wording is the evidence"},
   figure: {kind: 'figure', family: 'frame', says: "the source's own figure, with the parts worth seeing pointed out"},
   structure: {kind: 'diagram', type: 'architecture', family: 'system', says: 'separate components and what connects them'},
@@ -216,11 +219,29 @@ const spokenForms = (word) => {
 
 const starred = (text) => [...String(text || '').matchAll(/\*([^*]+)\*/g)].flatMap((match) => match[1].split(/\s+/)).filter(Boolean);
 
-const HAS_PICTURE = ['manim', 'trace', 'diagram', 'hyperframes', 'stat', 'compare', 'chart', 'figure'];
+const HAS_PICTURE = ['manim', 'trace', 'diagram', 'hyperframes', 'stat', 'compare', 'chart', 'table', 'matrix', 'figure'];
 // What a video that does not open on an animation opens on instead, in words.
-const OPENS_ON = {title: 'words', bullets: 'a list', code: 'bare code', trace: 'code', credit: 'the credit', stat: 'a number card', compare: 'panels', chart: 'a chart', quote: 'a quotation', figure: "the source's figure", diagram: 'a diagram', hyperframes: 'a rendered clip'};
+const OPENS_ON = {title: 'words', bullets: 'a list', code: 'bare code', trace: 'code', credit: 'the credit', stat: 'a number card', compare: 'panels', chart: 'a chart', table: 'a table', matrix: 'a matrix', quote: 'a quotation', figure: "the source's figure", diagram: 'a diagram', hyperframes: 'a rendered clip'};
 // Scenes drawn from the storyboard alone, whose parts arrive by `show`.
-const EVIDENCE = ['stat', 'compare', 'chart', 'quote', 'figure'];
+const EVIDENCE = ['stat', 'compare', 'chart', 'table', 'matrix', 'quote', 'figure'];
+// Evidence that reports what the source measured or drew: it says where it comes from, and follows the scene that sets it up.
+const REPORTED = ['stat', 'chart', 'table', 'matrix', 'quote', 'figure'];
+const SETS_UP = ['stat', 'chart', 'table', 'matrix', 'figure'];
+
+/** The files a scene quotes, with the lines it shows. */
+const quotedFiles = (scene) => [
+  ...(scene.file ? [{file: scene.file, range: scene.range}] : []),
+  ...(scene.versions || []).filter((version) => version.file).map((version) => ({file: version.file, range: version.range})),
+];
+
+/** What an evidence scene writes on screen, as words: for the check that it uses no word before its scene. */
+const shownWords = (scene) => [
+  scene.title, scene.caption, scene.axis, scene.across,
+  ...(scene.metrics || []).flatMap((metric) => [metric.label, metric.detail]),
+  ...(scene.labels || []), ...(scene.columns || []), ...(scene.rows || []).map((row) => (Array.isArray(row) ? row[0] : row)),
+  ...(scene.series || []).flatMap((entry) => [entry.label, ...(entry.points || []).map((point) => point.label)]),
+  ...(scene.callouts || []).map((callout) => callout.label),
+].filter(Boolean).join(' ').toLowerCase();
 
 const IDENTIFIER = /\b[a-z]+_[a-z0-9_]+\b|\b[a-z]+[A-Z][A-Za-z0-9]*\b|\b[A-Za-z_]\w*\(\)/;
 const sameCue = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -299,6 +320,13 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
   const offVocabulary = vocabularyFindings(storyboard);
   // A project `va paper` has read a paper into is a paper video, and is held to that paper's abstract.
   const paper = loadPaper(projectDir);
+  // What the video is made from. A paper read in with no sources declared is the one source, so the
+  // document rules apply to it without anything more being written.
+  const sources = storyboard.sources?.length ? storyboard.sources : paper ? [{id: 'paper', kind: 'paper', title: paper.title || null, path: null, url: null}] : [];
+  const root = projectDir ? path.resolve(projectDir, storyboard.sourceRoot || '.') : null;
+  const documents = sources.filter(isDocument);
+  const coding = sources.some((source) => source.kind === 'code');
+  const figureCount = new Map(); // figures each document draws, read once per routing
 
   // A credit comes after the close: the scene before it is the one that has to end the explanation.
   const closeIndex = count > 1 && scenes[count - 1].kind === 'credit' ? count - 2 : count - 1;
@@ -360,7 +388,8 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
 
     // A paper is explained with its idea and its evidence. Its code is how the authors built the thing, not what the
     // viewer came to understand, and a panel of it beside a small animation is the weakest picture a paper video has.
-    if (paper && (scene.kind === 'code' || scene.kind === 'trace' || scene.need === 'change')) {
+    // The exception is a scene that draws on a code source declared beside the paper (its released code).
+    if (paper && (scene.kind === 'code' || scene.kind === 'trace' || scene.need === 'change') && !sourcesOf(scene, sources, root).some((entry) => entry.kind === 'code')) {
       if (overridden) flag('note', `Code in a paper video: ${scene.override.trim()}`);
       else flag('error', 'This is a paper video, and this scene puts code on screen. A paper is explained with its idea (an animation, full frame) and its evidence (a number, a chart, its figure). Make this a "motion", "branching", or "math" scene that shows what the mechanism does. Keep the code only if the code is what the viewer asked to see, and say so in "override": "<reason>".');
     }
@@ -394,6 +423,65 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
     if (scene.kind === 'figure' && paper && paper.licence?.open === false) {
       flag('review', `This shows a figure from a paper whose licence (${paper.licence.url || 'arXiv, non-exclusive'}) does not grant reuse. Get the authors' permission, or be sure the use is fair where the video will be published; otherwise say what the figure shows with a picture of your own.`);
     }
+
+    // What the scene is drawn from decides which rules apply to each part of it: a document's or code's.
+    const drawn = sourcesOf(scene, sources, root);
+    const docs = drawn.filter(isDocument);
+    const document = docs.length > 0;
+    const named = namedSources(scene);
+    const docNames = docs.map((entry) => `"${entry.id}"`).join(' and ');
+    // With more than one source, each scene says which it draws on: the thinking that decides its rules is done per scene.
+    if (sources.length > 1 && scene.source === undefined && !['title', 'credit', 'bullets'].includes(scene.kind)) {
+      flag('review', `This video draws on ${sources.length} sources (${sources.map((entry) => `${entry.id}: ${entry.kind}`).join(', ')}). Say which this scene draws on: "source": "<id>", a list such as ["${sources[0].id}", "${sources[1].id}"] when it sets one beside the other, or null for a picture of the video's own.${drawn.length ? ` Its file is in "${drawn.map((entry) => entry.id).join('", "')}"; is that all it rests on?` : ''}`);
+    }
+
+    // Each quoted file is held to the rules of the source it sits in.
+    for (const {file, range} of quotedFiles(scene)) {
+      const owner = ownerOf(file, sources, root) || (drawn.length === 1 ? drawn[0] : null);
+      if (owner && named.length && !named.includes(owner.id)) flag('review', `This scene quotes ${path.basename(file)}, which is in "${owner.id}", but its "source" leaves "${owner.id}" out. List every source the scene rests on.`);
+      if (!isProseFile(file) || !root) continue;
+      const full = path.resolve(root, file);
+      if (!existsSync(full)) continue;
+      const text = readFileSync(full, 'utf8').replace(/\r\n/g, '\n');
+      const lines = text.split('\n').length;
+      const excerpt = proseShare(text, file, range || [1, lines]);
+      // A paragraph of a document is read, not explained: shown as code, it is a wall of text with a highlight on it.
+      if (excerpt.counted && excerpt.share >= 0.5) {
+        const what = `${excerpt.prose} of the ${excerpt.counted} lines shown from ${path.basename(file)} are prose${excerpt.longest > 120 ? `, the longest ${excerpt.longest} characters on one line` : ''}`;
+        const fix = 'Put the sentence that carries the claim in a "quote" scene (under forty-five words, with the phrase that matters marked) and animate the idea itself; show code only from an algorithm, a listing, or the released code.';
+        if (overridden) flag('note', `Prose shown as code: ${scene.override.trim()}`);
+        else flag(isDocument(owner) ? 'error' : 'review', `${what}. A paragraph on screen is read, not explained. ${fix}`);
+      } else if (path.extname(file).toLowerCase() === '.tex' && excerpt.counted && excerpt.macros >= excerpt.counted * 0.5) {
+        flag('review', `The lines shown from ${path.basename(file)} are LaTeX: ${excerpt.macros} commands like \\State and \\gets will be shown as they are typed, not as the paper prints them. Quote the released code if there is any; otherwise animate the algorithm and quote one line of it.`);
+      }
+    }
+
+    // A document's claim set beside the code that carries it out: both halves can be checked only if the claim says where it is.
+    const coded = drawn.some((entry) => !isDocument(entry));
+    if (document && coded && !REPORTED.includes(scene.kind) && !(typeof scene.ref === 'string' && REF_PATTERN.test(scene.ref))) {
+      flag('review', `This scene sets what ${docNames} says beside the code in "${drawn.filter((entry) => !isDocument(entry)).map((entry) => entry.id).join('", "')}". Say where the document says it ("ref": "Section 3.2"), so the claim and the code that carries it out can both be checked; and say in the narration if the code does something the document does not.`);
+    }
+    // The document drew its own pictures. Redraw one only when it cannot be read at video size, and say which.
+    if (document && scene.kind === 'diagram' && root && scene.ref === undefined) {
+      // A paper read in by `va paper` lists its figures; any other document is read from its path.
+      const figuresOf = (entry) => (entry.kind === 'paper' && paper ? (paper.figures || []).length : inventory(entry, root).figures.length);
+      const drawnByThem = docs.reduce((sum, entry) => sum + (figureCount.get(entry.id) ?? figureCount.set(entry.id, figuresOf(entry)).get(entry.id)), 0);
+      if (drawnByThem) flag('review', `${docNames} draws ${drawnByThem} figure(s) of its own (\`va paper\` or \`va sources\` lists them). If one shows these parts, use a "figure" scene and point at it. If you redraw it on purpose, because theirs cannot be read at video size, say which in "ref".`);
+    }
+
+    if (document && REPORTED.includes(scene.kind)) {
+      // A number or picture taken from a document says where in it, so a viewer can find it and a reviewer can check it.
+      const located = [scene.ref, scene.caption, scene.attribution].some((where) => typeof where === 'string' && REF_PATTERN.test(where));
+      if (!located) flag('review', `This ${scene.kind} reports what ${docNames} says, but not where it says it. Add "ref": "Table 2", "Figure 4", "Section 3.1", or the like${scene.kind === 'figure' ? ', or start the caption with it' : ''}.`);
+    }
+    if (document && SETS_UP.includes(scene.kind)) {
+      // Evidence comes after the idea it is evidence for: a figure before its explanation is a picture of unknown things.
+      if (scene.after === undefined) flag('review', `This ${scene.kind} is from ${docNames} but nothing says which scene sets it up. Name that scene in "after": the one that explains what the viewer is about to see measured or drawn. Evidence that arrives first is a picture of unknown things.`);
+      const order = new Map(scenes.map((entry, position) => [entry.id, position]));
+      const early = (storyboard.vocabulary || []).filter((entry) => entry.defined && order.get(entry.defined) > index && new RegExp(`\\b${escape(entry.word.toLowerCase())}\\b`).test(shownWords(scene)));
+      for (const entry of early) flag('review', `This ${scene.kind} shows "${entry.word}" before "${entry.defined}", the scene that explains it. Move it after that scene, or label it in plain words.`);
+    }
+    if (document && scene.kind === 'table' && !scene.best) flag('review', `A results table from ${docNames} with no row marked. Mark the row the source is about with "best", so the eye lands on it first.`);
 
     if (!scene.why) flag('review', 'No "why". Record the reason for this route in one sentence so it can be reviewed.');
 
@@ -499,7 +587,7 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
     if (scene.kind !== 'title' && scene.kind !== 'credit' && seconds < 6) flag('review', `About ${seconds.toFixed(0)}s is a short scene; the cut will feel abrupt. Merge it into a neighbour or give it another beat.`);
     if (seconds > 40) flag('review', `About ${seconds.toFixed(0)}s is a long time on one picture. Split it at a turn in the narration.`);
 
-    return {id: scene.id, index, need: scene.need || null, kind: scene.kind, type: scene.type, seconds, status, reasons, hits};
+    return {id: scene.id, index, need: scene.need || null, kind: scene.kind, type: scene.type, sources: drawn.map((entry) => entry.id), document, seconds, status, reasons, hits};
   });
 
   // Rules about the sequence as a whole.
@@ -521,8 +609,25 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
   });
   if (subject === 'algorithm' && !kinds.includes('manim') && !kinds.includes('trace')) seq('review', 'An algorithm video with no Manim or trace scene only shows text. Animate the behaviour at least once.');
   if (subject === 'system' && !kinds.includes('diagram')) seq('review', 'A system video with no diagram never shows how the parts connect. Add an architecture or sequence scene.');
-  // A paper is explained from its claims and its evidence; it may have no code at all.
-  if (!paper && !kinds.includes('code') && !kinds.includes('trace') && !scenes.some((scene) => scene.need === 'change')) seq('review', 'No code scene. An explainer about code should show the real lines at least once.');
+  // A video made only from documents shows no code; one made with code shows its real lines.
+  const codeless = (paper || sources.length > 0) && !coding;
+  if (!codeless && !kinds.includes('code') && !kinds.includes('trace') && !scenes.some((scene) => scene.need === 'change')) seq('review', 'No code scene. An explainer about code should show the real lines at least once.');
+
+  // What the video is made from, recognised before anything was written.
+  if (!sources.length && count > 2) {
+    seq('review', `No "sources". Say what the video is made from before writing it: [{"id": "...", "kind": "${Object.keys(SOURCE_KINDS).join('" | "')}", "path": "...", "url": "..."}]. A paper or a design doc brings its own rules (its evidence, where each number is in it, what sets each figure up); code brings others.`);
+  }
+  for (const source of sources) {
+    if (sources.length > 1 && !rows.some((row) => row.sources.includes(source.id))) seq('review', `Source "${source.id}" (${source.kind}) is declared but no scene draws from it. Use it, or take it out of "sources".`);
+  }
+  if (documents.length) {
+    const reported = rows.filter((row) => row.document && REPORTED.includes(row.kind));
+    if (!reported.length) seq('review', `The video is made from ${documents.map((source) => `"${source.id}" (${source.kind})`).join(', ')} but shows none of its evidence: no number, table, chart, quote, or figure from it. The viewer is asked to take every claim on trust.`);
+    const evidence = rows.filter((row) => EVIDENCE.includes(row.kind)).reduce((sum, row) => sum + row.seconds, 0);
+    if (count > 3 && evidence / Math.max(1, rows.reduce((sum, row) => sum + row.seconds, 0)) > 0.5) {
+      seq('review', `Evidence scenes take ${Math.round((100 * evidence) / rows.reduce((sum, row) => sum + row.seconds, 0))}% of the video. Past half, it is a slide deck of the source: the idea itself still needs an animation or a diagram.`);
+    }
+  }
 
   // The narration is one piece of writing, split up; not a set of lines written a scene at a time.
   const scriptFile = projectDir ? path.join(projectDir, 'script.md') : null;
@@ -661,7 +766,7 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
   rows.forEach((row) => (share[row.kind] = (share[row.kind] || 0) + row.seconds));
   const errors = rows.filter((row) => row.status === 'error').length;
   const reviews = rows.filter((row) => row.status === 'review').length + notes.filter((note) => note.level === 'review').length;
-  return {subject, declaredSubject: Boolean(storyboard.subject), brief: storyboard.brief || null, paper: paperSummary, rows, notes, total, share, errors, reviews, timed: Boolean(timeline)};
+  return {subject, declaredSubject: Boolean(storyboard.subject), brief: storyboard.brief || null, paper: paperSummary, sources, rows, notes, total, share, errors, reviews, timed: Boolean(timeline)};
 };
 
 /** The routing report as text: one line per scene, then whatever needs attention. */
@@ -676,10 +781,12 @@ export const formatRouting = (report) => {
     if (hook) lines.push(`  Hook: ${hook}`);
   }
   if (report.paper) lines.push(`  Paper: ${report.paper.title}. Its abstract makes ${report.paper.claims} claims: ${report.paper.shown} shown, ${report.paper.omitted} set aside, ${report.paper.claims - report.paper.shown - report.paper.omitted} unaccounted for.`);
+  if (report.sources?.length) lines.push(`  Made from: ${report.sources.map((source) => `${source.id} (${source.kind}${SOURCE_KINDS[source.kind]?.document ? ', document rules' : ''})`).join(', ')}.`);
   const width = Math.max(...report.rows.map((row) => row.id.length));
   for (const row of report.rows) {
     const route = row.kind === 'diagram' ? `diagram · ${row.type}` : row.kind;
-    lines.push(`  ${mark[row.status]}  ${row.id.padEnd(width)}  ${(row.need || '?').padEnd(12)} → ${route.padEnd(22)} ${row.seconds.toFixed(0).padStart(3)}s`);
+    const from = report.sources?.length > 1 && row.sources?.length ? `  from ${row.sources.join(' + ')}` : '';
+    lines.push(`  ${mark[row.status]}  ${row.id.padEnd(width)}  ${(row.need || '?').padEnd(12)} → ${route.padEnd(22)} ${row.seconds.toFixed(0).padStart(3)}s${from}`);
     for (const reason of row.reasons) lines.push(`            ${reason.level === 'note' ? 'note' : reason.level}: ${reason.text}`);
   }
   if (report.notes.length) {

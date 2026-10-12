@@ -53,6 +53,9 @@ const Value: React.FC<{metric: Metric; size: number; start: number; length: numb
   );
 };
 
+/** A word of a unit ("episodes") goes under its number in a card; a sign ("%", "×", "ms") stays beside it. */
+const stacks = (metric: Metric) => (metric.unit || '').length > 3;
+
 /** How large a value can be set in `width`: with its unit beside it, or under it when `stacked`. */
 const fit = (metric: Metric, width: number, most: number, stacked = false) => {
   const ems = emWidth(metric.value) + (metric.unit && !stacked ? 0.14 + emWidth(metric.unit) * 0.3 * 0.92 : 0);
@@ -116,7 +119,7 @@ const Cards: React.FC<{scene: StatScene; frame: number}> = ({scene, frame}) => {
   const height = Math.min(body.h, 520);
   const pad = count > 3 ? 32 : 44;
   // One size for every card, set by the longest value, so the numbers can be compared at a glance.
-  const size = Math.min(...scene.metrics.map((metric) => fit(metric, width - pad * 2, [0, 0, 190, 150, 116][count], true)));
+  const size = Math.min(...scene.metrics.map((metric) => fit(metric, width - pad * 2, [0, 0, 190, 150, 116][count], stacks(metric))));
   const {step} = stepAt(scene.steps, frame);
   const newest = (step?.show ?? 0) - 1;
   return (
@@ -154,7 +157,7 @@ const Cards: React.FC<{scene: StatScene; frame: number}> = ({scene, frame}) => {
             <div data-va-text="label" style={{...kicker(count > 3 ? 24 : 26), color: theme.muted}}>
               {metric.label}
             </div>
-            <Value metric={metric} size={size} start={start + 4} length={length} frame={frame} stacked />
+            <Value metric={metric} size={size} start={start + 4} length={length} frame={frame} stacked={stacks(metric)} />
             {metric.detail ? (
               <div data-va-text="detail" style={{fontFamily: SANS, fontSize: count > 3 ? 28 : 32, fontWeight: 500, lineHeight: 1.3, color: theme.text, textWrap: 'balance', opacity: ramp(frame, start + length - 4, 18)}}>
                 {metric.detail}

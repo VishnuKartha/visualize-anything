@@ -25,7 +25,7 @@ Three renderers make pictures. Remotion sets the timing, puts the layers togethe
 | Renderer | Scene kind | The question it answers |
 |---|---|---|
 | Remotion (native) | `title`, `bullets`, `credit` | What is the name of this, now that I know its purpose? What must I remember? Where do I find it? |
-| Remotion (native) | `stat`, `compare`, `chart`, `quote`, `figure` | What did the source measure, claim, and draw? |
+| Remotion (native) | `stat`, `compare`, `chart`, `table`, `matrix`, `quote`, `figure` | What did the source measure, claim, and draw? |
 | Manim | `manim` | How does the algorithm or data structure behave, step by step? What does the math say? |
 | Remotion + Manim | `trace` | What does the code say, and what does it do? |
 | HyperFrames | `hyperframes` | What changed between two versions of the code? How do these numbers compare? |
@@ -36,7 +36,8 @@ Three renderers make pictures. Remotion sets the timing, puts the layers togethe
 The house rules are in [references/taste.md](references/taste.md). Read them before you write a storyboard. These rules have the most effect:
 
 - **Do not show code alone.** When code is on screen, put a picture of its effect next to it. This is a `trace` scene. The router rejects a scene that shows only code.
-- **Do not show code in a paper video.** A paper is explained with its idea and its evidence. See [references/paper.md](references/paper.md), "Its pictures".
+- **Know the material.** Code, a paper, a design doc, documentation, or a topic with no source: identify the kinds at the brief and record them as `sources`. Each scene tells which sources it uses. The part of a scene that comes from a document obeys the rules of a document. See [references/sources.md](references/sources.md).
+- **Do not show code in a paper video.** A paper is explained with its idea and its evidence. The exception is a scene that uses a code source that you declared next to the paper. See [references/paper.md](references/paper.md), "Its pictures".
 - **Animate an algorithm. Do not draw a flowchart of it.** Keep one picture of the data for the full behaviour. Use Archify only when the subject is a system of separate parts.
 - **Open on an animation. Give the context first, then the hook.** The first scene is always a Manim scene. The router rejects all other openings. Start from a thing the viewer knows. Use one or two sentences and a picture the viewer recognises. Then show the hook on that picture. The hook is the core of the problem, or the most interesting fact about the answer. Agree the context and the hook with the user before you write. Do not say the hook to a viewer who does not know the subject. This is the most frequent cause of a bad opening. Do not start with a title card, a lecture, or a link.
 - **Then name the work.** Immediately after the opening, say in one line that this is the aim of the work. Show a title card with its name (`"need": "name"`). A paper video always has a title card.
@@ -90,6 +91,7 @@ Each arrow is a gate. `va facts` errors, routing errors, and a missing Vale stop
 
 A full build renders for some minutes. Agree the content before you start. From the request, find these items and give them to the user in one short message:
 
+- the material: the kinds of source that the request gives (code, a paper, a design doc, documentation, or a topic with no source). Frequently there is more than one: a design doc and the service that it describes, or a paper and its released code. If it is not clear, ask the user. Let the user select more than one.
 - the subject: the file, function, paper, or system
 - the audience: the things they know
 - the length: the default is 60 to 120 seconds
@@ -122,7 +124,7 @@ Then do these steps:
 
 If the user told you to go straight through, select the strongest candidate. Tell the user which candidate you selected and why.
 
-For the other items: if the request leaves a decision open and the decision changes the video, ask. If not, tell the user your assumption and continue. Record the result as `brief` in the storyboard. Record the context as `brief.context` and the hook as `brief.hook`.
+For the other items: if the request leaves a decision open and the decision changes the video, ask. If not, tell the user your assumption and continue. Record the result as `brief` in the storyboard. Record the context as `brief.context` and the hook as `brief.hook`. Record the material as `sources`. The later steps use it: the router applies the rules of a document to the scenes from a document, and the reviewers get the full source.
 
 ### 1. Understand
 
@@ -134,6 +136,13 @@ VA paper <project> <arXiv id, address, or PDF>
 ```
 
 This writes `paper/paper.md`. Read that file. The abstract is first, with one numbered claim on each line. The abstract has priority over the body. Take the focus and the hook from its claims. Account for each claim in the `claims` of the storyboard. Read [references/paper.md](references/paper.md) before you write the brief.
+
+**For a design doc or documentation**, list what it contains:
+
+```bash
+VA sources <project>              # sections, figures, tables, code blocks, each with its location
+VA sources <project> --figures    # also exports each figure to figures/ as a PNG
+```
 
 Read the code that the video explains, from its real location. Decide the one question that the video answers. Decide the three to five ideas that answer it. A good length is 60 to 150 seconds, which is approximately 150 to 380 spoken words.
 
@@ -185,6 +194,7 @@ Do not write a line into the storyboard that is not in the script. Narration tha
 
 Then write `storyboard.json`. It is the one source for all data other than the words. It has a `subject` and an ordered list of scenes. Each scene has a `need` and a list of `beats`. A beat is one spoken line of the script and the visual cue that goes with it. `va route` makes sure that the beats, in order, are the words of the script and no other words.
 
+- For each scene, first decide the sources that it uses: one source, more than one (the decision of a doc next to the code that does it), or none (`null`, a picture of the video's own). Record them as the `source` of the scene. This decision controls the rules for the scene. See [references/sources.md](references/sources.md).
 - Set `subject`. Give each scene a `need` from the list in [references/routing.md](references/routing.md). Record the reason in the `"why"` of the scene.
 - For the format of each field and a full example, see [references/storyboard.md](references/storyboard.md).
 - After the opening, add a title card (`"need": "name"`) for a paper. Add one for code if its name is important before the explanation. The title card has one line: this is the aim of the work.
@@ -241,13 +251,13 @@ A change to a sentence costs nothing now. After the render, it costs a render. S
 VA tts <project>
 ```
 
-This synthesizes one clip for each beat with edge-tts and writes `timeline.json`. It prints the time budget: the number of seconds in the visual window of each beat. Build the diagram focus and the Manim animations to these numbers. The tool keeps a cache of lines that did not change, so a second run after a text change is fast.
+This synthesizes one clip for each beat with edge-tts and writes `timeline.json`. If Edge TTS is not available, use a voice on this machine: `VA_TTS_ENGINE=franken` (franken_tts, with timed words), or `"voice": "say:Samantha"` in the storyboard (macOS `say`, with nothing to install and estimated word timings). It prints the time budget: the number of seconds in the visual window of each beat. Build the diagram focus and the Manim animations to these numbers. The tool keeps a cache of lines that did not change, so a second run after a text change is fast.
 
 ### 6. Visuals
 
 `title`, `bullets`, and `credit` scenes render from the storyboard. No other work is necessary.
 
-**Evidence scenes** (`number`, `contrast`, `chart`, `quote`, `figure`) also render from the storyboard. Read [references/scene-evidence.md](references/scene-evidence.md) for their fields. A `figure` must have its image in the project. For a paper, use these scenes for the results of the paper. Keep the animation for the idea. [references/routing.md](references/routing.md) tells you where each scene goes.
+**Evidence scenes** (`number`, `contrast`, `chart`, `table`, `matrix`, `quote`, `figure`) also render from the storyboard. Evidence from a document has a `ref` (its location in the document) and an `after` (the scene that prepares it). Read [references/scene-evidence.md](references/scene-evidence.md) for their fields. A `figure` must have its image in the project. For a paper, use these scenes for the results of the paper. Keep the animation for the idea. [references/routing.md](references/routing.md) tells you where each scene goes.
 
 **HyperFrames scenes.** Read [references/scene-hyperframes.md](references/scene-hyperframes.md). A `change` scene needs only its `versions` in the storyboard. A `data` scene needs a composition at `html/<scene-id>.html`. Then run:
 

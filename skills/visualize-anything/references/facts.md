@@ -51,6 +51,14 @@ binary_search(watched, 57)
 print(json.dumps({"binary-looks": len(watched.seen), "first-middle": VALUES[watched.seen[0]]}))
 ```
 
+When the oracle needs a library (numpy to compute a toy example the animation draws), declare it at the top of `facts.py` and `va facts` installs it for that run:
+
+```python
+# /// script
+# dependencies = ["numpy"]
+# ///
+```
+
 Three rules make it an oracle and not a second copy of the narration:
 
 - **It runs the real code.** Watch the function to count its work: use a list that records its reads, or a dictionary that records its evictions. Do not implement the function again.

@@ -3,12 +3,13 @@ import path from 'node:path';
 import {normalizeFacts, normalizeVocabulary} from './facts.mjs';
 import {normalizeClaims} from './paper.mjs';
 import {NEEDS, SUBJECTS, resolveRoute} from './router.mjs';
+import {normalizeSources} from './sources.mjs';
 import {findRun, speakable, spokenTokens} from './speech.mjs';
 import {fail, readJson} from './util.mjs';
 
-export const KINDS = ['title', 'code', 'trace', 'hyperframes', 'diagram', 'manim', 'bullets', 'credit', 'stat', 'compare', 'chart', 'quote', 'figure'];
+export const KINDS = ['title', 'code', 'trace', 'hyperframes', 'diagram', 'manim', 'bullets', 'credit', 'stat', 'compare', 'chart', 'table', 'matrix', 'quote', 'figure'];
 // Scenes drawn from the storyboard alone: what the source reports, with its parts arriving by `show`.
-export const EVIDENCE = ['stat', 'compare', 'chart', 'quote', 'figure'];
+export const EVIDENCE = ['stat', 'compare', 'chart', 'table', 'matrix', 'quote', 'figure'];
 const TONES = ['positive', 'negative', 'caution', 'neutral'];
 const IMAGES = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 const SIDES = ['left', 'right', 'above', 'below'];
@@ -29,7 +30,7 @@ export const SETTLED = 32; // frames before its end by which an evidence scene's
 export const PREDICT = 1.5; // extra silence after a beat marked `predict`: the question is asked, and the viewer gets to answer it first
 
 const gapAfter = (beat) => beat.pause ?? (beat.predict ? GAP + PREDICT : beat.land ? GAP + LAND : GAP);
-const HAS_PICTURE = ['manim', 'trace', 'diagram', 'hyperframes', 'stat', 'compare', 'chart', 'figure'];
+const HAS_PICTURE = ['manim', 'trace', 'diagram', 'hyperframes', 'stat', 'compare', 'chart', 'table', 'matrix', 'figure'];
 
 const LANG_BY_EXT = {
   '.ts': 'typescript', '.tsx': 'tsx', '.js': 'javascript', '.jsx': 'jsx', '.mjs': 'javascript', '.cjs': 'javascript',
@@ -147,7 +148,9 @@ export const phraseSpan = (quote, phrase) => {
 export const revealStops = (scene) => {
   const upTo = (count) => Array.from({length: count}, (_, index) => index + 1);
   if (scene.kind === 'stat') return {stops: upTo(scene.metrics.length), bare: false};
-  if (scene.kind === 'chart') return {stops: upTo(scene.labels.length), bare: false};
+  if (scene.kind === 'chart') return {stops: upTo(scene.chart === 'scatter' ? scene.series.reduce((sum, entry) => sum + entry.points.length, 0) : scene.labels.length), bare: false};
+  if (scene.kind === 'table') return {stops: upTo(scene.rows.length), bare: true};
+  if (scene.kind === 'matrix') return {stops: upTo(scene.rows.length), bare: false};
   if (scene.kind === 'quote') return {stops: upTo(scene.highlights.length), bare: true};
   if (scene.kind === 'figure') return {stops: upTo(scene.callouts.length), bare: true};
   // A contrast is made a panel at a time: each stop is one more panel's points.
@@ -187,31 +190,93 @@ const normalizeEvidence = (scene, beats, where, {errors, warnings, paths, strict
     });
     out.versus = scene.versus === true;
   }
-  if (scene.kind === 'chart') {
-    out.chart = scene.chart ?? 'bar';
-    if (!['bar', 'line'].includes(out.chart)) errors.push(`${where}: "chart" must be "bar" or "line".`);
-    out.labels = list(scene.labels).map((label) => String(label));
-    if (out.labels.length < 2 || out.labels.length > 12) errors.push(`${where}: a chart needs "labels", two to twelve of them, one per position along the axis.`);
-    if (new Set(out.labels).size !== out.labels.length) errors.push(`${where}: chart "labels" must be different from each other.`);
-    const authored = Array.isArray(scene.series) ? scene.series : scene.values !== undefined ? [{values: scene.values}] : [];
-    if (authored.length < 1 || authored.length > 4) errors.push(`${where}: a chart needs "values" (one number per label), or "series" (one to four of {"label", "values"}).`);
-    out.series = authored.map((entry, index) => {
-      const at = `${where} series ${index + 1}`;
-      const values = list(entry?.values);
-      if (values.length !== out.labels.length || values.some((value) => typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
-        errors.push(`${at}: "values" must be one number, zero or more, for each of the ${out.labels.length} labels.`);
-      }
-      if (authored.length > 1 && !text(entry?.label)) errors.push(`${at}: with more than one series, each needs a "label" for the legend.`);
-      return {label: text(entry?.label), values};
-    });
-    out.unit = text(scene.unit);
-    out.axis = text(scene.axis);
-    const known = new Set([...out.labels, ...out.series.map((entry) => entry.label).filter(Boolean)]);
+  const checkFocus = (known, what) => {
     beats.flatMap((beat) => [beat, ...beat.cues]).forEach((cue) => {
       if (cue.focus === undefined || cue.focus === null) return;
-      if (!Array.isArray(cue.focus)) errors.push(`${where}: a chart's "focus" is a list of its labels or series: the ones the sentence is about.`);
-      else for (const name of cue.focus) if (!known.has(name)) errors.push(`${where}: "focus" names "${name}", which is not one of the chart's labels or series (${[...known].join(', ')}).`);
+      if (!Array.isArray(cue.focus)) errors.push(`${where}: "focus" is a list of the ${what} the sentence is about.`);
+      else for (const name of cue.focus) if (!known.has(name)) errors.push(`${where}: "focus" names "${name}", which is not one of the ${what} (${[...known].join(', ')}).`);
     });
+  };
+  const finite = (value) => typeof value === 'number' && Number.isFinite(value);
+  if (scene.kind === 'chart') {
+    out.chart = scene.chart ?? 'bar';
+    if (!['bar', 'line', 'scatter'].includes(out.chart)) errors.push(`${where}: "chart" must be "bar", "line", or "scatter".`);
+    out.unit = text(scene.unit);
+    out.axis = text(scene.axis);
+    if (out.chart === 'scatter') {
+      // A trade-off: each point is one system, placed by two measurements.
+      out.across = text(scene.across);
+      if (!out.across || !out.axis) errors.push(`${where}: a scatter chart needs "axis" (what is measured up the side) and "across" (what is measured along the bottom), each with which way is better.`);
+      out.labels = [];
+      const authored = Array.isArray(scene.series) ? scene.series : Array.isArray(scene.points) ? [{points: scene.points}] : [];
+      if (authored.length < 1 || authored.length > 4) errors.push(`${where}: a scatter chart needs "points" (each {"x", "y", "label"}), or "series" (one to four of {"label", "points"}).`);
+      out.series = authored.map((entry, index) => {
+        const at = `${where} series ${index + 1}`;
+        if (authored.length > 1 && !text(entry?.label)) errors.push(`${at}: with more than one series, each needs a "label" for the legend.`);
+        return {
+          label: text(entry?.label),
+          values: [],
+          points: list(entry?.points).map((point, pointIndex) => {
+            if (!finite(point?.x) || !finite(point?.y) || point.x < 0 || point.y < 0) errors.push(`${at} point ${pointIndex + 1}: needs "x" and "y", numbers zero or more.`);
+            return {x: point?.x ?? 0, y: point?.y ?? 0, label: text(point?.label)};
+          }),
+        };
+      });
+      const total = out.series.reduce((sum, entry) => sum + entry.points.length, 0);
+      if (total < 2 || total > 16) errors.push(`${where}: a scatter chart shows two to sixteen points; it has ${total}.`);
+      checkFocus(new Set(out.series.flatMap((entry) => [entry.label, ...entry.points.map((point) => point.label)]).filter(Boolean)), "chart's point labels or series");
+    } else {
+      out.labels = list(scene.labels).map((label) => String(label));
+      if (out.labels.length < 2 || out.labels.length > 12) errors.push(`${where}: a chart needs "labels", two to twelve of them, one per position along the axis.`);
+      if (new Set(out.labels).size !== out.labels.length) errors.push(`${where}: chart "labels" must be different from each other.`);
+      const authored = Array.isArray(scene.series) ? scene.series : scene.values !== undefined ? [{values: scene.values}] : [];
+      if (authored.length < 1 || authored.length > 4) errors.push(`${where}: a chart needs "values" (one number per label), or "series" (one to four of {"label", "values"}).`);
+      out.series = authored.map((entry, index) => {
+        const at = `${where} series ${index + 1}`;
+        const values = list(entry?.values);
+        if (values.length !== out.labels.length || values.some((value) => !finite(value) || value < 0)) {
+          errors.push(`${at}: "values" must be one number, zero or more, for each of the ${out.labels.length} labels.`);
+        }
+        if (authored.length > 1 && !text(entry?.label)) errors.push(`${at}: with more than one series, each needs a "label" for the legend.`);
+        return {label: text(entry?.label), values};
+      });
+      checkFocus(new Set([...out.labels, ...out.series.map((entry) => entry.label).filter(Boolean)]), "chart's labels or series");
+    }
+  }
+  if (scene.kind === 'table') {
+    // A results table, cut down to the rows the sentence compares. Its first column names each row.
+    out.columns = list(scene.columns).map((column) => String(column));
+    if (out.columns.length < 2 || out.columns.length > 5) errors.push(`${where}: a table needs "columns", two to five of them; the first names each row.`);
+    if (!Array.isArray(scene.rows) || scene.rows.length < 1 || scene.rows.length > 6) errors.push(`${where}: a table needs "rows", one to six of them. A table of more is read, not watched: keep the rows the sentence compares.`);
+    out.rows = list(scene.rows).map((cells, index) => {
+      if (!Array.isArray(cells) || cells.length !== out.columns.length) errors.push(`${where} row ${index + 1}: must be a list of ${out.columns.length} cells, one per column.`);
+      return list(cells).map((cell) => (cell === null || cell === undefined ? '' : String(cell)));
+    });
+    const names = out.rows.map((cells) => cells[0]);
+    if (new Set(names).size !== names.length) errors.push(`${where}: each row's first cell names it, so they must differ.`);
+    out.best = text(scene.best);
+    if (out.best && !names.includes(out.best)) errors.push(`${where}: "best" is "${out.best}", which names no row (${names.join(', ')}).`);
+    out.highlight = list(scene.highlight === undefined ? [] : [scene.highlight].flat()).map(String);
+    for (const column of out.highlight) if (!out.columns.includes(column)) errors.push(`${where}: "highlight" names "${column}", which is not a column.`);
+    out.caption = text(scene.caption);
+    checkFocus(new Set([...names, ...out.columns]), "table's row names or columns");
+  }
+  if (scene.kind === 'matrix') {
+    // A grid of values coloured by size: attention weights, a confusion matrix, a correlation table.
+    out.rows = list(scene.rows).map(String);
+    out.columns = list(scene.columns).map(String);
+    if (out.rows.length < 2 || out.rows.length > 8 || out.columns.length < 2 || out.columns.length > 8) errors.push(`${where}: a matrix needs "rows" and "columns", two to eight labels each.`);
+    if (!Array.isArray(scene.values) || scene.values.length !== out.rows.length || scene.values.some((cells) => !Array.isArray(cells) || cells.length !== out.columns.length || cells.some((value) => !finite(value)))) {
+      errors.push(`${where}: "values" must be ${out.rows.length} rows of ${out.columns.length} numbers, one per cell.`);
+    }
+    out.values = list(scene.values).map((cells) => list(cells).map(Number));
+    out.numbers = scene.numbers !== false;
+    if (out.numbers && out.columns.length > 6) warnings.push(`${where}: ${out.columns.length} columns of numbers will be small; set "numbers": false to show the colours alone.`);
+    const flat = out.values.flat().filter(Number.isFinite);
+    out.scale = Array.isArray(scene.scale) && scene.scale.length === 2 && scene.scale.every(finite) && scene.scale[0] < scene.scale[1] ? scene.scale : flat.length ? [Math.min(0, ...flat), Math.max(...flat)] : [0, 1];
+    if (scene.scale !== undefined && out.scale !== scene.scale) errors.push(`${where}: "scale" is [low, high], the values the lightest and the strongest colour stand for.`);
+    out.axis = text(scene.axis);
+    checkFocus(new Set([...out.rows, ...out.columns]), "matrix's row or column labels");
   }
   if (scene.kind === 'quote') {
     out.quote = text(scene.quote) || '';
@@ -230,6 +295,15 @@ const normalizeEvidence = (scene, beats, where, {errors, warnings, paths, strict
     else if (!IMAGES.includes(path.extname(out.image).toLowerCase())) errors.push(`${where}: "image" must be one of ${IMAGES.join(', ')}. Export a PDF figure to PNG first.`);
     else if (strict && !existsSync(path.resolve(paths.dir, out.image))) errors.push(`${where}: image not found: ${path.resolve(paths.dir, out.image)}.`);
     out.caption = text(scene.caption);
+    // A dense figure is cut down to the panel the sentence is about, in percentages of the whole image.
+    out.crop = null;
+    if (scene.crop !== undefined) {
+      const crop = scene.crop;
+      const fields = ['x', 'y', 'width', 'height'];
+      if (!crop || fields.some((field) => !finite(crop[field])) || crop.x < 0 || crop.y < 0 || crop.width <= 0 || crop.height <= 0 || crop.x + crop.width > 100 || crop.y + crop.height > 100) {
+        errors.push(`${where}: "crop" is {"x", "y", "width", "height"}: the region to show, as percentages of the image, inside 0 to 100.`);
+      } else out.crop = Object.fromEntries(fields.map((field) => [field, crop[field]]));
+    }
     if (scene.callouts !== undefined && (!Array.isArray(scene.callouts) || scene.callouts.length > 5)) errors.push(`${where}: "callouts" is a list of up to five {"label", "x", "y"}.`);
     out.callouts = list(scene.callouts).slice(0, 5).map((callout, index) => {
       const at = `${where} callout ${index + 1}`;
@@ -276,6 +350,8 @@ export const loadStoryboard = (paths, {strict = true} = {}) => {
     sourceRoot: raw.sourceRoot || '.',
     scenes: [],
   };
+  // What the video is made from: recognised at the brief, and carried to every scene drawn from it.
+  storyboard.sources = normalizeSources(raw.sources, errors);
   storyboard.facts = normalizeFacts(raw.facts, errors);
   storyboard.vocabulary = normalizeVocabulary(raw.vocabulary, errors);
   const factById = new Map(storyboard.facts.map((fact) => [fact.id, fact]));
@@ -308,6 +384,22 @@ export const loadStoryboard = (paths, {strict = true} = {}) => {
       return;
     }
     const normalized = {...scene, beats: []};
+    // The sources a scene draws on: one id, a list of them (a design doc's decision beside the code), or null for the video's own picture.
+    if (scene.source !== undefined && scene.source !== null) {
+      const named = [scene.source].flat();
+      if (!named.length || named.some((id) => typeof id !== 'string')) errors.push(`${where}: "source" is a source id, a list of them, or null for a picture of the video's own.`);
+      else if (new Set(named).size !== named.length) errors.push(`${where}: "source" names a source twice.`);
+      for (const id of named.filter((entry) => typeof entry === 'string' && !storyboard.sources.some((source) => source.id === entry))) {
+        errors.push(`${where}: "source" "${id}" is not one of the storyboard's "sources" (${storyboard.sources.map((source) => source.id).join(', ') || 'none declared'}).`);
+      }
+    }
+    if (scene.ref !== undefined && !text(scene.ref)) errors.push(`${where}: "ref" says where in the source this comes from ("Table 2", "Figure 4", "Section 3.1").`);
+    // The scene that sets up what this one shows has to have been seen first.
+    if (scene.after !== undefined) {
+      if (typeof scene.after !== 'string' || !storyboard.scenes.some((entry) => entry.id === scene.after)) {
+        errors.push(`${where}: "after" is "${scene.after}", which is not an earlier scene. It names the scene that sets up what this one shows, and that scene comes first.`);
+      }
+    }
 
     scene.beats.forEach((beat, beatIndex) => {
       const at = `${where} beat ${beatIndex + 1}`;

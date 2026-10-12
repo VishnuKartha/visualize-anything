@@ -20,6 +20,28 @@ const niceTop = (value: number) => {
   return (lead <= 1 ? 1 : lead <= 2 ? 2 : lead <= 4 ? 4 : lead <= 5 ? 5 : lead <= 8 ? 8 : 10) * power;
 };
 
+/** A round step at or above `value`: 1, 2, 2.5, or 5 times a power of ten. */
+const niceStep = (value: number) => {
+  const power = 10 ** Math.floor(Math.log10(value));
+  const lead = value / power;
+  return (lead <= 1 ? 1 : lead <= 2 ? 2 : lead <= 2.5 ? 2.5 : lead <= 5 ? 5 : 10) * power;
+};
+
+/**
+ * Four round steps that hold every value with a little room either side. A scatter places points by
+ * position, not by length, so its axes fit the data: a trade-off between 24 and 28 is not flattened
+ * against a zero nobody measured near.
+ */
+const fit = (values: number[]) => {
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const span = high - low || Math.abs(high) || 1;
+  for (let step = niceStep(span / 4); ; step = niceStep(step * 1.01)) {
+    const from = Math.max(low >= 0 ? 0 : -Infinity, Math.floor((low - span * 0.08) / step) * step);
+    if (from + step * 4 >= high + span * 0.08) return {from, to: from + step * 4};
+  }
+};
+
 const tick = (value: number) => (Math.abs(value) >= 1000 ? value.toLocaleString('en-US') : String(Number(value.toFixed(4))));
 
 /** How lit a label or series is under a step's focus: everything, when nothing is singled out. */
@@ -45,8 +67,14 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
   const count = scene.labels.length;
   const many = scene.series.length > 1;
   const plot = {x: PAD.left, y: PAD.top, w: body.w - PAD.left - PAD.right, h: body.h - PAD.top - PAD.bottom};
-  const top = niceTop(Math.max(...scene.series.flatMap((entry) => entry.values)));
-  const yOf = (value: number) => plot.y + plot.h * (1 - value / top);
+  // A scatter places each point by two measurements; its points are counted across the series in order.
+  const scatter = scene.chart === 'scatter';
+  const dots = scene.series.flatMap((entry, seriesIndex) => (entry.points || []).map((point) => ({...point, seriesIndex, series: entry.label})));
+  const ys = scatter ? fit(dots.map((dot) => dot.y)) : {from: 0, to: niceTop(Math.max(...scene.series.flatMap((entry) => entry.values)))};
+  const xs = scatter ? fit(dots.map((dot) => dot.x)) : {from: 0, to: 1};
+  const top = ys.to;
+  const xOf = (value: number) => plot.x + (plot.w * (value - xs.from)) / (xs.to - xs.from);
+  const yOf = (value: number) => plot.y + plot.h * (1 - (value - ys.from) / (top - ys.from));
   const slot = plot.w / count;
   const focus = (label: string, series: string | null) => lerp(previous ? lit(previous, label, series) : lit(step, label, series), lit(step, label, series), p);
   const singled = Array.isArray(step?.focus);
@@ -55,7 +83,28 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
   const roomy = count * scene.series.length <= 8;
   const size = slot / scene.series.length < 130 ? 28 : 34;
 
-  const marks = scene.chart === 'bar' ? (
+  const marks = scatter ? (
+    dots.map((dot, index) => {
+      const arrived = entered(index, 18, 6);
+      if (arrived <= 0) return null;
+      const color = many ? COLORS[dot.seriesIndex % COLORS.length] : theme.accent;
+      const on = singled || previous?.focus ? focus(dot.label || '', dot.series) : 1;
+      const x = xOf(dot.x);
+      const y = yOf(dot.y);
+      // A label goes on the side of the point with more room.
+      const flip = x > plot.x + plot.w * 0.72;
+      return (
+        <g key={index} opacity={arrived * lerp(DIM, 1, on)}>
+          <circle cx={x} cy={y} r={lerp(13, 18, singled ? on : 0) * (0.4 + 0.6 * arrived)} fill={color} stroke={theme.bg} strokeWidth={4} />
+          {dot.label ? (
+            <text data-va-text="value" x={x + (flip ? -26 : 26)} y={y + 10} textAnchor={flip ? 'end' : 'start'} fontFamily={SANS} fontSize={30} fontWeight={700} fill={theme.text}>
+              {dot.label}
+            </text>
+          ) : null}
+        </g>
+      );
+    })
+  ) : scene.chart === 'bar' ? (
     scene.labels.map((label, index) => {
       const grown = entered(index, 26, 5);
       const start = arrival(scene.steps, index, 5);
@@ -148,7 +197,7 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
       >
         <svg width={body.w} height={body.h} style={{position: 'absolute', inset: 0}}>
           {[0, 1, 2, 3, 4].map((line) => {
-            const value = (top * line) / 4;
+            const value = ys.from + ((top - ys.from) * line) / 4;
             return (
               <g key={line}>
                 <line x1={plot.x} x2={plot.x + plot.w} y1={yOf(value)} y2={yOf(value)} stroke={line ? theme.panelBorder : theme.dim} strokeWidth={line ? 1 : 2} />
@@ -159,6 +208,18 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
             );
           })}
           {marks}
+          {scatter
+            ? [0, 1, 2, 3, 4].map((line) => (
+                <text key={`x${line}`} data-va-text="axis" x={xOf(xs.from + ((xs.to - xs.from) * line) / 4)} y={plot.y + plot.h + 44} textAnchor="middle" fontFamily={MONO} fontSize={24} fill={theme.muted}>
+                  {tick(xs.from + ((xs.to - xs.from) * line) / 4)}
+                </text>
+              ))
+            : null}
+          {scatter && scene.across ? (
+            <text data-va-text="axis" x={plot.x + plot.w} y={plot.y + plot.h + 88} textAnchor="end" fontFamily={MONO} fontSize={24} fontWeight={500} letterSpacing="0.06em" fill={theme.muted}>
+              {scene.across}
+            </text>
+          ) : null}
           {scene.labels.map((label, index) => (
             <text
               key={label}

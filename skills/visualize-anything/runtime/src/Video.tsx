@@ -5,6 +5,8 @@ import {AbsoluteFill, Sequence, interpolate, staticFile, useCurrentFrame, useVid
 import {Captions} from './Captions';
 import {BulletsView} from './scenes/Bullets';
 import {ChartView} from './scenes/Chart';
+import {MatrixView} from './scenes/Matrix';
+import {TableView} from './scenes/Table';
 import {CompareView} from './scenes/Compare';
 import {CreditView} from './scenes/Credit';
 import {CodeView} from './scenes/Code';
@@ -60,6 +62,10 @@ export const View: React.FC<{scene: Scene}> = ({scene}) => {
       return <CompareView scene={scene} />;
     case 'chart':
       return <ChartView scene={scene} />;
+    case 'table':
+      return <TableView scene={scene} />;
+    case 'matrix':
+      return <MatrixView scene={scene} />;
     case 'quote':
       return <QuoteView scene={scene} />;
     case 'figure':

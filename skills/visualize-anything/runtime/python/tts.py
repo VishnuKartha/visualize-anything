@@ -4,7 +4,7 @@
 # dependencies = ["edge-tts>=7.0"]
 # ///
 """
-Narration synthesis for visualize-anything (Microsoft Edge TTS, no API key).
+Narration synthesis for visualize-anything (Microsoft Edge TTS, no API key; or macOS `say`).
 
 Reads a job file listing every narration beat, synthesizes one MP3 per beat,
 measures its exact duration with ffprobe, and records word-level timings. Those
@@ -20,6 +20,10 @@ Edge TTS is an online service. When it is unavailable, VA_TTS_ENGINE=franken
 synthesizes on this machine instead: `franken_tts` speaks each beat, and
 `franken_whisper` listens to the result to time its words. VA_TTS_VOICE names
 the local voice (default "matt"); the storyboard's rate is applied as tempo.
+A voice written `say:<name>` (e.g. `say:Samantha`) is spoken by macOS `say`
+instead, offline. It reports no word timings, so each word is given a share of
+the clip in proportion to its length: captions and word-anchored cues land
+near their words rather than on them.
 """
 
 import argparse
@@ -28,6 +32,7 @@ import difflib
 import hashlib
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -37,8 +42,9 @@ from pathlib import Path
 import edge_tts
 
 TICKS_PER_SECOND = 10_000_000  # edge-tts reports offsets in 100ns units
-CONCURRENCY = 4
-ATTEMPTS = 3
+# The service answers 403 when it is asked too often; fewer at once, and a longer wait each time.
+CONCURRENCY = 2
+ATTEMPTS = 6
 ENGINE = os.environ.get("VA_TTS_ENGINE", "edge")  # "edge": Microsoft's online voices. "franken": local.
 LEAD_TRIM = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.04"
 LEVEL = "loudnorm=I=-19:TP=-2:LRA=11"
@@ -62,7 +68,38 @@ def ffprobe_duration(path: Path) -> float:
     return float(result.stdout.strip())
 
 
+SAY_WPM = 175  # macOS `say` speaks at about this many words a minute at "+0%"
+
+
+def estimated_words(text: str, duration: float) -> list:
+    """Word timings for an engine that reports none: each word gets time in proportion to its length."""
+    tokens = text.split()
+    weights = [len(token) + 1 for token in tokens]
+    total, spoken = sum(weights) or 1, max(0.0, duration - 0.15)
+    words, cursor = [], 0.05
+    for token, weight in zip(tokens, weights):
+        span = spoken * weight / total
+        words.append({"text": token.strip(".,;:!?\"'()"), "start": round(cursor, 3), "end": round(cursor + span * 0.9, 3)})
+        cursor += span
+    return words
+
+
+def synthesize_say(text: str, voice: str, rate: str, mp3: Path, meta: Path) -> None:
+    """Speak with macOS `say`, convert to MP3, and estimate word timings."""
+    if not shutil.which("say"):
+        raise RuntimeError('"say:" voices need macOS `say`, which is not on this machine')
+    percent = float(rate.strip().rstrip("%") or 0)
+    aiff = mp3.with_suffix(".aiff")
+    subprocess.run(["say", "-v", voice.split(":", 1)[1], "-r", str(round(SAY_WPM * (1 + percent / 100))), "-o", str(aiff), text], check=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(aiff), "-ar", "24000", "-ac", "1", "-b:a", "96k", str(mp3)], check=True)
+    aiff.unlink()
+    duration = ffprobe_duration(mp3)
+    meta.write_text(json.dumps({"duration": round(duration, 3), "words": estimated_words(text, duration), "estimated": True}))
+
+
 async def synthesize(text: str, voice: str, rate: str, pitch: str, mp3: Path, meta: Path) -> None:
+    if voice.startswith("say:"):
+        return await asyncio.to_thread(synthesize_say, text, voice, rate, mp3, meta)
     last_error = None
     for attempt in range(ATTEMPTS):
         try:
@@ -84,8 +121,11 @@ async def synthesize(text: str, voice: str, rate: str, pitch: str, mp3: Path, me
             return
         except Exception as error:  # network hiccups are the common case; retry them
             last_error = error
-            await asyncio.sleep(1.5 * (attempt + 1))
-    raise RuntimeError(f"TTS failed for {text[:60]!r}: {last_error}")
+            await asyncio.sleep(2 ** attempt + random.random() * 2)  # 1, 2, 4, 8, 16 seconds, plus jitter
+    hint = ""
+    if "403" in str(last_error):
+        hint = ' The service refused every attempt. If it is down for everyone (it was from 2026-10-11, edge-tts issue #490), narrate on this machine until it is back: VA_TTS_ENGINE=franken (franken_tts, with timed words), or "voice": "say:Samantha" in the storyboard (macOS `say`, nothing to install).'
+    raise RuntimeError(f"TTS failed for {text[:60]!r}: {last_error}.{hint}")
 
 
 def _spoken(text: str) -> list[str]:
@@ -172,12 +212,13 @@ async def main() -> None:
     cache_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
     voice, rate, pitch = job["voice"], job.get("rate", "+0%"), job.get("pitch", "+0Hz")
-    local = ENGINE == "franken"
+    # A `say:` voice is the storyboard's own choice, so it wins over VA_TTS_ENGINE.
+    local = ENGINE == "franken" and not voice.startswith("say:")
     speaker = voice  # who is heard; the manifest keeps the storyboard's `voice`, which the timeline is checked against
     if local:
         # The storyboard names an Edge voice by default; a local run takes VA_TTS_VOICE, or a local name if the storyboard has one.
         speaker = os.environ.get("VA_TTS_VOICE") or (voice if voice in LOCAL_VOICES else "matt")
-    elif ENGINE != "edge":
+    elif ENGINE not in ("edge", "franken"):
         raise RuntimeError(f'VA_TTS_ENGINE is "{ENGINE}"; it must be "edge" or "franken"')
 
     semaphore = asyncio.Semaphore(1 if local else CONCURRENCY)  # one local model at a time

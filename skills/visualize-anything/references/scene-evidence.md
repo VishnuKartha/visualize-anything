@@ -1,16 +1,18 @@
 # Evidence scenes
 
-Five scene kinds show the things that the source reports: its number, its comparison, its measurements, its words, its figure. They are most important when the subject is a paper, because the claims of a paper are only as good as its evidence. A benchmark in a README or a table in a design document is the same thing.
+Seven scene kinds show the things that the source reports: its number, its comparison, its measurements, its table, a grid of its values, its words, its figure. They are most important when the subject is a paper, because the claims of a paper are only as good as its evidence. A benchmark in a README or a table in a design document is the same thing.
 
 | `need` | Kind | The question it answers |
 |---|---|---|
 | `number` | `stat` | How much? How many? One large number, or four at most side by side. |
 | `contrast` | `compare` | What are the alternatives, and what does each get right and wrong? |
-| `chart` | `chart` | How do these measurements compare, or change from one round to the next? |
+| `chart` | `chart` | How do these measurements compare, or change from one round to the next? Which system wins a trade-off? |
+| `table` | `table` | What exactly did each row score, and which row is the source's own? |
+| `matrix` | `matrix` | What does this grid of values look like: where is it strong, where is it weak? |
 | `quote` | `quote` | What exactly did the source claim? |
 | `figure` | `figure` | What did the source draw, and where must I look in it? |
 
-Remotion draws all five from the storyboard. You write no script and render no clip first. `va stills` shows them immediately after `va tts`. The tool measures their layout as it does for a title or a recap.
+Remotion draws all seven from the storyboard. You write no script and render no clip first. `va stills` shows them immediately after `va tts`. The tool measures their layout as it does for a title or a recap.
 
 They do not replace the explanation. Animate the idea in Manim or in a diagram. These scenes go before and after it, and say what was measured and what it is compared with. A video made only of these scenes is a slide deck.
 
@@ -26,6 +28,18 @@ Each evidence scene has parts: metrics, points, bars, marked phrases, callouts. 
 The facts ledger holds each number in these scenes, as it holds a number in the narration: the value of a metric, the values of a chart, a number in a point or a quote. The axis labels of a chart are the exception. "Round 1" names a position and measures nothing.
 
 For a paper, most numbers belong to the paper, and nothing in the project calculates them. Give each a row with `"given"` and its location in the paper ("Table 2, bridge task, round 1"). See [facts.md](facts.md).
+
+## Where it comes from, and what comes before it
+
+Evidence from a document (a paper, a design doc, documentation) has two more fields. See [sources.md](sources.md).
+
+| Field | Meaning |
+|---|---|
+| `ref` | The location in the document: `"Table 2"`, `"Figure 4"`, `"Section 3.1"`, `"Abstract"`. A `figure` caption or a `quote` attribution that starts with one is also correct. `va paper` and `va sources` give the number of each figure and table. |
+| `after` | The id of the earlier scene that prepares this one: the scene that explains the thing that the viewer sees measured or drawn. |
+| `source` | Which source the scene shows, when there is more than one. Use `null` for a picture of the video's own, for example a toy matrix that you calculated. No source reports it. |
+
+The router asks for `ref` and `after` on a `stat`, `chart`, `table`, `matrix`, or `figure` from a document. A `quote` needs only `ref`. An `after` that names a later scene is an error.
 
 ## `stat`: the number
 
@@ -107,14 +121,105 @@ Write the points in parallel. If the left panel says what it remembers and what 
 |---|---|
 | `labels` | Two to twelve positions along the axis, in order. |
 | `values` | One number for each label, zero or more. Or `series`: one to four of `{"label", "values"}` for grouped bars or some lines, with a legend. |
-| `chart` | `"bar"` (the default) or `"line"`. A line is for an ordered axis (rounds, sizes, time). Bars are for separate things. |
+| `chart` | `"bar"` (the default), `"line"`, or `"scatter"`. A line is for an ordered axis (rounds, sizes, time). Bars are for separate things. A scatter is for a trade-off. |
 | `unit` | Written after each value when there is one series: `"s"`, `"%"`. |
 | `axis` | A short line in the corner of the chart. It says what is measured and which direction is better. |
 
 - `show` is the number of labels drawn. Bars grow from the axis. A line draws to its next point. Each value counts up when its mark arrives.
 - `focus` names the labels or series that the sentence is about. With one series, the bars in focus keep the accent and the others become slate.
-- The axis always starts at zero. A chart that starts at a different value makes the difference look larger than it is.
+- The axis of a bar or line chart always starts at zero. A bar that starts at a different value makes the difference look larger than it is. A scatter is different: the eye reads a point by its position, not its length, so the axes of a scatter fit the data.
 - Chart only the values that the narration compares. A table of forty cells is not a chart. The four cells that make the point are.
+
+### A scatter: the trade-off
+
+```json
+{
+  "id": "tradeoff",
+  "need": "chart",
+  "chart": "scatter",
+  "why": "Score against cost is a trade-off, so each model is one point that both measures place.",
+  "ref": "Table 2",
+  "after": "idea",
+  "axis": "BLEU, EN-DE (higher is better)",
+  "across": "training cost, 10^18 FLOPs (lower is better)",
+  "series": [
+    {"label": "Earlier models", "points": [{"x": 9.6, "y": 25.16, "label": "ConvS2S"}, {"x": 20, "y": 26.03, "label": "MoE"}]},
+    {"label": "Transformer", "points": [{"x": 3.3, "y": 27.3, "label": "base"}, {"x": 23, "y": 28.4, "label": "big"}]}
+  ],
+  "beats": [
+    {"say": "Put cost along the bottom and score up the side."},
+    {"say": "The base model is up and to the left: better, and cheaper than all of them.", "focus": ["base"]}
+  ]
+}
+```
+
+- Give `points` (one series) or `series` (one to four of `{"label", "points"}`). Each point is `{"x", "y", "label"}`. Use two to sixteen points in total.
+- `axis` tells what is measured up the side. `across` tells what is measured along the bottom. Each tells which direction is better. Both are necessary: a trade-off with no direction is only two numbers.
+- `show` counts points, across the series in order. `focus` names point labels or series.
+
+## `table`: the rows that the sentence compares
+
+```json
+{
+  "id": "results",
+  "need": "table",
+  "why": "The results of the paper, cut to the rows that the sentence compares.",
+  "ref": "Table 2",
+  "after": "idea",
+  "columns": ["Model", "EN-DE BLEU", "EN-FR BLEU", "Training FLOPs"],
+  "rows": [["ConvS2S", "25.16", "40.46", "9.6e18"], ["MoE", "26.03", "40.56", "2.0e19"], ["Transformer (big)", "28.4", "41.8", "2.3e19"]],
+  "best": "Transformer (big)",
+  "highlight": "EN-DE BLEU",
+  "caption": "Table 2, newstest2014",
+  "beats": [
+    {"say": "Against the strongest models of the time, on English to German translation."},
+    {"say": "The big Transformer scores twenty-eight point four, the best in the table.", "focus": ["Transformer (big)"]}
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `columns` | Two to five headings. The first heading names each row. |
+| `rows` | One to six rows, with one cell for each column. Write a cell as it must read (`"28.4"`, `"9.6e18"`). Numbers count up when their row arrives. |
+| `best` | The name (the first cell) of the row of the source. The tool tints it, gives it an accent edge, and makes its values bold. Mark one in each table from a document. |
+| `highlight` | One or more columns that the sentence is about. The heading gets the accent. The values are bold. |
+| `caption` | A line under the table that tells where it comes from. |
+
+- The header is on screen from the start. `show` counts rows. Each row comes in when the voice gets to it. If the scene has a beat to spare, the table starts empty.
+- `focus` names rows (by their first cell) or columns. The others step back.
+- Keep the rows that the sentence compares. Cut a table of twenty rows to the three or four rows that make the point. If the omitted rows are important, the narration says so.
+
+## `matrix`: a grid of values
+
+```json
+{
+  "id": "weights",
+  "need": "matrix",
+  "source": null,
+  "why": "A toy of what attention calculates: each row is the weights of one word over the sentence.",
+  "rows": ["the", "cat", "sat"],
+  "columns": ["the", "cat", "sat"],
+  "values": [[0.6, 0.3, 0.1], [0.2, 0.5, 0.3], [0.1, 0.6, 0.3]],
+  "axis": "each row sums to 1",
+  "beats": [
+    {"say": "Attention is a grid of weights: each word decides how much to look at each other word."},
+    {"say": "Here, sat looks mostly at cat.", "focus": ["sat"]}
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `rows`, `columns` | Two to eight labels each. |
+| `values` | One row of numbers for each row label, with one number for each column. |
+| `scale` | Optional `[low, high]`: the values for the faintest and the strongest colour. The default is from zero (or the lowest value, if it is less than zero) to the highest. Set it when you compare two matrices, so one colour shows the same value in both. |
+| `numbers` | `false` shows the colours only. Use it for a grid that is too large to read cell by cell (more than six columns). The facts ledger does not examine values that are not shown. |
+| `axis` | A short line under the grid: what a row is, or what the values are. |
+
+- `show` counts rows. Each row fills from left to right when the voice gets to it.
+- `focus` names rows or columns. Their cells stay bright. The others become dim. "sat looks at cat" is `"focus": ["sat"]`.
+- A matrix that you calculate for the video (a toy) is `"source": null`, and its values come from `facts.py`. A matrix from the paper (a confusion matrix in its appendix) has a `ref`, the same as other evidence.
 
 ## `quote`: the source's words
 
@@ -161,7 +266,8 @@ Write the points in parallel. If the left panel says what it remembers and what 
 - Each callout points at `x`, `y`, as percentages of the image from its top left. `side` is the position of the label from its point: `left`, `right`, `above`, or `below`. The default is right of a point in the left of the image, and left of a point in the right. Use `va stills` to position them: look, move, look again.
 - `show` counts callouts. The frame moves a small distance to the newest callout. The earlier labels stay and step back.
 - Use the figure of the paper. Do not build it again as a chart or a diagram. The authors selected that picture, and a reader recognises it. Give its source in `caption`. Make sure that you can reproduce it: a figure from an arXiv paper has the licence that the authors selected there.
-- A viewer cannot read a dense figure at video size. Crop the panel that the narration is about before you use it.
+- A viewer cannot read a dense figure at video size. Show the panel that the narration is about with `crop`: `{"x", "y", "width", "height"}`, as percentages of the image from its top left. The tool shows only that region, at its own shape. The callout positions are then percentages of the region that the viewer sees.
+- `va paper` puts the figures of a paper in `paper/figures/`. `va sources <project> --figures` exports the figures of a design doc or documentation to `figures/` as PNGs.
 
 ## What they are not for
 

@@ -1,6 +1,7 @@
 {
   "title": "Why binary search needs so few steps",
   "subject": "algorithm",
+  "sources": [{"id": "binary-search", "kind": "code", "title": "binary_search.py", "path": "src"}],
   "brief": {
     "audience": "programmers meeting the algorithm for the first time",
     "length": 70,

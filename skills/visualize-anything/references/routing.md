@@ -19,6 +19,8 @@ Set `"subject"` at the top of the storyboard. It controls whether system diagram
 
 Also record the `brief` that you agreed with the user: `audience`, `length` in seconds, `focus`, `context`, `hook`. The router reports a video that is more than one fifth longer or shorter than the length in the brief.
 
+Also record the `sources`: the material that the video is made from. Its kinds are code, a paper, a design doc, documentation, or a topic with no source. A video can have more than one. `subject` tells what the idea is. `sources` tells what the material is. Each scene also tells which sources it uses, before you select its `need`. The router applies the rules of a document to the parts of a scene that come from a document. See [sources.md](sources.md).
+
 ## 2. Declare each scene's `need`
 
 For each scene, ask: **what must the viewer see to believe this sentence?** Select one need. The router supplies the renderer, so you can omit `kind` and the `type` of a diagram.
@@ -33,7 +35,9 @@ For each scene, ask: **what must the viewer see to believe this sentence?** Sele
 | `change` | Which lines of the code were removed and which were added | "The fix is one line", "this check was added", "the pull request replaces..." | `hyperframes` (a diff) |
 | `number` | The one number that the claim depends on, or four at most side by side, counted up as the voice says them | "Thirty-six frames a second", "twenty-five million episodes, or four rounds" | `stat` |
 | `contrast` | Two or three alternatives, each with its good point and its cost | "A simulator remembers, but...; a video model looks real, but..." | `compare` (panels side by side) |
-| `chart` | Measured values against each other: bars, or a line across rounds | "Seventy-one seconds in round one, forty-one by round four" | `chart` |
+| `chart` | Measured values against each other: bars, a line across rounds, or a scatter of systems that two measures place | "Seventy-one seconds in round one, forty-one by round four"; "better, and cheaper than all of them" | `chart` |
+| `table` | The rows of a results table that the sentence compares, with the row of the source marked | "Against the strongest models of the time, it scores best" | `table` |
+| `matrix` | A grid of values, coloured by size: attention weights, a confusion matrix | "Each word decides how much to look at each other word" | `matrix` |
 | `quote` | The words of the source, when the wording is the evidence | "The authors put it this way" | `quote` |
 | `figure` | The figure of the source, with pointers to the important parts | "This is the paper's own diagram of the loop" | `figure` |
 | `data` | Numbers that need a picture designed for them, which none of the four above draws | "A million comparisons against twenty", as two bars racing | `hyperframes` (a composition that you write) |
@@ -61,6 +65,8 @@ Some needs are easy to confuse:
 - **`change` or `trace`?** If the viewer must see the difference between two versions, use `change`. If they must understand what one version does, use `trace`.
 - **`change` or `motion`?** `change` is for an edit to the code. Two different approaches to the same job ("instead of scanning, it halves") are different in behaviour, not in a few lines. Run the two on the same data, with a count, in a `motion` scene.
 - **`chart` or `math`?** A measured or counted quantity (a benchmark, a size, a number before and after) is `chart`. With only one or two numbers, it is `number`. A relation or a formula (halving, growth, a curve) is `math`.
+- **`chart` or `table`?** A chart compares one or two measures across some things. The eye reads the shapes. A table is for numbers that the viewer must read, with some measures on each row and the row of the source marked. Above six rows, chart the column that the sentence is about.
+- **`matrix` or `math`?** A matrix shows the values of one grid: these weights, this confusion. The rule that makes them (a softmax of scores) is `math`. Frequently the two are next to each other, the grid first.
 - **`chart` or `data`?** Bars or a line are `chart`. You give the values and you build nothing. `data` is for the picture that those cannot draw. It costs a composition that you write and render.
 - **`number` or `question`?** The two put a large number on screen. `question` is a sentence. `number` is a measurement with its unit and the thing that it counts. Neither opens a video. When the hook is a number, the opening is a Manim scene that counts it next to the thing that it measures. A `number` scene can say it again later.
 - **`contrast` or `motion`?** If the two things are different in what they are (what each keeps, what each costs), put them side by side: `contrast`. If they are different in what they do to the same data, run the two on it: `motion`.
@@ -110,6 +116,7 @@ The router examines each scene for these things:
 | Each beat of a `trace` scene points at a line of the code | If a sentence is not about a line, the code must not be on screen while the voice says it. Code that nothing points at is wallpaper. |
 | Each beat changes the picture | Two beats that highlight the same lines, focus the same nodes, or leave the same parts of a chart or a contrast on screen are one beat. |
 | A quote has fewer than approximately forty-five words, and a chart has sixteen marks at most | Above that, one is a paragraph to read and the other is a table. The viewer cannot read them while a person speaks. |
+| With more than one source, each scene tells which sources it uses. The part of a scene that comes from a document obeys the rules of a document: no prose shown as code, evidence that tells where it is (`ref`) and which scene prepares it (`after`), a claim of a document next to its code with a `ref`, a results table with its row marked, the figure of the document before a diagram that you draw | See [sources.md](sources.md). Prose shown as code is an error for a document. It is a review for other sources. The other rules are reviews. |
 | A scene has 6 to 40 seconds | A shorter scene makes a sudden cut. A longer scene makes the picture old. |
 | The narration explains. It does not read code aloud or use filler | "self dot items dot move to end" and "basically, just" are noise. |
 | Scenes from one script say whether they share a picture | A shared picture must not fade out and in between scenes. |
@@ -175,12 +182,15 @@ Read the paper into the project with `va paper` first. [paper.md](paper.md) tell
 - The hook is still a Manim animation: the headline numbers of the paper, counted next to a picture of the thing that they measure.
 - A result that comes later is a `number`, counted up on screen as the voice says it. Two numbers side by side (the paper and the earlier work) are the same scene.
 - The thing that the paper compares against is a `contrast`: the alternatives as panels, each with its good point and its cost.
-- A result across rounds, sizes, or baselines is a `chart`. Chart the values that the sentence compares, not the full table.
-- The figure of the paper is a `figure`. Do not draw again a figure that the authors drew. Point at their figure.
+- A result across rounds, sizes, or baselines is a `chart`. Chart the values that the sentence compares, not the full table. A trade-off (score against cost) is a scatter: each system is one point.
+- When the viewer must read the numbers, use a `table` of the rows that the sentence compares. Mark the row of the paper with `best`.
+- Attention weights, a confusion matrix, or a different grid of values is a `matrix`.
+- The figure of the paper is a `figure`. Do not draw again a figure that the authors drew. Point at their figure. Crop it to the panel that the sentence is about.
 - A sentence that makes the claim better than a paraphrase is a `quote`. One in a video is sufficient.
-- Do not show the code of the paper. Explain each mechanism as a full-frame animation. A `trace` scene in a paper video is an error, unless its `override` says that the viewer asked for the code. See [paper.md](paper.md), "Its pictures".
+- Do not show the code of the paper. Explain each mechanism as a full-frame animation. A `trace` scene in a paper video is an error, unless its `override` says that the viewer asked for the code, or the scene uses a code source that you declared next to the paper (its released code). See [paper.md](paper.md), "Its pictures", and [sources.md](sources.md).
+- Each result tells where it is in the paper (`ref`: "Table 2") and which scene prepares it (`after`).
 
-The tool draws these five from the storyboard. You build and render nothing first. See [scene-evidence.md](scene-evidence.md). The idea still gets an animation. A paper video made only of these scenes is a slide deck of the paper. A paper video with none of them asks the viewer to believe each number without evidence.
+The tool draws these scenes from the storyboard. You build and render nothing first. See [scene-evidence.md](scene-evidence.md). The idea still gets an animation. A paper video made only of these scenes is a slide deck of the paper. A paper video with none of them asks the viewer to believe each number without evidence.
 
 ## Mixing renderers
 
