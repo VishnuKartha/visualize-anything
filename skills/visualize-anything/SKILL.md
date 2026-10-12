@@ -44,6 +44,7 @@ The house rules are in [references/taste.md](references/taste.md). Read them bef
 - **Each scene continues from the scene before it.** Do not start a scene with "now let's look at".
 - **End on the picture.** Do not end on a slide of bullets. The recap shows each takeaway next to the moment that proved it. The last line of the recap returns to the hook. A short `credit` scene then gives the name of the work.
 - **Keep one picture through the video.** Mark scenes that share a picture with `continues`. These scenes do not fade between each other.
+- **A frame holds few things.** Things that arrive and do not leave fill the frame, and the viewer reads and does not listen. Keep nine labelled things and 25 words in an animation frame. Remove or dim each thing that the voice left. `va manim` and `va route` measure this.
 - **The voice explains.** It does not read code aloud. It does not use filler. It is quiet for a moment after the main point (`land`).
 - **Write for a listener.** The viewer hears each sentence one time and cannot look back. Name the subject, and do not make the viewer resolve "it". Give each term before you use it. Say the point of a comparison. Say few numbers.
 - **Do not type a number.** Each number that is said or shown is a row in the `facts` of the storyboard. A script runs the real code and calculates each number again. Before you say "always" or "never", test the limits of the claim. See [references/facts.md](references/facts.md).
@@ -251,7 +252,21 @@ A change to a sentence costs nothing now. After the render, it costs a render. S
 VA tts <project>
 ```
 
-This synthesizes one clip for each beat with edge-tts and writes `timeline.json`. If Edge TTS is not available, use a voice on this machine: `VA_TTS_ENGINE=franken` (franken_tts, with timed words), or `"voice": "say:Samantha"` in the storyboard (macOS `say`, with nothing to install and estimated word timings). It prints the time budget: the number of seconds in the visual window of each beat. Build the diagram focus and the Manim animations to these numbers. The tool keeps a cache of lines that did not change, so a second run after a text change is fast.
+This synthesizes one clip for each beat with edge-tts and writes `timeline.json`. It prints the time budget: the number of seconds in the visual window of each beat. Build the diagram focus and the Manim animations to these numbers. The tool keeps a cache of lines that did not change, so a second run after a text change is fast.
+
+edge-tts uses an online service of Microsoft. If the service refuses the request (an error 403), use a voice on this machine. There are two. The first is the local engine:
+
+```bash
+VA_TTS_ENGINE=kokoro VA tts <project>
+```
+
+- Kokoro is an open model that runs on this machine. The first run downloads the model (approximately 340 MB) into `~/.visualize-anything/vendor/kokoro`.
+- `VA_TTS_VOICE` selects the voice. The default is `am_michael`. `uv run <skill>/runtime/python/kokoro_say.py --voices --out x` lists the voices.
+- The `rate` of the storyboard becomes the speed of Kokoro. The local engine ignores `pitch`.
+- Word timings: if `franken_whisper` is installed, it listens to each clip and gives exact timings. If not, the tool estimates the timings from the text and the pauses in the clip. An estimate is usually correct to a few tenths of a second. `VA_TTS_TIMING=estimate` or `listen` selects one.
+- Set the same variables for each later `VA tts` and `VA build` of the project. If not, the tool uses edge-tts again and makes each clip again.
+
+The second is macOS `say`: set `"voice": "say:Samantha"` in the storyboard. There is nothing to install. The word timings are estimates. A `say:` voice has priority over `VA_TTS_ENGINE`.
 
 ### 6. Visuals
 
@@ -280,6 +295,8 @@ VA manim <project> [scene-id...]
 ```
 
 It renders the scene. It reports each beat whose animation was longer than its narration window. To correct such a beat, decrease the `run_time` values. Do not ignore it. It also reports a drawing that fills only a small part of its panel or its frame for four seconds or more. Correct the layout.
+
+It also counts the labelled things and the words on screen at the end of each beat. Above nine things or 25 words, it gives a warning. Remove each thing that the voice left, dim each thing that is only context, or divide the scene. See [references/scene-manim.md](references/scene-manim.md), "A frame holds few things".
 
 ### 7. Review
 

@@ -211,6 +211,7 @@ class Cells(VGroup):
                                    stroke_width=3.5, fill_color=UNVISITED, fill_opacity=0.12)
             box.move_to([i * (size + gap), 0, 0])
             label = Text(str(value), font=MONO, font_size=font_size, color=TEXT, weight=BOLD).move_to(box)
+            box.va_row = label.va_row = id(self)  # for on_screen(): the row is one thing to look at
             self.boxes.add(box)
             self.labels.add(label)
         self.add(self.boxes, self.labels)
@@ -630,6 +631,61 @@ def lanes(count: int) -> list:
     return [SAFE_TOP - step * (i + 0.5) for i in range(count)]
 
 
+_DIM = 0.4  # at or below this opacity a thing has stepped back: it is context, not something to read
+
+
+def _opacity(mobject) -> float:
+    """How strongly a thing is drawn: the strongest of its fill and its stroke."""
+    try:
+        return max(float(mobject.get_fill_opacity()), float(mobject.get_stroke_opacity()))
+    except Exception:  # a group has no opacity of its own
+        return 1.0
+
+
+def _words(text) -> int:
+    return len(re.findall(r"[A-Za-z][A-Za-z'-]*", str(text or "")))
+
+
+def on_screen(mobjects) -> tuple[int, int]:
+    """What a viewer is asked to take in at once: (labelled things, words). A box with its name is one
+    thing, and so is a row of cells, a count, a tree, a formula, or a line of text. What has been
+    dimmed to step back is not counted: it is there to be recognised, not read."""
+    rows = set()  # a row of cells is one thing, however many of its cells are on screen and however they got there
+
+    def walk(group) -> tuple[int, int]:
+        things = words = 0
+        for mobject in group:
+            row = getattr(mobject, "va_row", None)
+            if row is not None:  # a cell's box or label, put on screen one cell at a time
+                if _opacity(mobject) > _DIM:
+                    rows.add(row)
+            elif isinstance(mobject, Node):
+                if _opacity(mobject.box) > _DIM:
+                    things += 1
+                    words += _words(mobject.label.text) + _words(getattr(getattr(mobject, "note", None), "text", ""))
+            elif isinstance(mobject, (Tally, Track, Graph)):
+                if any(_opacity(part) > _DIM for part in mobject.family_members_with_points()[:4]):
+                    things += 1
+                    words += sum(_words(part.text) for part in mobject.get_family() if isinstance(part, Text))
+            elif isinstance(mobject, DecimalNumber):
+                if _opacity(mobject) > _DIM:
+                    things += 1
+            elif isinstance(mobject, Text):
+                if _opacity(mobject) > _DIM and _words(mobject.text):
+                    things += 1
+                    words += _words(mobject.text)
+            elif isinstance(mobject, SVGMobject):  # a formula
+                if _opacity(mobject) > _DIM:
+                    things += 1
+            else:
+                more = walk(mobject.submobjects)
+                things, words = things + more[0], words + more[1]
+        return things, words
+
+    things, words = walk(mobjects)
+    return things + len(rows), words
+
+
 class Beat:
     def __init__(self, index: int, duration: float, text: str, lead: float = 0.0, words=None):
         self.index = index
@@ -720,6 +776,9 @@ class VAScene(Scene):
         current._start = sum(b.duration for b in self.beats[:index])
         self._beat_end = current._start + current.duration
         yield current
+        # What the beat leaves on screen: `va manim` reports a frame that asks for too much reading.
+        things, words = on_screen(self.mobjects)
+        print(f"VA_CROWD beat {index} things={things} words={words}", file=sys.stderr, flush=True)
         remaining = self._beat_end - self.renderer.time
         if remaining > 1 / config.frame_rate:
             self.wait(remaining)

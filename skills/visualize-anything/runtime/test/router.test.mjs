@@ -520,6 +520,31 @@ test('an evidence scene whose beats leave the same thing on screen is told so', 
   assert.match(texts(row(analyzeRouting(board('mixed', [OPEN, long, LRU[1], LRU[4]])), 'words').reasons), /quote is 50 words/);
 });
 
+test('an evidence scene or a recap that piles parts up is told what to drop', () => {
+  const reasons = (entry) => texts(row(analyzeRouting(board('mixed', [OPEN, entry, LRU[1], LRU[4]])), entry.id).reasons);
+  const says = ['Staged, the same model passed far more of the tests.', 'Doing both added almost nothing more.'];
+  const chart = (beats) => scene('result', 'chart', [], {labels: ['One', 'Two'], series: [{label: null, values: [35, 56]}], beats});
+  // Two notes are two more sentences to read; one short note is the qualification a number needs.
+  const two = chart([{say: says[0], caption: '', show: 1, note: 'Measured on one model'}, {say: says[1], caption: '', show: 2, note: 'Another agent ran the baseline'}]);
+  assert.match(reasons(two), /shows 2 different notes/);
+  const one = chart([{say: says[0], caption: '', show: 1}, {say: says[1], caption: '', show: 2, note: 'Measured on one model'}]);
+  assert.doesNotMatch(reasons(one), /different notes|characters|words on screen/);
+  const wordy = chart([{say: says[0], caption: '', show: 1}, {say: says[1], caption: '', show: 2, note: 'Both of the staged scores are above the higher of the two published flagship scores'}]);
+  assert.match(reasons(wordy), /A note is 83 characters/);
+  // Three numbers with a line under each is a table; so is a frame with forty words on it.
+  const metric = (label, detail) => ({value: '20', unit: 'points', label, detail, delta: null});
+  const cards = (details) => scene('limits', 'number', [says[0]], {metrics: ['This model', 'A stronger one', 'Solved'].map((label, index) => metric(label, details[index] ?? null))});
+  assert.match(reasons(cards(['gained from working in stages'])), /3 numbers side by side, with a "detail"/);
+  assert.doesNotMatch(reasons(cards([])), /side by side|words on screen/);
+  const packed = scene('limits', 'number', [says[0]], {title: 'How far the result goes on the two models that the paper measured it on', metrics: [metric('The model as released, with no retraining at all', 'gained from working in stages over one long session'), metric('A model that was already stronger than it', 'gained from the same stages, starting from a higher score')]});
+  assert.match(reasons(packed), /about \d+ words on screen at once/);
+  // A takeaway is a claim to keep, not a sentence to read.
+  const recap = (items) => ({...LRU[4], items});
+  const kept = (items) => texts(row(analyzeRouting(board('mixed', [OPEN, LRU[1], recap(items)])), LRU[4].id).reasons);
+  assert.match(kept(['Stages are separate sessions that share written reports and the code', 'Every pass halves the range']), /A takeaway is 68 characters/);
+  assert.doesNotMatch(kept(['Every pass halves the range', 'Order of use lives in one dictionary']), /A takeaway is/);
+});
+
 test('numbers an evidence scene puts on screen are held to the ledger; a chart\'s axis labels are not', () => {
   const chart = scene('bridge', 'chart', ['The crossing gets quicker with every round the agents play.'], {labels: ['Round 1', 'Round 4'], series: [{label: null, values: [71, 41]}], unit: 's'});
   const stat = scene('speed', 'number', ['The renderer keeps pace with the agent on a single card.'], {metrics: [{value: '36', unit: 'fps', label: 'frames a second', detail: null, delta: null}]});

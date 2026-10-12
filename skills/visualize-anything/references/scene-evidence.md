@@ -41,6 +41,14 @@ Evidence from a document (a paper, a design doc, documentation) has two more fie
 
 The router asks for `ref` and `after` on a `stat`, `chart`, `table`, `matrix`, or `figure` from a document. A `quote` needs only `ref`. An `after` that names a later scene is an error.
 
+## Do not let the parts pile up
+
+The viewer reads these scenes while the voice speaks. `va route` reports a scene that asks for too much reading:
+
+- **35 words on screen at most.** The count includes the title, the axis line, the labels, the values, the details, and the longest note. Make the labels shorter, omit the title or the note, or show fewer parts.
+- **One note in a scene, of 70 characters or fewer.** A note is the one qualification that the number needs. A second note is a second sentence that the viewer reads while the voice says a different one. Say it, or cut it.
+- **With three or four numbers, give no `detail`.** The label and the number are sufficient. Say the remainder. If each number needs a line of text, show two numbers.
+
 ## `stat`: the number
 
 ```json

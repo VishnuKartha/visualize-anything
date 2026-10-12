@@ -35,6 +35,7 @@ A check that fires is advice with a reason, unless the table says that it blocks
 | No text smaller than 24px | The viewer does not read text that is too small | `va stills`, `va manim` |
 | Use only the palette | One blue that is not in the palette makes the scene look pasted in | `va manim` |
 | Nothing stays still for more than six seconds | A still picture below a voice that continues is a slide | `va qc` |
+| A frame holds few things | A viewer who reads a full frame does not listen. Things that only arrive, and do not leave, fill the frame | `va manim` (things and words at the end of each beat), `va route` (words, notes, and details of evidence scenes, length of a takeaway) |
 | No seams | A cut, a jump, or a silence in the incorrect place tells the viewer that one thing ended and another started | `va qc`, measured on the rendered file |
 | One dataset in each video | If the example values change, the viewer must start again | you |
 | Calculate each number | A number that you type into a script can be wrong, and nothing detects it | `va facts` (blocks the build), `va route` |
@@ -45,7 +46,7 @@ A check that fires is advice with a reason, unless the table says that it blocks
 
 ## End on the picture
 
-The recap is not a slide of text. It shows each takeaway next to the moment that proved it: the earlier scene, stopped at that frame.
+The recap is not a slide of text. It shows each takeaway next to the moment that proved it: the earlier scene, stopped at that frame. One takeaway is on screen at a time, in large text. The picture has most of the frame, so that the viewer can read it. The takeaway before it leaves when the next arrives.
 
 ```json
 {
@@ -70,6 +71,8 @@ The recap is not a slide of text. It shows each takeaway next to the moment that
 - `from` names an earlier scene that has a picture. `beat` selects the beat whose last frame the recap shows. The default is the last beat of the scene. The picture changes when each takeaway arrives.
 - An item that is only a string shows next to the last picture before the recap, or next to the scene that `"over"` names.
 - Use three or four takeaways. Each one is a claim, not a topic: "Each pass halves the range", not "Halving".
+- Keep a takeaway to 48 characters or fewer: six to eight words. `va route` reports a longer one.
+- Select a moment whose picture is simple. A frame that had twelve things on it does not become clear when it is smaller.
 
 ## Return to the hook
 
@@ -275,6 +278,25 @@ Do not turn a package off for the full script. Do not rewrite a good spoken line
 One or two moments in a video are the point: the comparison that finds the target, the eviction, the number that makes the claim. Give that beat `"land": true`. The voice waits 0.7 seconds longer after it, and the picture holds.
 
 Use it one or two times. If each beat lands, no beat lands.
+
+## A frame holds few things
+
+The viewer listens while they look. A frame with many boxes, labels, and numbers makes them read, and then they do not hear the sentence. Things pile up when a scene adds a thing in each beat and removes none.
+
+| Scene | The limit | Checked by |
+|---|---|---|
+| A Manim or trace scene | Nine labelled things and 25 words on screen at the end of a beat. A dimmed thing is not counted | `va manim` |
+| A `number`, `chart`, `contrast`, or `figure` scene | 35 words on screen. One note, of 70 characters or fewer. With three or four numbers, no `detail` | `va route` |
+| The recap | One takeaway on screen at a time. 48 characters or fewer in a takeaway | the scene, `va route` |
+
+To obey the limit, do these in this order:
+
+1. Remove the thing that the voice left.
+2. Dim the thing that is only context.
+3. Say the words in place of showing them.
+4. Divide the scene.
+
+[scene-manim.md](scene-manim.md), "A frame holds few things", tells you how in a Manim script. [scene-evidence.md](scene-evidence.md) tells you how in an evidence scene.
 
 ## Readable, and in one palette
 

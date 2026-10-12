@@ -24,7 +24,7 @@ Where a scene `continues` the scene before it, the breath at that join is as sho
 | `claims` | none | For a paper: the decision of the video for each claim of its abstract, as `{"abstract": n, "scene": "<scene id>"}` or `{"abstract": n, "omit": "<why>"}`. `va paper` gives the claims their numbers. `va route` lists each claim with no decision. See [paper.md](paper.md). |
 | `vocabulary` | none | The words that the video uses for its ideas: `{"word": "look", "not": ["comparison"], "defined": "<scene id>"}`. The router holds the narration to them. See [taste.md](taste.md). |
 | `music` | none | Music to put below the voice: a path in the project, or `{"file": "bed.mp3", "under": 18, "gap": 10}`. The numbers are loudness units below the voice while it speaks, and in a silence. See [taste.md](taste.md). |
-| `voice` | `"en-US-AndrewNeural"` | An edge-tts voice. To list them, run `uv run --with edge-tts edge-tts --list-voices`. |
+| `voice` | `"en-US-AndrewNeural"` | An edge-tts voice. To list them, run `uv run --with edge-tts edge-tts --list-voices`. With the local engine (`VA_TTS_ENGINE=kokoro`), a Kokoro voice such as `"am_michael"`. See SKILL.md, "TTS". |
 | `rate`, `pitch` | `"+0%"`, `"+0Hz"` | The prosody of edge-tts. For example, `"+8%"` gives a faster voice. |
 | `sourceRoot` | `"."` | The base for code `file` paths, relative to the project directory. `va init` sets it to the directory where you ran it. |
 | `captions` | `true` | Captions with word timing at the bottom of the frame. |
@@ -187,7 +187,7 @@ It has one beat: one short line that says the name aloud. It has no cues.
 
 The recap. Scene fields: `items` (required, three or four), optional `title`, optional `over` (the scene whose last frame shows by default).
 
-Each item is a line of text, or `{"text": "...", "from": "<scene id>", "beat": n}`. The second form shows the takeaway next to the moment that proved it: the named scene, stopped at the end of that beat. The default is its last beat. See [taste.md](taste.md).
+Each item is a line of text, or `{"text": "...", "from": "<scene id>", "beat": n}`. The second form shows the takeaway next to the moment that proved it: the named scene, stopped at the end of that beat. The default is its last beat. With pictures, one takeaway is on screen at a time, and the picture has most of the frame. Keep a takeaway to 48 characters or fewer. See [taste.md](taste.md).
 
 | Beat cue | Meaning |
 |---|---|

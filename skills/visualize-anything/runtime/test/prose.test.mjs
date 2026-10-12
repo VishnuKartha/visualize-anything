@@ -48,3 +48,11 @@ test('a drawing that keeps to a corner of its frame is found, once it has had ti
   assert.equal(sparseStretch(samples, 0.1), null);
   assert.equal(sparseStretch([], 0.35), null);
 });
+
+test('a beat that ends with too much on screen is reported, worst first', async () => {
+  const {CROWD, crowdedBeats} = await import('../lib/steps.mjs');
+  const lines = ['Animation 3: FadeIn', 'VA_CROWD beat 0 things=4 words=9', 'VA_CROWD beat 1 things=12 words=20', 'VA_CROWD beat 2 things=8 words=31', 'VA_CROWD beat 3 things=17 words=44'];
+  assert.deepEqual(crowdedBeats(lines), [{beat: 4, things: 17, words: 44}, {beat: 2, things: 12, words: 20}, {beat: 3, things: 8, words: 31}]);
+  assert.deepEqual(crowdedBeats(lines.slice(0, 2)), []);
+  assert.deepEqual(crowdedBeats([`VA_CROWD beat 0 things=${CROWD.things} words=${CROWD.words}`]), []);
+});

@@ -15,6 +15,7 @@ The helper controls the timing and the layout. The content on screen controls wh
 - **Keep the count on screen.** When the narration claims a cost (looks, steps, moves, bytes), put a `Tally` next to the data. Increment it at each step. Its last value is the number that the voice says, and it arrives on that word. `Race` in `examples/binary-search/video/manim/search.py` does this, with one `Tally` for each lane.
 - **Put the label on the thing.** A name is next to the object that it names, in the colour of that object. Do not use a legend in a corner. The viewer must not look away from the data to learn what it is.
 - **Nothing moves without a reason.** An object moves when its data moves. It changes colour when its state changes. If neither occurs, it stays. See [story.md](story.md).
+- **A frame holds few things.** The viewer listens while they look. Keep nine labelled things or fewer on screen, and 25 words or fewer. See "A frame holds few things" below.
 
 | The claim is about | Draw | Notes |
 |---|---|---|
@@ -55,6 +56,22 @@ When the topic permits a choice, give the story one of these shapes:
 - a result that looks wrong, and then the reason that it is correct
 - simple pieces that make a surprising thing together
 - one thing seen two ways that are the same
+
+## A frame holds few things
+
+Objects stay on screen until you remove them. A scene that only adds becomes a page of boxes and labels, and the viewer reads it and does not listen. This is the most frequent defect of a long animation scene.
+
+Count the things on screen at the end of each beat. A thing is one of these: a box with its name, a row of cells, a count, a track, a tree, a formula, or a line of text.
+
+- **Keep nine things or fewer, and 25 words or fewer.** `va manim` counts them at the end of each beat and gives a warning above these limits.
+- **When the voice leaves a thing, the thing leaves the frame.** Use `FadeOut`. If the thing is context that a later beat needs, dim it: `thing.animate.set_opacity(0.3)`. A dimmed thing is not counted.
+- **After the layout is built, a beat that adds a thing removes a thing.**
+- **Put on screen only what the voice says.** A list of four items with two of them spoken is two items too many. If the picture needs the other two, say them.
+- **Use one count in a frame.** When a second number arrives, the first number leaves or becomes a small label ("was 34.87").
+- **Do not put a note in each box.** A `Node` has a note only when the name does not tell what the box does.
+- **If the idea still needs more, it is two scenes.** Divide the scene. Mark the second scene `continues` if it keeps the picture. Start it with only the things that it needs.
+
+`on_screen(self.mobjects)` gives the two counts at any point of a script.
 
 ## Start from the kit
 
@@ -285,7 +302,7 @@ Layout rules:
 - **A wait by hand.** Do not add `self.wait()` at the end of a beat to fill it. The `beat` block does that. Use `self.wait()` only for a pause between two animations in a beat.
 - **A drawing below the captions or the heading.** `va manim` examines the rendered clip. It gives a warning, with times, when a thing is drawn in the caption strip or the heading area. Move it into the safe area.
 - **Text overlap.** After `va manim`, make stills (`va stills <project> <scene-id>`) and look. Position labels with `next_to(..., buff=...)` relative to the thing that they describe. Do not use absolute coordinates if you can prevent it.
-- **Objects that stay.** Objects stay on screen until you remove them. `FadeOut` each object that the next beat does not need.
+- **Objects that stay.** Objects stay on screen until you remove them. `FadeOut` each object that the next beat does not need. `va manim` reports each beat that ends with more than nine labelled things or 25 words on screen. See "A frame holds few things".
 - **`Create()` on text.** It draws the outlines of the letters. Use `Write()` or `FadeIn()` for `Text` and `Math`.
 - **`Transform(a, b)`, then an animation of `b`.** `b` was not added to the scene. `a` now looks like `b`. Use `ReplacementTransform(a, b)` when you continue to work with `b`.
 - **`.animate` outside `play()`.** `mob.animate.shift(UP)` is an animation builder, not a mobject. It has an effect only in `self.play(...)`.
@@ -299,6 +316,8 @@ Layout rules:
 ```bash
 VA manim <project> [scene-id...]        # add --draft for a pass at half resolution
 ```
+
+The tool counts the labelled things and the words on screen at the end of each beat. It gives a warning for a beat above nine things or 25 words. Remove or dim the things that the voice left.
 
 The tool sets the output to the exact frame count of the scene. If the animation is short, it holds the last frame. If the animation is long, it cuts the end. Each case prints a warning. Each case tells you to correct the timing of the script. Do not depend on this safety function.
 

@@ -326,6 +326,17 @@ const manimAsset = (paths, scene) => path.join(paths.assets, `${scene.id}.mp4`);
 // Colours Manim defines that are not in the video's palette. ORANGE is absent: va_manim redefines it.
 // How much of its frame a drawing should fill, and for how long it may fall short before it is reported.
 const SPARSE = {panel: 0.35, frame: 0.12, seconds: 4};
+// How much a frame may ask a viewer to read while they also listen: labelled things, and words.
+export const CROWD = {things: 9, words: 25};
+
+/** The beats a Manim scene ends crowded, worst first, from the `VA_CROWD` lines its render printed. */
+export const crowdedBeats = (lines, limit = CROWD) =>
+  lines
+    .map((line) => line.match(/^VA_CROWD beat (\d+) things=(\d+) words=(\d+)/))
+    .filter(Boolean)
+    .map((match) => ({beat: Number(match[1]) + 1, things: Number(match[2]), words: Number(match[3])}))
+    .filter((entry) => entry.things > limit.things || entry.words > limit.words)
+    .sort((a, b) => b.things - a.things || b.words - a.words);
 const OFF_PALETTE = /\b(?:PURE_)?(?:BLUE|RED|GREEN|YELLOW|PURPLE|PINK|TEAL|GOLD|MAROON|WHITE|BLACK|GR[AE]Y)(?:_[A-E])?\b/g;
 
 // Manim classes that typeset with LaTeX unless told otherwise, and what the kit has in their place.
@@ -439,6 +450,7 @@ export const manim = async (paths, only = [], {force = false, draft = false} = {
     const reported = (result.stderr + result.stdout).split('\n');
     const overruns = reported.filter((line) => line.startsWith('VA_OVERRUN'));
     const late = reported.filter((line) => line.startsWith('VA_LATE'));
+    const crowded = crowdedBeats(reported);
     const rendered = findRendered(mediaDir, scene.class);
     if (!rendered) fail(`Scene "${scene.id}": manim finished but ${scene.class}.mp4 was not produced.`);
 
@@ -467,6 +479,12 @@ export const manim = async (paths, only = [], {force = false, draft = false} = {
     if (late.length) {
       log(`  ${late.length} word anchor(s) were reached after the word was spoken — shorten the animations before them:`);
       late.forEach((line) => log(`    ${line.replace('VA_LATE ', '')}`));
+    }
+    // The opposite fault: things keep arriving and none leaves, until the frame is a page to read.
+    if (crowded.length) {
+      log(`  warning: ${crowded.length} beat(s) end with more on screen than a viewer takes in while listening (about ${CROWD.things} labelled things, ${CROWD.words} words):`);
+      crowded.slice(0, 4).forEach((entry) => log(`    beat ${entry.beat}: ${entry.things} things, ${entry.words} words`));
+      log('    When the voice leaves a thing, remove it or dim it (opacity 0.3). Put on screen only what the voice says. If the idea still needs more, it is two scenes.');
     }
     // A drawing that keeps to one corner of its frame looks unfinished. A trace panel has nothing laid over it,
     // so it should be filled; a full frame gives up its top and bottom to the heading and the captions.

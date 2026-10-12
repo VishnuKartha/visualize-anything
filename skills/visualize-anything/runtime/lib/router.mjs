@@ -14,6 +14,27 @@ import {speakable} from './speech.mjs';
 // joining word again and again. Limits are generous on purpose: past them the line was not said aloud.
 const PRONOUNS = /\b(?:it|its|itself|they|them|their|theirs)\b/gi;
 const JOINERS = ['so', 'but', 'and', 'then', 'now', 'because'];
+// What a scene may ask a viewer to read while they listen: the words an evidence scene can have on
+// screen at once, the length of a note, and the length of a takeaway.
+export const CROWD = {words: 35, note: 70, takeaway: 48};
+
+/** Every word an evidence scene can have on screen at once: its title, labels, values, details, and its longest note. */
+export const wordsShown = (scene) => {
+  const count = (text) => String(text ?? '').replace(/\*/g, '').split(/\s+/).filter(Boolean).length;
+  const panels = scene.panels || [scene.left, scene.right].filter(Boolean);
+  const series = scene.series || (scene.values ? [{values: scene.values}] : []);
+  const notes = scene.beats.flatMap((beat) => [beat.note, ...(beat.cues || []).map((cue) => cue.note)]).filter(Boolean);
+  const parts = [
+    scene.title, scene.axis, scene.caption,
+    ...(scene.labels || []),
+    ...series.flatMap((entry) => [entry.label, ...(entry.values || [])]),
+    ...(scene.metrics || []).flatMap((metric) => [metric?.label, metric?.value, metric?.unit, metric?.detail, metric?.delta]),
+    ...panels.flatMap((panel) => [panel?.label, ...(panel?.points || []).map((point) => (typeof point === 'string' ? point : point?.text))]),
+    ...(scene.callouts || []).map((callout) => callout?.label),
+  ];
+  return parts.reduce((sum, part) => sum + count(part), 0) + Math.max(0, ...notes.map(count));
+};
+
 export const LISTENER = {pronouns: 3, numbersInSentence: 3, numbersAMinute: 4, numbersFloor: 6, sameOpener: 3, wordsAMinute: 150};
 
 const sentencesOf = (text) => String(text).replace(/`[^`]*`/g, 'x').split(/(?<=[.!?;:])\s+/).map((part) => part.trim()).filter(Boolean);
@@ -556,6 +577,25 @@ export const analyzeRouting = (storyboard, {timeline = null, projectDir = null} 
       if (scene.kind === 'chart' && scene.labels && scene.series && scene.labels.length * scene.series.length > 16) {
         flag('review', `The chart has ${scene.labels.length * scene.series.length} marks. Past sixteen none of them is read; chart the ones the sentence compares and say the rest.`);
       }
+      // An evidence scene is read while the voice is heard. Parts that pile up are read instead of heard.
+      const notes = [...new Set(scene.beats.flatMap((beat) => [beat.note, ...(beat.cues || []).map((cue) => cue.note)]).filter(Boolean))];
+      if (notes.length > 1) {
+        flag('review', `The scene shows ${notes.length} different notes. A note is the one qualification its number needs; a second is a sentence to read while another is spoken. Keep one and say or cut the others.`);
+      }
+      const long = notes.find((note) => note.length > CROWD.note);
+      if (long) flag('review', `A note is ${long.length} characters. Past about ${CROWD.note} it is a caption of its own: say it, or cut it to the few words of the qualification.`);
+      if (scene.kind === 'stat' && (scene.metrics || []).length >= 3 && scene.metrics.some((metric) => metric?.detail)) {
+        flag('review', `${scene.metrics.length} numbers side by side, with a "detail" under them, is a table to read. With three or more, keep the label and the number and say the rest; or show two.`);
+      }
+      const shown = wordsShown(scene);
+      if (shown > CROWD.words) {
+        flag('review', `The scene can have about ${shown} words on screen at once, while the voice is speaking. Past about ${CROWD.words}, neither is taken in: shorten the labels, drop the title or the note, or show fewer parts.`);
+      }
+    }
+
+    if (scene.kind === 'bullets') {
+      const wordy = (scene.items || []).map((item) => (typeof item === 'string' ? item : item?.text) || '').find((text) => text.length > CROWD.takeaway);
+      if (wordy) flag('review', `A takeaway is ${wordy.length} characters ("${wordy.slice(0, 40)}..."). Past about ${CROWD.takeaway} it wraps and is read, not kept: make it a claim of six to eight words.`);
     }
 
     if (scene.kind === 'title') {

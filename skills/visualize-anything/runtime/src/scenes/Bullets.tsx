@@ -6,9 +6,11 @@ import {MONO, SANS, STAGE, beatAt, ramp, theme} from '../theme';
 import type {BulletsScene, Scene, Shot} from '../types';
 
 // A recap is not a slide of text. Each takeaway arrives beside the moment that proved it: the
-// earlier scene itself, frozen at that frame. The list is the voice's outline; the picture is the proof.
+// earlier scene itself, frozen at that frame. The picture is the proof, so it gets most of the frame,
+// and one takeaway is on screen at a time: a list that builds up beside it is a page to read while
+// the voice has already moved on.
 
-const PANEL_WIDTH = 880;
+const PANEL_WIDTH = 1160;
 
 /** The part of a scene worth showing small: a trace's animation panel, otherwise the content area. */
 export const cropOf = (scene: Scene) =>
@@ -43,6 +45,8 @@ export const Picture: React.FC<{shot: Shot; opacity: number; width?: number}> = 
 
 /** How many items are on screen during each step (resolved when the video is assembled). */
 const visibleCounts = (scene: BulletsScene) => scene.steps.map((step) => Math.min(scene.items.length, Math.max(0, step.show ?? 0)));
+
+const kickerStyle: React.CSSProperties = {fontFamily: MONO, fontSize: 26, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', color: theme.muted};
 
 export const BulletsView: React.FC<{scene: BulletsScene}> = ({scene}) => {
   const frame = useCurrentFrame();
@@ -105,6 +109,33 @@ export const BulletsView: React.FC<{scene: BulletsScene}> = ({scene}) => {
       </AbsoluteFill>
     );
   }
+  const column = {left: 80 + PANEL_WIDTH + 60, width: STAGE.width - (80 + PANEL_WIDTH + 60) - 80};
+  const newest = Math.max(0, counts[current] - 1);
+  // The takeaway on screen is the newest; the one before it leaves as it arrives.
+  const arrival = (index: number) => {
+    const firstStep = counts.findIndex((count) => count > index);
+    return firstStep < 0 ? 0 : ramp(frame, scene.steps[firstStep]?.cue ?? 0, 16);
+  };
+  const one = (
+    <div style={{position: 'relative', minHeight: 300}}>
+      {scene.items.map((item, index) => {
+        if (index > newest || index < newest - 1) return null;
+        const enter = arrival(index);
+        const opacity = index === newest ? enter : 1 - arrival(newest);
+        if (opacity <= 0) return null;
+        return (
+          <div key={item} style={{position: index === newest ? 'relative' : 'absolute', inset: index === newest ? undefined : 0, opacity, translate: index === newest ? `${(1 - enter) * 30}px 0` : undefined}}>
+            <div style={{fontFamily: MONO, fontSize: 30, fontWeight: 600, color: theme.accent, marginBottom: 18}}>
+              {String(index + 1).padStart(2, '0')} <span style={{color: theme.dim}}>/ {String(scene.items.length).padStart(2, '0')}</span>
+            </div>
+            <div data-va-text={index === newest ? 'takeaway' : undefined} style={{fontFamily: SANS, fontSize: 50, fontWeight: 650, lineHeight: 1.18, letterSpacing: '-0.015em', color: theme.text, textWrap: 'balance'}}>
+              {item}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
   return (
     <AbsoluteFill>
       {before && !same && swap < 1 ? (
@@ -117,9 +148,13 @@ export const BulletsView: React.FC<{scene: BulletsScene}> = ({scene}) => {
           <Picture shot={shot} opacity={same || current === 0 ? ramp(frame, 0, 14) : swap} />
         </div>
       ) : null}
-      <div data-va-box="bullets" style={{position: 'absolute', left: 80 + PANEL_WIDTH + 70, top: 104, width: STAGE.width - (80 + PANEL_WIDTH + 70) - 80, height: 800, display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
-        {title}
-        {list}
+      <div data-va-box="bullets" style={{position: 'absolute', left: column.left, top: 104, width: column.width, height: 800, display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
+        {scene.title ? (
+          <div data-va-box="bullets-title" style={{...kickerStyle, marginBottom: 34}}>
+            {scene.title}
+          </div>
+        ) : null}
+        {one}
       </div>
     </AbsoluteFill>
   );
