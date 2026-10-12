@@ -3,7 +3,7 @@
 // gets the same answer. What the numbers mean is decided once, below.
 
 export const SEAM = {
-  cut: 0.02, // share of the picture that may change in one frame...
+  cut: 2 / 255, // how far the picture may change in one frame, averaged over every pixel: two of its 255 levels of brightness...
   spike: 2, // ...when that is at least this many times the change in the frames either side. A fade changes several frames alike; a cut changes one.
   alike: 0.99, // how alike the frames either side of a carried-on join must be (structural similarity, 0 to 1)
   carryPause: 1.0, // seconds the voice may stop at a join where the picture carries on
