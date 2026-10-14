@@ -83,7 +83,7 @@ Vale is a necessary dependency. `va doctor` shows `MISS` without it, and `va rou
 
 Typst typesets the formulas in Manim scenes. LaTeX is not necessary. Write `Math("O(log n)")`. Do not write `MathTex`.
 
-## Workflow: Brief → Understand → Facts → Storyboard → Plan review → TTS → Visuals → Review → Render → Independent review
+## Workflow: Brief → Understand → Facts → Storyboard → Plan review → TTS → Visuals → Review → Render → Independent review → Graphics review
 
 Each arrow is a gate. `va facts` errors, routing errors, and a missing Vale stop the build. The two reviews stop the build until each finding has a disposition.
 
@@ -144,7 +144,19 @@ VA sources <project>              # sections, figures, tables, code blocks, each
 VA sources <project> --figures    # also exports each figure to figures/ as a PNG
 ```
 
-Read the code that the video explains, from its real location. Decide the one question that the video answers. Decide the three to five ideas that answer it. A good length is 60 to 150 seconds, which is approximately 150 to 380 spoken words.
+Read the code that the video explains, from its real location. Decide the one question that the video answers.
+
+**Work from first principles.** Do not start from the order of the source or from the scene kinds that the skill has. Start from the question:
+
+1. What must be true for the answer to make sense? Follow each idea back until you reach something that the audience of the brief already knows. That is where the video starts.
+2. Build forward from there, one idea at a time. Each idea needs only the ideas before it.
+3. For each idea, decide the picture that makes it obvious, before you choose a scene kind. Then find the scene kind that draws that picture. If no scene kind can draw it, use the nearest one and tell the user what is missing. That is a gap in the skill.
+
+**The length sets how far you go.** The length in the brief is the budget. Speech is about 150 words a minute. Spend the budget on the chain of ideas, the most important first.
+
+- A short video (60 to 150 seconds, the default) has room for three to five ideas. Start from the nearest idea that the audience knows. Show one result.
+- A longer video goes further back toward fundamentals, and further into the evidence: the setup, each comparison, the ablations, the limits.
+- When the chain is longer than the budget, cut from the end of the chain and from the side branches. Do not cut the steps that join it. A missing step loses the viewer. A missing branch does not.
 
 Then decide the shape of the story from [references/story.md](references/story.md):
 
@@ -329,12 +341,27 @@ A still picture is the most frequent defect in an explainer. Correct each still 
 
 You built the video, so you cannot judge it. Run `VA review <project>`. Give the brief to a new subagent. See [references/review.md](references/review.md). Correct the defects that the reviewer puts highest. Render again. Run one verification round. If you cannot start a subagent, tell the user that the video was not independently reviewed.
 
+**Do not deliver a video that nobody looked at.** Before you give a video to the user, publish it, or put it in a page, two things must be true. You looked at the contact sheets of its final render (`va stills`), and each number on screen agrees with the words spoken at that moment. And its independent review ran. QC measures motion and seams. It cannot see a wrong number. If you could not run the review, say so next to the video.
+
+### 10. Graphics review (once)
+
+When the video review ends at SHIP, run the last review:
+
+```bash
+VA review <project> --graphics
+```
+
+This cuts each visual state out of the finished `video.mp4` and writes the reviewer briefs. The reviewer is the user's viewer. If the brief states an audience, there is one brief, written as that audience (`graphics-audience.md`). If not, there are three, one for each viewer, as in the other reviews (`graphics-newcomer.md`, `graphics-practitioner.md`, `graphics-expert.md`). Give each brief to its own new subagent, and start them at the same time. Each judges each scene for its viewer: can the graphic be improved, and how? Each also lists the things that the skill could not draw. See [references/review.md](references/review.md).
+
+This review runs once. It reads every frame at full size, so it is expensive. The tool refuses a second run while a report exists, unless you pass `--force`. Pass `--force` only when the user asks. Act on the improvements in the report, render again, and do not review again. Report the "missing capabilities" to the user. They are gaps in the skill, not in the video.
+
 Then give the user:
 
 - the absolute path
 - the duration
 - the scene list, with the need, the renderer, and the reason for each scene
 - the decision of the reviewer, and the changes that you made because of it
+- the improvements from the graphics review that you made, and the missing capabilities that it found
 
 `VA studio <project>` opens Remotion Studio for an interactive preview.
 

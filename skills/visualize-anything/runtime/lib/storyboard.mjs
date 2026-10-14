@@ -227,18 +227,30 @@ const normalizeEvidence = (scene, beats, where, {errors, warnings, paths, strict
       checkFocus(new Set(out.series.flatMap((entry) => [entry.label, ...entry.points.map((point) => point.label)]).filter(Boolean)), "chart's point labels or series");
     } else {
       out.labels = list(scene.labels).map((label) => String(label));
-      if (out.labels.length < 2 || out.labels.length > 12) errors.push(`${where}: a chart needs "labels", two to twelve of them, one per position along the axis.`);
+      // Past sixteen the router advises against it (one value per mark can no longer be read), but a whole
+      // distribution, every game of a benchmark sorted by its result, is read by its shape and is allowed.
+      if (out.labels.length < 2 || out.labels.length > 32) errors.push(`${where}: a chart needs "labels", two to thirty-two of them, one per position along the axis.`);
       if (new Set(out.labels).size !== out.labels.length) errors.push(`${where}: chart "labels" must be different from each other.`);
       const authored = Array.isArray(scene.series) ? scene.series : scene.values !== undefined ? [{values: scene.values}] : [];
       if (authored.length < 1 || authored.length > 4) errors.push(`${where}: a chart needs "values" (one number per label), or "series" (one to four of {"label", "values"}).`);
       out.series = authored.map((entry, index) => {
         const at = `${where} series ${index + 1}`;
         const values = list(entry?.values);
-        if (values.length !== out.labels.length || values.some((value) => !finite(value) || value < 0)) {
-          errors.push(`${at}: "values" must be one number, zero or more, for each of the ${out.labels.length} labels.`);
+        // A bar can go below zero: a change against a control (a gain on most datasets, a loss on one) is drawn from a zero line.
+        if (values.length !== out.labels.length || values.some((value) => !finite(value))) {
+          errors.push(`${at}: "values" must be one number for each of the ${out.labels.length} labels.`);
+        }
+        // The spread the source reports for each value (its ± standard deviation), drawn as a whisker.
+        const spread = entry?.errors === undefined ? null : list(entry.errors);
+        if (spread && (spread.length !== out.labels.length || spread.some((value) => !finite(value) || value < 0))) {
+          errors.push(`${at}: "errors" must be one number, zero or more, for each of the ${out.labels.length} labels: the ± the source reports.`);
         }
         if (authored.length > 1 && !text(entry?.label)) errors.push(`${at}: with more than one series, each needs a "label" for the legend.`);
-        return {label: text(entry?.label), values};
+        // Series with the same "stack" are one bar made of parts: a total and what it is made of.
+        const stack = text(entry?.stack);
+        if (stack && out.chart !== 'bar') errors.push(`${at}: "stack" puts series on top of each other in one bar; it needs a bar chart.`);
+        if (stack && values.some((value) => finite(value) && value < 0)) errors.push(`${at}: a stacked series adds to the bar below it, so its values must be zero or more.`);
+        return {label: text(entry?.label), values, errors: spread, stack};
       });
       checkFocus(new Set([...out.labels, ...out.series.map((entry) => entry.label).filter(Boolean)]), "chart's labels or series");
     }
@@ -275,6 +287,12 @@ const normalizeEvidence = (scene, beats, where, {errors, warnings, paths, strict
     const flat = out.values.flat().filter(Number.isFinite);
     out.scale = Array.isArray(scene.scale) && scene.scale.length === 2 && scene.scale.every(finite) && scene.scale[0] < scene.scale[1] ? scene.scale : flat.length ? [Math.min(0, ...flat), Math.max(...flat)] : [0, 1];
     if (scene.scale !== undefined && out.scale !== scene.scale) errors.push(`${where}: "scale" is [low, high], the values the lightest and the strongest colour stand for.`);
+    // A grid of changes (a gain or a loss, a ratio above or below 1) is coloured both ways from a centre:
+    // above it toward the accent, below it toward rose. With a scale that crosses zero, the centre is zero.
+    if (scene.center !== undefined && (!finite(scene.center) || scene.center <= out.scale[0] || scene.center >= out.scale[1])) {
+      errors.push(`${where}: "center" is the value that means no change (0 for a difference, 1 for a ratio); it must lie inside the scale, between ${out.scale[0]} and ${out.scale[1]}.`);
+    }
+    out.center = finite(scene.center) ? scene.center : out.scale[0] < 0 && out.scale[1] > 0 ? 0 : null;
     out.axis = text(scene.axis);
     checkFocus(new Set([...out.rows, ...out.columns]), "matrix's row or column labels");
   }

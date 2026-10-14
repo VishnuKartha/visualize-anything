@@ -2,7 +2,7 @@ import type React from 'react';
 import {useContext} from 'react';
 import {AbsoluteFill, Freeze, useCurrentFrame} from 'remotion';
 import {StageContext} from '../StageContext';
-import {MONO, SANS, STAGE, beatAt, ramp, theme} from '../theme';
+import {MONO, SANS, STAGE, beatAt, glide, ramp, theme} from '../theme';
 import type {BulletsScene, Scene, Shot} from '../types';
 
 // A recap is not a slide of text. Each takeaway arrives beside the moment that proved it: the
@@ -60,7 +60,9 @@ export const BulletsView: React.FC<{scene: BulletsScene}> = ({scene}) => {
   const shot = shotAt(current);
   const before = current > 0 ? shotAt(current - 1) : null;
   const pictured = Boolean(shot) && scenes.length > 0;
-  const swap = ramp(frame, scene.steps[current]?.cue ?? 0, 14);
+  // Two whole pictures cross-fade, so the fade eases in as well as out: an ease-out starts with most of
+  // the change in its first frame, which reads as a cut.
+  const swap = glide(frame, scene.steps[current]?.cue ?? 0, 18);
   const same = before && shot && before.scene === shot.scene && before.frame === shot.frame;
   // Each picture sits in a panel of its own shape. Two of different shapes cross-fade; neither is resized.
   const panel = (of: Shot): React.CSSProperties => {

@@ -119,8 +119,10 @@ Write the points in parallel. If the left panel says what it remembers and what 
 
 | Field | Meaning |
 |---|---|
-| `labels` | Two to twelve positions along the axis, in order. |
-| `values` | One number for each label, zero or more. Or `series`: one to four of `{"label", "values"}` for grouped bars or some lines, with a legend. |
+| `labels` | Two to thirty-two positions along the axis, in order. Labels that do not fit under their bar are set at an angle. Above sixteen, the values are not written on each bar: show a whole distribution this way (each game of a benchmark, sorted), and say what its shape shows. |
+| `values` | One number for each label. Or `series`: one to four of `{"label", "values"}` for grouped bars or some lines, with a legend. A value can be less than zero. |
+| `errors` | Optional, in a series: the ± that the source reports for each value. Each is drawn as a whisker on its bar. |
+| `stack` | Optional, in a series of a bar chart: series with the same `stack` are one bar, each drawn on top of the one before. Use it for a total and its parts: a run time that is setup plus training. Each part shows its value inside it, and the bar shows the total above it. |
 | `chart` | `"bar"` (the default), `"line"`, or `"scatter"`. A line is for an ordered axis (rounds, sizes, time). Bars are for separate things. A scatter is for a trade-off. |
 | `unit` | Written after each value when there is one series: `"s"`, `"%"`. |
 | `axis` | A short line in the corner of the chart. It says what is measured and which direction is better. |
@@ -129,6 +131,30 @@ Write the points in parallel. If the left panel says what it remembers and what 
 - `focus` names the labels or series that the sentence is about. With one series, the bars in focus keep the accent and the others become slate.
 - The axis of a bar or line chart always starts at zero. A bar that starts at a different value makes the difference look larger than it is. A scatter is different: the eye reads a point by its position, not its length, so the axes of a scatter fit the data.
 - Chart only the values that the narration compares. A table of forty cells is not a chart. The four cells that make the point are.
+
+### A chart of changes: the result on each case
+
+An ablation or a comparison with a control is a result on each dataset, task, or setting. One count ("better on 13 of 14") hides the sizes of the differences and the case that went the other way. When the brief has the time and the interest for it, chart the change on each case:
+
+```json
+{
+  "id": "vary",
+  "need": "chart",
+  "why": "The paper's ablation, dataset by dataset: what varying the graph gains over freezing it.",
+  "ref": "Table 16",
+  "after": "compose",
+  "title": "Varying the graph, against *freezing* it",
+  "labels": ["Cora", "CiteSeer", "PubMed", "Physics"],
+  "values": [2.70, 0.84, 0.88, -0.04],
+  "unit": "pts",
+  "axis": "accuracy gained over Frozen, points",
+  "beats": [{"say": "...", "focus": ["Physics"]}]
+}
+```
+
+- Each value is a difference that the oracle calculates from two `given` cells of the table. Thus the two cells are checked against the paper, and the difference is calculated, not typed.
+- A value below zero draws down from the zero line, in rose. The values show their sign.
+- Use `errors` for the ± of the source when the sentence says that a difference is larger or smaller than the noise. Give the ± of the values that the chart draws.
 
 ### A scatter: the trade-off
 
@@ -214,6 +240,7 @@ Write the points in parallel. If the left panel says what it remembers and what 
 | `rows`, `columns` | Two to eight labels each. |
 | `values` | One row of numbers for each row label, with one number for each column. |
 | `scale` | Optional `[low, high]`: the values for the faintest and the strongest colour. The default is from zero (or the lowest value, if it is less than zero) to the highest. Set it when you compare two matrices, so one colour shows the same value in both. |
+| `center` | Optional. The value that means no change: 0 for a difference, 1 for a ratio. Cells above it shade toward the accent, and cells below it toward rose, each by its distance from the centre. A scale that crosses zero has the centre 0 by default. Use it for a grid of gains and losses. |
 | `numbers` | `false` shows the colours only. Use it for a grid that is too large to read cell by cell (more than six columns). The facts ledger does not examine values that are not shown. |
 | `axis` | A short line under the grid: what a row is, or what the values are. |
 

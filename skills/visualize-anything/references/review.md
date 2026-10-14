@@ -2,7 +2,7 @@
 
 The agent that built a video is the worst judge of it. It knows the purpose of each frame, so it sees the purpose and not the frame. A review is valid only when it comes from an agent that did not build the video and did not get the intent.
 
-There are two reviews. The first review reads the plan, before you record or draw. A finding then costs one sentence to correct. The second review watches the result.
+There are three reviews. The first review reads the plan, before you record or draw. A finding then costs one sentence to correct. The second review watches the result. The third review runs once at the end, and asks only whether each graphic could be better.
 
 ## The three viewers
 
@@ -84,6 +84,26 @@ The plan review finds the things that no check can find: a word that the newcome
 The video brief names the three viewers and their contracts. It asks its reviewer to say each scene back as the newcomer. Give its findings dispositions the same way. The verification round judges those also.
 
 Tell the user the decision of the reviewer and the changes that you made because of the review. If no subagent is available, say that the video was not independently reviewed. Do not review it yourself and call that a review.
+
+## The graphics review
+
+Run it once, after the video review ends at SHIP.
+
+```bash
+VA review <project> --graphics
+```
+
+The other reviews read contact sheets that Remotion draws again. This review cuts its frames from `out/video.mp4`, the file that the viewer gets. The frames have the encoding, the captions, and the real timing. There is one frame for each visual state, at full size, in `out/review/graphics/`. The brief gives each scene its need, its reason, its `ref`, the narration, and its frames. It also gives the length and the focus of the brief, and how long each scene is on screen, so the reviewer can judge whether the picture carries enough for this video in the time it has. The reviewer suggests the best use of the time there is, not more time. One rich result in a ten-minute video about experiments needs more than one number. In a sixty-second video, one number can be correct.
+
+The reviewer judges for the person the video is for:
+
+- **The brief states an audience.** There is one reviewer, who is that audience and came for the focus of the brief. The tool writes `graphics-audience.md`.
+- **The brief states no audience.** There are three reviewers, the three viewers above, as in the plan review. The tool writes `graphics-newcomer.md`, `graphics-practitioner.md`, and `graphics-expert.md`.
+
+1. **Give each brief to its own new subagent**, and start them at the same time. Give each only this instruction: *"Read `<path to its brief>` and do what it says."* Each writes `graphics-<viewer>-report.md`.
+2. **Read the reports.** Each scene is KEEP or IMPROVE. Then come the top improvements, at most five, and the missing capabilities. Where the viewers disagree, use the rules above: the expert decides what is true, the newcomer the pace, the practitioner the mechanisms and costs.
+3. **Make the improvements that you agree with**, and render again. Do not run this review again. The tool refuses a second run while a report exists, unless the user asks for one (`--force`).
+4. **Tell the user the missing capabilities.** They are the things that the skill cannot draw yet. They are the way that the skill becomes more powerful.
 
 ## Where this came from
 

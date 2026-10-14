@@ -24,6 +24,8 @@ test('one frame that changes far more than its neighbours is a cut; a fade is no
   assert.match(texts({changes: frames({450: 0.04})}), /0:15: the picture changes in a single frame inside "b"/);
   // A six-frame fade on a busy picture: each frame changes about as much as the next.
   assert.deepEqual(kinds({changes: frames({594: 0.023, 595: 0.021, 596: 0.02, 597: 0.019, 598: 0.018, 599: 0.017})}), []);
+  // A fade-out that ends with the video: the last frame has no neighbour after it, and that is not a still frame.
+  assert.deepEqual(kinds({changes: frames({894: 0.022, 895: 0.022, 896: 0.022, 897: 0.022, 898: 0.022, 899: 0.022})}), []);
   // Small things popping in stay under the floor.
   assert.deepEqual(kinds({changes: frames({450: SEAM.cut - 0.005})}), []);
 });
