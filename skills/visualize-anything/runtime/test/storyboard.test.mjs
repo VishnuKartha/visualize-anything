@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {planCodeChange} from '../lib/hyperframes.mjs';
+import {countAndRestyle} from '../lib/steps.mjs';
 import {subtitleFiles} from '../lib/media.mjs';
 import {speakable} from '../lib/speech.mjs';
 import {buildSteps, buildTimeline, captionPhrases, loadStoryboard, phraseTime, projectPaths, spokenTokens, withAutoCues} from '../lib/storyboard.mjs';
@@ -328,7 +329,17 @@ test('an evidence scene is checked for its own fields and comes back in one shap
   const compare = load({need: 'contrast', left: {label: 'A', tone: 'negative', points: ['slow', {text: 'exact', tone: 'positive'}]}, right: {label: 'B', points: ['fast']}});
   assert.deepEqual(compare.panels.map((panel) => panel.points.map((point) => point.tone)), [['negative', 'positive'], ['neutral']]);
   const chart = load({need: 'chart', labels: ['Round 1', 'Round 4'], values: [71, 41], unit: 's'});
-  assert.deepEqual([chart.chart, chart.series], ['bar', [{label: null, values: [71, 41]}]]);
+  assert.deepEqual([chart.chart, chart.series], ['bar', [{label: null, values: [71, 41], errors: null, stack: null}]]);
+  // A cost and its parts: two series sharing a stack are one bar.
+  const parts = load({need: 'chart', labels: ['Reddit', 'products'], series: [{label: 'split', values: [313.7, 179.3], stack: 'EDiS'}, {label: 'training', values: [518.7, 404.5], stack: 'EDiS'}, {label: 'Full GCN', values: [713.4, 1154]}]});
+  assert.deepEqual(parts.series.map((entry) => entry.stack), ['EDiS', 'EDiS', null]);
+  // A chart of changes against a control goes below zero, and carries the ± the source reports.
+  const gains = load({need: 'chart', labels: ['Cora', 'Physics'], series: [{values: [2.7, -0.04], errors: [0.98, 0.09]}]});
+  assert.deepEqual(gains.series, [{label: null, values: [2.7, -0.04], errors: [0.98, 0.09], stack: null}]);
+  // A grid of changes is coloured both ways from a centre: zero by default when the scale crosses it, or the one given (1 for ratios).
+  assert.equal(load({need: 'matrix', rows: ['a', 'b'], columns: ['x', 'y'], values: [[1, -2], [0.5, 3]]}).center, 0);
+  assert.equal(load({need: 'matrix', rows: ['a', 'b'], columns: ['x', 'y'], values: [[0.2, 0.4], [0.6, 0.8]]}).center, null);
+  assert.equal(load({need: 'matrix', rows: ['a', 'b'], columns: ['x', 'y'], values: [[1.1, 0.9], [1.6, 1.0]], scale: [0.8, 1.7], center: 1}).center, 1);
   const quote = load({need: 'quote', quote: 'A drawing mistake stays a drawing mistake.', highlight: 'stays a drawing mistake'});
   assert.deepEqual(quote.highlights, [[3, 6]]);
 
@@ -337,9 +348,12 @@ test('an evidence scene is checked for its own fields and comes back in one shap
   broken({need: 'number', metrics: [{value: '36'}]}, /needs "label"/);
   broken({need: 'contrast', left: {label: 'A', points: ['x']}}, /needs "left" and "right"/);
   broken({need: 'contrast', left: {label: 'A', tone: 'angry', points: ['x']}, right: {label: 'B', points: ['y']}}, /"tone" must be one of/);
-  broken({need: 'chart', labels: ['a', 'b'], values: [1]}, /one number, zero or more, for each of the 2 labels/);
+  broken({need: 'chart', labels: ['a', 'b'], values: [1]}, /one number for each of the 2 labels/);
+  broken({need: 'chart', labels: ['a', 'b'], series: [{values: [1, 2], errors: [0.1]}]}, /"errors" must be one number, zero or more/);
+  broken({need: 'chart', labels: ['a', 'b'], series: [{label: 'p', values: [1, -2], stack: 's'}, {label: 'q', values: [1, 2], stack: 's'}]}, /stacked series .* zero or more/);
   broken({need: 'chart', labels: ['a', 'b'], values: [1, 2], beats: [{say: 'The first one is the tall one.', focus: ['c']}]}, /"focus" names "c"/);
   broken({need: 'quote', quote: 'A drawing mistake stays.', highlight: 'never said'}, /is not in the quote/);
+  broken({need: 'matrix', rows: ['a', 'b'], columns: ['x', 'y'], values: [[1.1, 0.9], [1.6, 1.0]], scale: [0.8, 1.7], center: 2}, /"center" is the value that means no change/);
   broken({need: 'figure', image: 'figures/missing.png'}, /image not found/);
   broken({need: 'figure', image: 'figures/paper.pdf'}, /Export a PDF figure to PNG/);
   broken({need: 'number', metrics: [{value: '36', label: 'fps'}], beats: [{say: 'It does one thing well.', show: 2}]}, /asks for more than the 1 this scene has/);
@@ -392,4 +406,11 @@ test('the storyboard says what it does with each claim of a paper\'s abstract', 
   assert.throws(() => load([{abstract: 1, scene: 'open', omit: 'Both at once is neither.'}]), /one or the other/);
   assert.throws(() => load([{abstract: 1, omit: 'no'}]), /"omit" says why/);
   assert.throws(() => load([{abstract: 1, scene: 'open'}, {abstract: 1, scene: 'open'}]), /accounted for twice/);
+});
+
+test('a count and a restyle of the same number in one play() is caught; in two plays it is not', () => {
+  assert.deepEqual(countAndRestyle('self.play(ChangeDecimalToValue(tally[0], 12), tally[0].animate.set_color(ACCENT), run_time=1.4)'), ['tally[0]']);
+  assert.deepEqual(countAndRestyle('self.play(seen.to(9), seen.animate.shift(UP))'), ['seen']);
+  assert.deepEqual(countAndRestyle('self.play(ChangeDecimalToValue(tally[0], 12), run_time=1.4)\nself.play(tally[0].animate.set_color(ACCENT))'), []);
+  assert.deepEqual(countAndRestyle('self.play(track.reach(1), seen.to(9), other.animate.shift(UP))'), []);
 });

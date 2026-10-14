@@ -115,8 +115,18 @@ const madeOf = (scene) => {
   if (scene.kind === 'compare') return `Panels: ${scene.panels.map((panel) => `"${panel.label}": ${panel.points.map((point) => `${point.text} [${point.tone}]`).join(', ')}`).join(' | ')}`;
   if (scene.kind === 'chart' && scene.chart === 'scatter') return `A scatter chart, ${scene.axis} against ${scene.across}: ${scene.series.map((entry) => `${entry.label ? `${entry.label}: ` : ''}${entry.points.map((point) => `${point.label || 'a point'} at (${point.x}, ${point.y})`).join(', ')}`).join(' | ')}`;
   if (scene.kind === 'table') return `A table (${scene.columns.join(' | ')}): ${scene.rows.map((cells) => cells.join(' | ')).join('; ')}${scene.best ? `; the row marked best: ${scene.best}` : ''}`;
-  if (scene.kind === 'matrix') return `A ${scene.rows.length}×${scene.columns.length} matrix, rows ${scene.rows.join(', ')}, columns ${scene.columns.join(', ')}${scene.numbers ? '' : ', as colours alone'}`;
-  if (scene.kind === 'chart') return `A ${scene.chart} chart${scene.unit ? ` in ${scene.unit}` : ''}: ${scene.series.map((entry) => `${entry.label ? `${entry.label}: ` : ''}${scene.labels.map((label, index) => `${label} = ${entry.values[index]}`).join(', ')}`).join(' | ')}`;
+  if (scene.kind === 'matrix') {
+    // The reviewer is told every value, and how the colour reads them, as the viewer sees them.
+    const colour = scene.center !== null && scene.center !== undefined ? `coloured both ways from ${scene.center} (above it toward the accent, below it toward rose)` : `coloured from ${scene.scale[0]} (faint) to ${scene.scale[1]} (strong)`;
+    const values = scene.rows.map((row, index) => `${row}: ${scene.values[index].join(', ')}`).join('; ');
+    return `A ${scene.rows.length}×${scene.columns.length} matrix, rows ${scene.rows.join(', ')}, columns ${scene.columns.join(', ')}, ${colour}${scene.numbers ? '' : ', as colours alone (no numbers on screen)'}${scene.axis ? `; under it: "${scene.axis}"` : ''}. Values: ${values}`;
+  }
+  if (scene.kind === 'chart') {
+    // Each value with the ± drawn on it, and which bars are stacked into one, as they appear on screen.
+    const series = scene.series.map((entry) => `${entry.label ? `${entry.label}${entry.stack ? ` (stacked into "${entry.stack}")` : ''}: ` : ''}${scene.labels.map((label, index) => `${label} = ${entry.values[index]}${entry.errors ? ` ±${entry.errors[index]}` : ''}`).join(', ')}`).join(' | ');
+    const whiskers = scene.series.some((entry) => entry.errors) ? '; each ± is drawn as an error bar' : '';
+    return `A ${scene.chart} chart${scene.unit ? ` in ${scene.unit}` : ''}${scene.axis ? `, labelled "${scene.axis}"` : ''}: ${series}${whiskers}`;
+  }
   if (scene.kind === 'quote') return `Quoted: "${scene.quote}"${scene.attribution ? ` (${scene.attribution})` : ''}`;
   if (scene.kind === 'figure') return `Figure: ${scene.image}${scene.caption ? `, captioned "${scene.caption}"` : ''}${scene.callouts.length ? `; pointed out: ${scene.callouts.map((callout) => callout.label).join(', ')}` : ''}`;
   return null;

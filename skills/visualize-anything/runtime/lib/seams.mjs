@@ -43,7 +43,10 @@ export const findSeams = (props, measured) => {
   // One finding per moment: a swap often shows up in two neighbouring frames.
   const moments = [];
   const changes = measured.changes || [];
-  const cuts = changes.filter((change, index) => change.score >= SEAM.cut && change.score >= SEAM.spike * Math.max(changes[index - 1]?.score ?? 0, changes[index + 1]?.score ?? 0));
+  // A spike is measured against the frames that exist on either side: the video's first and last frames have one neighbour,
+  // and a missing one is not a still frame (a fade-out that ends with the video would otherwise read as a cut).
+  const neighbours = (index) => [changes[index - 1], changes[index + 1]].filter(Boolean).map((change) => change.score);
+  const cuts = changes.filter((change, index) => change.score >= SEAM.cut && neighbours(index).length > 0 && change.score >= SEAM.spike * Math.max(...neighbours(index)));
   for (const cut of cuts) {
     const last = moments.at(-1);
     if (last && cut.time - last.time < 0.2) last.score = Math.max(last.score, cut.score);

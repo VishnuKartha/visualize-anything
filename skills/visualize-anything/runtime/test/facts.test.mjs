@@ -12,6 +12,9 @@ test('numbers are found as digits and as words', () => {
   assert.deepEqual(values('It keeps 96.5% of the file, in two hundred and fifty blocks of twenty-one bits.'), [96.5, 250, 21]);
   assert.deepEqual(values('About 3 million keys, 13,002 weights, and 2.5 thousand more.'), [3000000, 13002, 2500]);
   assert.deepEqual(numbersIn('searched in twenty looks').map((number) => number.text), ['twenty']);
+  // A chart of changes shows a loss with its sign; a dash between two numbers is a range, not a sign.
+  assert.deepEqual(values('-0.04'), [-0.04]);
+  assert.deepEqual(values('a drop (-2.5 points), in a 3-4 range'), [-2.5, 3, 4]);
 });
 
 test('what is not a quantity is left alone', () => {

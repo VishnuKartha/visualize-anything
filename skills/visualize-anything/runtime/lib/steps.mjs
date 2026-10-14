@@ -129,7 +129,12 @@ export const paper = async (paths, source) => {
   if (!read) fail(`paper.py finished but wrote no usable ${path.join(out, 'paper.json')}.`);
   const body = read.sections.filter((section) => section.kind === 'body');
   log(`paper: ${read.title}`);
-  log(`  read from ${read.read_from}: ${body.length} sections, ${read.figures.filter((figure) => figure.file).length} of ${read.figures.length} figures saved, ${read.tables.length} tables.`);
+  log(`  read from ${read.read_from}: ${body.length} sections, ${read.figures.filter((figure) => figure.file).length} of ${read.figures.length} figures saved, ${read.tables.length} tables${read.tables_from_source ? ` (${read.tables_from_source} of them from the LaTeX source, where the HTML edition lost or misnumbered them)` : ''}.`);
+  for (const conflict of read.table_conflicts || []) {
+    log(`  Table ${conflict.n}: the HTML edition and the LaTeX source give this number to different tables. The source's is kept, since its numbers are the PDF's.`);
+    log(`    HTML:   ${conflict.html}`);
+    log(`    source: ${conflict.source}`);
+  }
   log('');
   log('  The abstract, claim by claim. Plan the video from these before anything in the body:');
   for (const claim of read.claims) log(`    ${String(claim.n).padStart(2)}. ${claim.text}${claim.numbers.length ? `   [states ${claim.numbers.join(', ')}]` : ''}`);
@@ -369,8 +374,38 @@ export const manimTaste = (source, beside, className) => {
   for (const [pattern, what, instead] of NEEDS_LATEX) {
     if (pattern.test(code)) notes.push(`uses ${what}, which typesets with LaTeX and fails where none is installed. Use ${instead}.`);
   }
+  for (const clash of countAndRestyle(code)) notes.push(`changes the value of ${clash} and animates it in the same play(). Manim then leaves the number on its old value. Count in one play(), then recolour or move it in the next.`);
   if (!KIT.test(code)) notes.push('draws everything by hand. Start from the kit in va_manim (Cells, Tally, Flow, Track, Net, span, tag, fit, and the rest; see references/scene-manim.md) and keep raw Manim shapes for the one object the kit does not have.');
   return notes;
+};
+
+/**
+ * Each play() that counts a number to a new value (ChangeDecimalToValue, or a Tally's .to()) while it also
+ * animates that same number, or the group holding it, with .animate. The two animations fight over one
+ * mobject and the count is lost: the number stays where it started. Returns the clashing names.
+ */
+export const countAndRestyle = (code) => {
+  const clashes = [];
+  for (const start of [...code.matchAll(/self\.play\(/g)].map((match) => match.index + match[0].length)) {
+    let depth = 1;
+    let end = start;
+    while (end < code.length && depth > 0) {
+      if (code[end] === '(') depth += 1;
+      else if (code[end] === ')') depth -= 1;
+      end += 1;
+    }
+    const call = code.slice(start, end - 1);
+    const counted = [
+      ...[...call.matchAll(/ChangeDecimalToValue\(\s*([\w.\[\]]+)/g)].map((match) => match[1]),
+      ...[...call.matchAll(/([\w.\[\]]+)\.to\(/g)].map((match) => match[1]),
+    ];
+    const animated = [...call.matchAll(/([\w.\[\]]+)\.animate\b/g)].map((match) => match[1]);
+    const root = (name) => name.split(/[.\[]/)[0];
+    for (const name of counted) {
+      if (animated.some((other) => other === name || other.startsWith(`${name}[`) || other.startsWith(`${name}.`) || name.startsWith(`${other}[`) || name.startsWith(`${other}.`) || root(other) === root(name)) && !clashes.includes(name)) clashes.push(name);
+    }
+  }
+  return clashes;
 };
 
 const findRendered = (dir, className) => {
@@ -711,7 +746,7 @@ export const buildProps = async (paths) => {
     } else if (scene.kind === 'table') {
       scenes.push({...base, title: scene.title, columns: scene.columns, rows: scene.rows, best: scene.best, highlight: scene.highlight, caption: scene.caption});
     } else if (scene.kind === 'matrix') {
-      scenes.push({...base, title: scene.title, rows: scene.rows, columns: scene.columns, values: scene.values, scale: scene.scale, numbers: scene.numbers, axis: scene.axis});
+      scenes.push({...base, title: scene.title, rows: scene.rows, columns: scene.columns, values: scene.values, scale: scene.scale, center: scene.center ?? null, numbers: scene.numbers, axis: scene.axis});
     } else if (scene.kind === 'quote') {
       scenes.push({...base, quote: scene.quote, highlights: scene.highlights, attribution: scene.attribution});
     } else if (scene.kind === 'figure') {
@@ -888,6 +923,8 @@ const STATIC_ADVICE = {
   stat: 'bring each number in on the words that say it ("cues": [{"at": "<phrase>", "show": n}]), or add a "note" where the sentence qualifies it',
   compare: 'bring each point in on the words that make it ("cues": [{"at": "<phrase>", "show": n}])',
   chart: 'grow the next bar on the words that say its value ("show"), or light the one the sentence is about ("focus": ["<label>"])',
+  table: 'bring each row in on the words that name it ("cues": [{"at": "<phrase>", "show": n}]), or light the row or column the sentence is about ("focus": ["<row or column>"])',
+  matrix: 'fill the next row on the words that name it ("cues": [{"at": "<phrase>", "show": n}]), or light the row or column the sentence is about ("focus": [...])',
   quote: 'mark a phrase when the voice reaches it ("highlight", then "cues": [{"at": "<phrase>", "show": n}]), or quote less',
   figure: 'point at the next part of the figure when the voice names it ("callouts", then "cues": [{"at": "<phrase>", "show": n}])',
 };
@@ -966,7 +1003,8 @@ export const qc = async (paths, {video, props} = {}) => {
     for (const item of statics) {
       log(`    ${item.scene.id} beat ${item.beat}: ${(item.end - item.start).toFixed(1)}s still (${clock(item.start)}–${clock(item.end)})`);
     }
-    for (const kind of new Set(statics.map((item) => item.scene.kind))) log(`    ${kind}: ${STATIC_ADVICE[kind]}.`);
+    // Every kind that can hold still has its advice; a kind added later without any still gets the general rule.
+    for (const kind of new Set(statics.map((item) => item.scene.kind))) log(`    ${kind}: ${STATIC_ADVICE[kind] || 'change the picture on the words that name what changes: a cue ("cues": [{"at": "<phrase>", ...}]) on the next part, or a "focus" on the one the sentence is about'}.`);
   }
   if (seams.length) {
     log(`  ${seams.length} seam(s), where the video stops being one continuous thing:`);
@@ -997,6 +1035,18 @@ const parseLayout = (output) =>
     })
     .filter(Boolean);
 
+/** One frame for each visual state of the video, late in the state, when its transitions have settled and it is what the viewer dwells on. */
+const settledShots = (props) =>
+  props.scenes.flatMap((scene, sceneIndex) =>
+    scene.steps.map((step, stepIndex) => {
+      const local = Math.min(step.cue + Math.max(0, Math.round(step.cueFrames * 0.8) - 1), scene.frames - lastLook(scene));
+      const frame = scene.from + Math.max(step.cue, local);
+      const part = scene.steps.filter((entry, index) => entry.beat === step.beat && index <= stepIndex).length;
+      const sub = part > 1 ? String.fromCharCode(96 + part) : '';
+      return {frame, scene, sceneIndex, beat: step.beat, sub, label: `${String(sceneIndex + 1).padStart(2, '0')} ${scene.id} · beat ${step.beat + 1}${sub} · ${clock(frame / props.fps)}`};
+    }),
+  );
+
 /**
  * Contact sheets: every visual state of the video, labelled, a few per image, so the picture can
  * be reviewed in a handful of reads. Each frame's layout is measured in the browser on the way.
@@ -1012,17 +1062,7 @@ export const stills = async (paths, only = [], {at} = {}) => {
     }
     shots.push({frame: Math.round(seconds * props.fps), label: `at ${clock(seconds)} (${seconds}s)`});
   } else {
-    props.scenes.forEach((scene, sceneIndex) => {
-      if (only.length && !only.includes(scene.id)) return;
-      scene.steps.forEach((step, stepIndex) => {
-        // Late in the state: transitions have settled and this is what the viewer dwells on.
-        const local = Math.min(step.cue + Math.max(0, Math.round(step.cueFrames * 0.8) - 1), scene.frames - lastLook(scene));
-        const frame = scene.from + Math.max(step.cue, local);
-        const part = scene.steps.filter((entry, index) => entry.beat === step.beat && index <= stepIndex).length;
-        const sub = part > 1 ? String.fromCharCode(96 + part) : '';
-        shots.push({frame, label: `${String(sceneIndex + 1).padStart(2, '0')} ${scene.id} · beat ${step.beat + 1}${sub} · ${clock(frame / props.fps)}`});
-      });
-    });
+    shots.push(...settledShots(props).filter((shot) => !only.length || only.includes(shot.scene.id)));
   }
   if (!shots.length) fail('No matching scenes to capture.');
 
@@ -1078,8 +1118,9 @@ const RENDERER_NAME = {title: 'opening statement', credit: 'end card', code: 'co
  * when, where the frames are, and what the automated checks found. The reviewer must be a fresh
  * agent that did not build the video; this brief is all it is given.
  */
-export const review = async (paths, {verify, plan} = {}) => {
+export const review = async (paths, {verify, plan, graphics, force} = {}) => {
   if (plan) return reviewPlan(paths);
+  if (graphics) return reviewGraphics(paths, {force});
   const video = path.join(paths.out, 'video.mp4');
   if (!existsSync(video)) fail('Nothing to review yet. Run `va render <project>` first.');
   const {storyboard} = load(paths);
@@ -1182,6 +1223,102 @@ export const review = async (paths, {verify, plan} = {}) => {
   log(`review: brief for an independent reviewer → ${briefPath}`);
   log(`  Give that file, and nothing else, to a fresh agent. It writes ${reportPath}.`);
   return {briefPath, reportPath, round};
+};
+
+/**
+ * The last look, and the only one of its kind: every visual state cut from the finished MP4 itself,
+ * read scene by scene by fresh agents who ask of each one only whether the graphic could be better
+ * for the person watching. A stated audience gets one reviewer who is that audience; with none
+ * stated, the three viewers each get one, as in the other reviews. Each reads many full-size
+ * frames, so it is expensive, and it runs once per video.
+ */
+const reviewGraphics = async (paths, {force} = {}) => {
+  const video = path.join(paths.out, 'video.mp4');
+  if (!existsSync(video)) fail('Nothing to review yet. Run `va render <project>` first.');
+  const reviewDir = path.join(paths.out, 'review');
+  mkdirSync(reviewDir, {recursive: true});
+  const done = readdirSync(reviewDir).filter((name) => /^graphics-.+-report\.md$/.test(name));
+  if (done.length && !force) {
+    fail(`The graphics review has already run: ${done.map((name) => path.join(reviewDir, name)).join(', ')}. It reads every frame at full size, so it runs once per video. Act on those reports; pass --force only if the user asks for another.`);
+  }
+  const {storyboard} = load(paths);
+  const {props} = await buildProps(paths);
+  const frameDir = path.join(reviewDir, 'graphics');
+  rmSync(frameDir, {recursive: true, force: true});
+  mkdirSync(frameDir, {recursive: true});
+
+  // Cut from the rendered file, not redrawn: this is exactly what a viewer sees, encoding and all.
+  const shots = settledShots(props);
+  log(`review: cutting ${shots.length} frame(s) from ${video}...`);
+  for (const shot of shots) {
+    shot.file = path.join(frameDir, `${String(shot.sceneIndex + 1).padStart(2, '0')}-${shot.scene.id}-beat${shot.beat + 1}${shot.sub}.png`);
+    await run('ffmpeg', ['-y', '-v', 'error', '-ss', (shot.frame / props.fps).toFixed(3), '-i', video, '-frames:v', '1', shot.file], {capture: true});
+  }
+
+  const brief = storyboard.brief || {};
+  // The person the video was made for. With nobody stated, the three viewers stand in, as they do in the other reviews.
+  const viewers = brief.audience
+    ? [{key: 'audience', name: 'the audience', who: `You are the person this video was made for: ${brief.audience}.${brief.focus ? ` You came for this: ${brief.focus}.` : ''}`, contract: 'Every picture gives you what you came for, at the depth this video has time for, and nothing on screen is in your way.'}]
+    : Object.entries(VIEWERS).map(([key, viewer]) => ({key, name: viewer.name, who: viewer.who, contract: viewer.contract}));
+
+  const authored = new Map(storyboard.scenes.map((scene) => [scene.id, scene]));
+  const scenes = [];
+  props.scenes.forEach((scene, index) => {
+    const source = authored.get(scene.id);
+    scenes.push(`### ${index + 1}. ${scene.id} · ${RENDERER_NAME[scene.kind]} · ${clock(scene.from / props.fps)} · on screen ${fmtSeconds(scene.frames / props.fps)}`, '');
+    scenes.push(`- Viewer needs to see: ${source.need || '(not declared)'}`);
+    if (source.why) scenes.push(`- Why this picture: ${source.why}`);
+    if (source.ref) scenes.push(`- From the source: ${source.ref}`);
+    scenes.push('- The voice:');
+    source.beats.forEach((beat, beatIndex) => scenes.push(`  ${beatIndex + 1}. ${beat.say}`));
+    scenes.push('- Frames (read every one):');
+    shots.filter((shot) => shot.scene === scene).forEach((shot) => scenes.push(`  - beat ${shot.beat + 1}${shot.sub}: ${shot.file}`));
+    scenes.push('');
+  });
+
+  log('');
+  log(`review: ${shots.length} frame(s) cut from the video → ${frameDir}`);
+  log(`  graphics brief${viewers.length > 1 ? 's, one per viewer (no audience in the brief)' : ` for ${brief.audience}`}. Give each to its own fresh agent, and nothing else:`);
+  const briefs = viewers.map((viewer) => {
+    const briefPath = path.join(reviewDir, `graphics-${viewer.key}.md`);
+    const reportPath = path.join(reviewDir, `graphics-${viewer.key}-report.md`);
+    const out = [];
+    out.push(`# Graphics review, as ${viewer.name}: ${storyboard.title}`, '');
+    out.push(
+      'You are judging the graphics of a narrated explainer video, scene by scene. You did not make it. Each frame below was cut from the finished video file, late in each visual state, when it has settled. Judge only what is on screen, and whether a better picture was possible for you.',
+      '',
+    );
+    out.push('## Who you are', '', viewer.who, '', `**The contract:** ${viewer.contract}`, '');
+    out.push('## The video', '');
+    out.push(`- Subject: ${storyboard.title}`);
+    if (brief.focus) out.push(`- What it sets out to answer: ${brief.focus}`);
+    out.push(`- Length: ${fmtSeconds(props.totalFrames / props.fps)}${brief.length ? ` (asked for about ${brief.length}s)` : ''}`);
+    for (const source of storyboard.sources) out.push(`- Made from: ${source.title || source.id} (${source.kind})${source.url ? `, ${source.url}` : ''}`);
+    out.push(`- Video, if you need to see motion: ${video}`, '');
+    out.push('## The scenes', '', ...scenes);
+    out.push(`The video runs ${fmtSeconds(props.totalFrames / props.fps)}, and each scene shows how long it is on screen. Suggest the best use of the time there is, not more time.`, '');
+    out.push('## What to judge, for each scene, as yourself', '');
+    out.push(
+      '1. **Can this graphic be improved for you?** Answer yes or no first. "No" is a good answer when the frame is right; do not invent a defect.',
+      '2. **If yes, how.** Name the change concretely: what to add, remove, enlarge, recolour, move, or show instead. Say whether it is a change to this scene, or a different kind of picture.',
+      '3. **Does it carry what you came for, in the time it has?** Given the length and the focus above, does the picture show enough? A rich result (many rows, datasets, or conditions) collapsed into one number, when the scene has the time and you want more, is a finding. So is a frame too dense to read in the seconds it is on screen.',
+      '4. **Craft.** Legibility at normal size, contrast, alignment, empty space, a colour that means two things, a label that names nothing.',
+      '5. **What the skill could not do.** If the better picture needs something the scene kinds cannot draw (a kind of chart, an error bar, a layout), say so as its own item. These go back into the skill.',
+      '',
+    );
+    out.push('## Your report', '');
+    out.push(`Write it to ${reportPath}, with no praise:`, '');
+    out.push(
+      '- **Scene by scene:** one line each: `<n>. <id>: KEEP` or `<n>. <id>: IMPROVE: <the change>`.',
+      '- **Top improvements**, at most five, the largest gain for you first. Each one: scene · beat, what to change, and what in the frame shows the need.',
+      '- **Missing capabilities:** what the skill should be able to draw and cannot. Write "none" if none.',
+    );
+    writeFileSync(briefPath, out.join('\n') + '\n');
+    log(`  ${viewer.name.padEnd(16)} ${briefPath}`);
+    return {viewer: viewer.key, briefPath, reportPath};
+  });
+  log('  This review runs once.');
+  return {briefs, frames: shots.length};
 };
 
 /**

@@ -45,7 +45,7 @@ def fetch(url: str) -> tuple[bytes, str]:
 
 
 # The few TeX signs that carry meaning in a number: kept as the sign, where every other macro is dropped.
-SIGNS = {"\\times": "×", "\\approx": "≈", "\\sim": "~", "\\pm": "±", "\\leq": "≤", "\\geq": "≥", "\\le ": "≤ ", "\\ge ": "≥ ", "\\cdot": "·", "\\%": "%"}
+SIGNS = {**{f"\\{name}": letter for name, letter in zip("alpha beta gamma delta epsilon theta lambda mu rho sigma tau phi omega".split(), "αβγδεθλμρστφω")}, "\\times": "×", "\\approx": "≈", "\\sim": "~", "\\pm": "±", "\\leq": "≤", "\\geq": "≥", "\\le ": "≤ ", "\\ge ": "≥ ", "\\cdot": "·", "\\%": "%"}
 
 
 def clean(text: str) -> str:
@@ -171,6 +171,280 @@ def from_arxiv_html(identifier: str, out: Path) -> dict | None:
 
     return {"source": f"https://arxiv.org/abs/{identifier}", "read_from": "arXiv HTML", "id": identifier, "title": title, "authors": authors, "abstract": abstract,
             "sections": sections, "figures": sorted(figures, key=lambda f: f["n"]), "tables": sorted(tables, key=lambda t: t["n"])}
+
+
+# ---------------------------------------------------------------------------------------------
+# LaTeX source: the tables the HTML edition lost
+
+# arXiv's HTML edition is made by LaTeXML, which drops a table it cannot convert (one brought in by
+# \input inside an appendix, say) and leaves only a missing label. The source the paper was built
+# from has every table, so the tables the HTML lacks are read from it, numbered as LaTeX numbers them.
+
+
+def uncommented(tex: str) -> str:
+    r"""The TeX the paper prints: no % comments, nothing between \iffalse and \fi."""
+    tex = re.sub(r"(?<!\\)%[^\n]*", "", tex)
+    return re.sub(r"\\iffalse\b.*?\\fi\b", "", tex, flags=re.S)
+
+
+def source_tree(identifier: str, out: Path) -> Path | None:
+    """The paper's LaTeX source, unpacked into paper/source/. None when arXiv has no source for it."""
+    import gzip, io, tarfile
+    try:
+        data, _ = fetch(f"https://arxiv.org/e-print/{identifier}")
+    except Exception:
+        return None
+    root = out / "source"
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        raw = gzip.decompress(data) if data[:2] == b"\x1f\x8b" else data
+    except OSError:
+        return None
+    try:
+        with tarfile.open(fileobj=io.BytesIO(raw)) as archive:
+            try:
+                archive.extractall(root, filter="data")
+            except TypeError:  # Python before 3.11.4 has no extraction filter; keep only plain files inside root
+                safe = [m for m in archive.getmembers() if (m.isfile() or m.isdir()) and not Path(m.name).is_absolute() and ".." not in Path(m.name).parts]
+                archive.extractall(root, members=safe)
+    except tarfile.TarError:
+        if b"\\documentclass" not in raw:
+            return None  # a PDF-only submission
+        (root / "main.tex").write_bytes(raw)
+    return root
+
+
+def main_file(root: Path) -> Path | None:
+    """The file LaTeX is run on: the one arXiv's 00README names as top level, else the document that pulls in the most others."""
+    readme = root / "00README.json"
+    if readme.is_file():
+        try:
+            for entry in json.loads(readme.read_text()).get("sources", []):
+                if entry.get("usage") == "toplevel" and (root / entry.get("filename", "")).is_file():
+                    return root / entry["filename"]
+        except (ValueError, AttributeError):
+            pass
+    mains = []
+    for file in root.rglob("*.tex"):
+        text = uncommented(file.read_text("utf-8", "replace"))
+        if "\\documentclass" in text and "\\begin{document}" in text:
+            mains.append((len(re.findall(r"\\(?:input|include|subfile|import|subimport)\b", text)), len(text), file))
+    return max(mains)[2] if mains else None
+
+
+INCLUDE = re.compile(r"\\(?:input|include|subfile)\s*\{([^}]*)\}|\\input\s+([^\s{}\\]+)|\\(?:sub)?import\s*\{([^}]*)\}\s*\{([^}]*)\}")
+
+
+def expanded(root: Path) -> str:
+    r"""The main file with every \input, \include, and \import written out in place, as LaTeX reads them."""
+    main = main_file(root)
+    if main is None:
+        return ""
+
+    def expand(file: Path, depth: int, here: Path) -> str:
+        text = uncommented(file.read_text("utf-8", "replace"))
+        if depth > 12:
+            return text
+
+        def inline(match):
+            if match.group(3) is not None:  # \import{dir}{file}: paths inside it are taken from dir
+                folder = (here / match.group(3).strip()) if match.group(0).lstrip("\\").startswith("sub") else (root / match.group(3).strip())
+                name, base = match.group(4).strip(), folder
+            else:
+                # LaTeX resolves \input from the folder it was run in, the main file's, wherever the \input is written.
+                name, base = (match.group(1) or match.group(2)).strip(), main.parent
+            for candidate in (base / name, base / f"{name}.tex"):
+                if candidate.is_file():
+                    return expand(candidate, depth + 1, candidate.parent)
+            return ""
+        return INCLUDE.sub(inline, text)
+    tex = expand(main, 0, main.parent)
+    # The paper's own short macros (\newcommand{\edis}{EDiS}) written out, so a name reads as the paper prints it.
+    macros = {}
+    for match in re.finditer(r"\\(?:re)?newcommand\*?\s*\{?\\([A-Za-z]+)\}?\s*(?=\{)|\\def\s*\\([A-Za-z]+)\s*(?=\{)", tex):
+        body, _ = braced(tex, match.end())
+        if "#" not in body and len(body) < 60:
+            macros[match.group(1) or match.group(2)] = re.sub(r"\\xspace\b", "", re.sub(r"\\[A-Za-z]+\s*\{([^{}]*)\}", r"\1", body))
+    for name, body in sorted(macros.items(), key=lambda item: -len(item[0])):
+        tex = re.sub(r"\\" + name + r"(?![A-Za-z])(?:\{\})?", lambda _, body=body: body, tex)
+    return tex
+
+
+def braced(text: str, start: int) -> tuple[str, int]:
+    """The contents of the {group} that opens at text[start], and the index after it."""
+    depth, index = 0, start
+    while index < len(text):
+        escaped = index > 0 and text[index - 1] == "\\"
+        if text[index] == "{" and not escaped:
+            depth += 1
+        elif text[index] == "}" and not escaped:
+            depth -= 1
+            if depth == 0:
+                return text[start + 1:index], index + 1
+        index += 1
+    return text[start + 1:], len(text)
+
+
+def top_level_split(text: str, separator: str) -> list[str]:
+    r"""Split at a separator that is not inside a {group}: a \\\\ inside \makecell{a\\\\b} is a line break in one cell, not a new row."""
+    parts, depth, last, index = [], 0, 0, 0
+    while index < len(text):
+        char = text[index]
+        if char == "{" and text[index - 1:index] != "\\":
+            depth += 1
+        elif char == "}" and text[index - 1:index] != "\\":
+            depth -= 1
+        elif depth == 0 and text.startswith(separator, index) and (separator != "&" or text[index - 1:index] != "\\"):
+            parts.append(text[last:index])
+            index += len(separator)
+            if separator == "\\\\" and text[index:index + 1] == "[":  # \\[2pt]
+                index = text.find("]", index) + 1 or index
+            last = index
+            continue
+        index += 1
+    parts.append(text[last:])
+    return parts
+
+
+def cell_text(cell: str) -> str:
+    """One table cell as it reads: the shading, emphasis, and sizes dropped, ± and the like kept."""
+    cell = re.sub(r"\\(?:cellcolor|rowcolor|color)(?:\[[^\]]*\])?\{[^}]*\}", "", cell)
+    cell = re.sub(r"\\multi(?:column|row)\{[^}]*\}\{[^}]*\}", "", cell)
+    cell = re.sub(r"\\(?:scriptsize|footnotesize|small|tiny|normalsize|bfseries|itshape|centering)\b", "", cell)
+    cell = re.sub(r"\$\^\{?\\dagger\}?\$|\^\\dagger", "", cell)
+    cell = cell.replace("\\\\", " ")
+    return clean(cell.replace("$", "").replace("~", " "))
+
+
+RULES = re.compile(r"\\(?:toprule|midrule|bottomrule|hline|specialrule\{[^}]*\}\{[^}]*\}\{[^}]*\}|cline\{[^}]*\}|cmidrule(?:\([^)]*\))?\{[^}]*\}|addlinespace(?:\[[^\]]*\])?|endfirsthead|endhead|endfoot|endlastfoot)")
+
+
+def tabular_rows(body: str) -> list[list[str]]:
+    rows = []
+    for line in top_level_split(RULES.sub("", body), "\\\\"):
+        line = re.sub(r"\\rowcolor(?:\[[^\]]*\])?\{[^}]*\}", "", line)
+        cells = [cell_text(cell) for cell in top_level_split(line, "&")]
+        if any(cells):
+            rows.append(cells)
+    return rows
+
+
+TABULAR = re.compile(r"\\begin\{(tabular\*?|tabularx|tabulary|longtable\*?|NiceTabular\*?|tblr)\}")
+WIDTH_FIRST = {"tabular*", "tabularx", "tabulary", "NiceTabular*"}
+
+
+def tabulars_in(body: str) -> list[tuple[int, list[list[str]]]]:
+    """Each tabular in a stretch of TeX, with where it starts and its rows."""
+    found = []
+    for match in TABULAR.finditer(body):
+        name = match.group(1)
+        end = body.find(f"\\end{{{name}}}", match.end())
+        head = body[match.end():end if end >= 0 else len(body)]
+        index = 0
+        # Skip an optional [t] and the width (tabular*, tabularx), then the column spec, each a {group}.
+        for _ in range(2 if name in WIDTH_FIRST else 1):
+            while head[index:index + 1].isspace():
+                index += 1
+            if head[index:index + 1] == "[":
+                index = head.find("]", index) + 1
+            index = head.find("{", index)
+            if index < 0:
+                break
+            _, index = braced(head, index)
+        if name.startswith("longtable"):  # its captions are rows of the table; take them out
+            head = re.sub(r"\\caption\*?(?:\[[^\]]*\])?\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*(?:\\\\)?", "", head)
+        found.append((match.start(), tabular_rows(head[max(index, 0):])))
+    return found
+
+
+def source_tables(tex: str) -> list[dict]:
+    r"""
+    Every numbered table in the order LaTeX numbers them, each with its caption and the rows of its tabular.
+
+    LaTeX steps the table counter at each \caption inside a table, table*, wraptable, or longtable, and
+    at each \captionof{table}. A \caption* is unnumbered, and a caption inside a subtable labels a part
+    of its table, so neither counts.
+    """
+    found = []
+    tex = re.sub(r"\\begin\{subtable\}.*?\\end\{subtable\}", lambda m: re.sub(r"\\caption", r"\\subcaption", m.group(0)), tex, flags=re.S)
+    events = re.compile(r"\\begin\{(table\*?|wraptable|longtable\*?)\}|\\captionof\s*\{table\}(?:\[[^\]]*\])?\s*(?=\{)")
+    position = 0
+    while True:
+        match = events.search(tex, position)
+        if not match:
+            break
+        if match.group(1):
+            name = match.group(1)
+            end = tex.find(f"\\end{{{name}}}", match.end())
+            end = len(tex) if end < 0 else end
+            body = tex[match.end():end]
+            scope = tex[match.start():end] if name.startswith("longtable") else body
+            captions = []
+            for caption in re.finditer(r"\\caption(?!\*)(?:of\s*\{table\})?(?:\[[^\]]*\])?\s*(?=\{)", body):
+                text, _ = braced(body, caption.end())
+                captions.append((caption.start(), clean(text.replace("$", ""))))
+            if name.startswith("longtable"):
+                captions = captions[:1]  # a longtable repeats its caption on each page; it is one table
+            tabulars = tabulars_in(scope)
+            for index, (at, caption) in enumerate(captions):
+                # A table with one caption and several tabulars (subtables, panels) is one table: its rows are all of theirs, in order.
+                rows = tabulars[index][1] if len(captions) > 1 and index < len(tabulars) else ([row for _, part in tabulars for row in part] if len(captions) == 1 else [])
+                found.append({"caption": caption, "rows": rows})
+            position = end + 1
+        else:
+            # \captionof{table} outside a float: the tabular it labels sits in the same minipage, just before or after it.
+            text, after = braced(tex, match.end())
+            before = tex.rfind("\\begin{minipage}", 0, match.start())
+            close = tex.find("\\end{minipage}", match.end())
+            scope = tex[before:close] if before >= 0 and close >= 0 and close - before < 20000 else tex[max(0, match.start() - 4000):after + 4000]
+            tabulars = tabulars_in(scope)
+            found.append({"caption": clean(text.replace("$", "")), "rows": tabulars[0][1] if len(tabulars) == 1 else []})
+            position = after
+    return found
+
+
+def caption_words(caption: str) -> set[str]:
+    return {word for word in re.findall(r"[a-z]{4,}", caption.lower())}
+
+
+def add_source_tables(paper: dict, identifier: str, out: Path) -> None:
+    r"""
+    Add the tables that the HTML edition lost, read from the LaTeX source.
+
+    The source is numbered by counting captions as LaTeX does, so its numbers are the PDF's, the ones a
+    reader cites. The two editions are first held against each other on the tables both have. When
+    most agree, the source's numbering is trusted: a missing table is added, and where the two give the
+    same number to different tables (LaTeXML can number a figure's caption as a table), the source's
+    table replaces the HTML's and the conflict is recorded. When most disagree, or the paper renumbers
+    its tables by hand (\setcounter, a supplement's "S1"), nothing is added.
+    """
+    paper["tables_from_source"], paper["table_conflicts"] = 0, []
+    root = source_tree(identifier, out)
+    tex = expanded(root) if root else ""
+    if not tex or re.search(r"\\(?:setcounter\{table\}|renewcommand\{?\\thetable)", tex):
+        return
+    numbered = dict(enumerate(source_tables(tex), start=1))
+
+    def same(a: str, b: str) -> bool:
+        x, y = caption_words(a), caption_words(b)
+        return not x or not y or len(x & y) >= 0.5 * min(len(x), len(y))
+    shared = [table for table in paper["tables"] if table["n"] in numbered]
+    agree = [table for table in shared if same(table["caption"], numbered[table["n"]]["caption"])]
+    if not shared or len(agree) < 0.75 * len(shared):
+        return
+    by_number = {table["n"]: table for table in paper["tables"]}
+    for number, table in numbered.items():
+        if len(table["rows"]) < 2:
+            continue
+        entry = {"n": number, "caption": re.sub(r"^Table\s*\d+\s*[:.]\s*", "", table["caption"]), "columns": table["rows"][0], "rows": table["rows"][1:], "read_from": "LaTeX source"}
+        if number not in by_number:
+            by_number[number] = entry
+            paper["tables_from_source"] += 1
+        elif not same(by_number[number]["caption"], table["caption"]):
+            paper["table_conflicts"].append({"n": number, "html": by_number[number]["caption"][:120], "source": entry["caption"][:120]})
+            by_number[number] = entry
+            paper["tables_from_source"] += 1
+    paper["tables"] = sorted(by_number.values(), key=lambda t: t["n"])
 
 
 # ---------------------------------------------------------------------------------------------
@@ -330,6 +604,15 @@ def markdown(paper: dict) -> str:
                 out += [f"**Table {number}.** {table['caption']}", "", "| " + " | ".join(pad(table["columns"])) + " |", "|" + "---|" * width]
                 out += ["| " + " | ".join(pad(row)) + " |" for row in table["rows"]]
                 out.append("")
+    loose = [table for number, table in sorted(tables.items()) if number not in placed]
+    if loose:
+        out += ["## Tables not cited in the text above", "", "Read from the paper's LaTeX source where the HTML edition lost them. Their numbers are LaTeX's own, so they match the PDF.", ""]
+        for table in loose:
+            width = max(len(table["columns"]), *(len(row) for row in table["rows"])) if table["rows"] else len(table["columns"])
+            pad = lambda row: [cell.replace("|", "/") for cell in row] + [""] * (width - len(row))
+            out += [f"**Table {table['n']}.** {table['caption']}", "", "| " + " | ".join(pad(table["columns"])) + " |", "|" + "---|" * width]
+            out += ["| " + " | ".join(pad(row)) + " |" for row in table["rows"]]
+            out.append("")
     return "\n".join(out)
 
 
@@ -346,6 +629,9 @@ def main() -> None:
     paper = None
     if identifier and not local.exists():
         paper = from_arxiv_html(identifier, out)
+        if paper is not None:
+            # The HTML edition can lose tables it could not convert; the source has them.
+            add_source_tables(paper, identifier, out)
         if paper is None:
             data, _ = fetch(f"https://arxiv.org/pdf/{identifier}")
             (out / "paper.pdf").write_bytes(data)
@@ -364,7 +650,7 @@ def main() -> None:
     (out / "paper.json").write_text(json.dumps(paper, indent=2, ensure_ascii=False) + "\n")
     (out / "paper.md").write_text(markdown(paper) + "\n")
     print(json.dumps({"title": paper["title"], "read_from": paper["read_from"], "claims": len(paper["claims"]), "sections": len([s for s in paper["sections"] if s["kind"] == "body"]),
-                      "figures": len(paper["figures"]), "figures_saved": len([f for f in paper["figures"] if f["file"]]), "tables": len(paper["tables"]), "licence": paper["licence"]}))
+                      "figures": len(paper["figures"]), "figures_saved": len([f for f in paper["figures"] if f["file"]]), "tables": len(paper["tables"]), "tables_from_source": paper.get("tables_from_source", 0), "table_conflicts": paper.get("table_conflicts", []), "licence": paper["licence"]}))
 
 
 if __name__ == "__main__":

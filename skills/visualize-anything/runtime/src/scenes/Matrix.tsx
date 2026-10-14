@@ -10,14 +10,15 @@ import {Evidence, arrival, bodyOf, partWay, stepAt} from './parts';
 
 const LABEL_W = 220;
 const HEADER_H = 76;
-const DIM = 0.22;
+// Rows and columns out of focus step back but stay readable: the viewer still compares against them.
+const DIM = 0.4;
 
 /** How lit a label, or a cell in a row and column, is under a step's focus: a cell is lit when its row or its column is named. */
 const lit = (step: Step | undefined, ...names: string[]) => (!Array.isArray(step?.focus) || names.some((name) => step.focus!.includes(name)) ? 1 : 0);
 
 /** The accent mixed into the panel by `t`, as an rgb() string: the colour of a cell at that share of the scale. */
-const warm = (t: number) => {
-  const [a, b] = [theme.panel, theme.accent].map((hex) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)));
+const warm = (t: number, toward: string = theme.accent) => {
+  const [a, b] = [theme.panel, toward].map((hex) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)));
   return `rgb(${a.map((channel, index) => Math.round(lerp(channel, b[index], 0.08 + 0.92 * t))).join(',')})`;
 };
 
@@ -27,8 +28,14 @@ export const MatrixView: React.FC<{scene: MatrixScene}> = ({scene}) => {
   const [low, high] = scene.scale;
   const rows = scene.rows.length;
   const cols = scene.columns.length;
-  const cell = Math.min(160, (body.w - LABEL_W - 40) / cols, (body.h - HEADER_H - (scene.axis ? 50 : 0)) / rows);
-  const grid = {w: LABEL_W + cell * cols, h: HEADER_H + cell * rows};
+  // Column labels wider than their cell are set at an angle, and the header grows to hold them.
+  const longest = Math.max(0, ...scene.columns.map((column) => column.length));
+  const headerFont = (estimate: number) => Math.min(30, estimate >= 130 ? 34 : estimate >= 100 ? 28 : 24);
+  const roughCell = Math.min(160, (body.w - LABEL_W - 40) / cols, (body.h - HEADER_H - (scene.axis ? 50 : 0)) / rows);
+  const tilted = longest * headerFont(roughCell) * 0.58 > roughCell - 8;
+  const headerH = tilted ? Math.min(180, 30 + longest * headerFont(roughCell) * 0.58 * 0.66) : HEADER_H;
+  const cell = Math.min(160, (body.w - LABEL_W - 40) / cols, (body.h - headerH - (scene.axis ? 50 : 0)) / rows);
+  const grid = {w: LABEL_W + cell * cols, h: headerH + cell * rows};
   const left = body.x + (body.w - grid.w) / 2;
   const top = body.y + (body.h - grid.h - (scene.axis ? 50 : 0)) / 2;
   const places = Math.min(2, Math.max(0, ...scene.values.flat().map((value) => (String(value).split('.')[1] || '').length)));
@@ -46,9 +53,9 @@ export const MatrixView: React.FC<{scene: MatrixScene}> = ({scene}) => {
           <div
             key={`c${index}`}
             data-va-text="axis"
-            style={{position: 'absolute', left: LABEL_W + cell * index, top: 0, width: cell, height: HEADER_H, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: SANS, fontSize: Math.min(30, size), fontWeight: 600, color: theme.text, opacity: lerp(0.4, 1, focus(column)), whiteSpace: 'nowrap'}}
+            style={{position: 'absolute', left: LABEL_W + cell * index, top: 0, width: cell, height: headerH, display: 'flex', alignItems: tilted ? 'flex-end' : 'center', justifyContent: tilted ? 'flex-start' : 'center', paddingBottom: tilted ? 10 : 0, boxSizing: 'border-box', fontFamily: SANS, fontSize: Math.min(30, size), fontWeight: 600, color: theme.text, opacity: lerp(0.4, 1, focus(column)), whiteSpace: 'nowrap'}}
           >
-            {column}
+            <span style={tilted ? {display: 'inline-block', transform: 'rotate(-40deg)', transformOrigin: 'left bottom', marginLeft: cell / 2 - 6} : undefined}>{column}</span>
           </div>
         ))}
         {scene.rows.map((name, rowIndex) => {
@@ -58,13 +65,18 @@ export const MatrixView: React.FC<{scene: MatrixScene}> = ({scene}) => {
             <div key={`r${rowIndex}`}>
               <div
                 data-va-text="axis"
-                style={{position: 'absolute', left: 0, top: HEADER_H + cell * rowIndex, width: LABEL_W - 24, height: cell, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontFamily: SANS, fontSize: Math.min(30, size), fontWeight: 600, color: theme.text, opacity: lerp(0.4, 1, rowOn), whiteSpace: 'nowrap'}}
+                style={{position: 'absolute', left: 0, top: headerH + cell * rowIndex, width: LABEL_W - 24, height: cell, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontFamily: SANS, fontSize: Math.min(30, size), fontWeight: 600, color: theme.text, opacity: lerp(0.4, 1, rowOn), whiteSpace: 'nowrap'}}
               >
                 {name}
               </div>
               {scene.columns.map((column, colIndex) => {
                 const value = scene.values[rowIndex][colIndex];
-                const t = Math.max(0, Math.min(1, (value - low) / (high - low || 1)));
+                // With a centre, a cell is coloured by how far it is from no change, on its own side.
+                const center = scene.center;
+                const below = center !== null && value < center;
+                const t = center === null
+                  ? Math.max(0, Math.min(1, (value - low) / (high - low || 1)))
+                  : Math.max(0, Math.min(1, below ? (center - value) / (center - low || 1) : (value - center) / (high - center || 1)));
                 // Cells warm from left to right as their row arrives.
                 const filled = start === null ? 0 : glide(frame, start + colIndex * 4, 22);
                 const shade = lerp(DIM, 1, focus(name, column));
@@ -74,13 +86,13 @@ export const MatrixView: React.FC<{scene: MatrixScene}> = ({scene}) => {
                     style={{
                       position: 'absolute',
                       left: LABEL_W + cell * colIndex + 3,
-                      top: HEADER_H + cell * rowIndex + 3,
+                      top: headerH + cell * rowIndex + 3,
                       width: cell - 6,
                       height: cell - 6,
                       borderRadius: 10,
                       boxSizing: 'border-box',
                       border: `1px solid ${theme.panelBorder}`,
-                      backgroundColor: filled > 0 ? warm(t * filled) : theme.panel,
+                      backgroundColor: filled > 0 ? warm(t * filled, below ? theme.rose : theme.accent) : theme.panel,
                       opacity: shade,
                       display: 'flex',
                       alignItems: 'center',

@@ -71,12 +71,14 @@ export type ChartScene = Base & {
   /** A scatter chart's horizontal measure; null for bars and lines. */
   across: string | null;
   labels: string[];
-  series: {label: string | null; values: number[]; points?: {x: number; y: number; label: string | null}[]}[];
+  /** `errors` is the ± the source reports for each value, drawn as a whisker; null when it reports none. */
+  series: {label: string | null; values: number[]; errors?: number[] | null; stack?: string | null; points?: {x: number; y: number; label: string | null}[]}[];
 };
 /** The rows of a results table the sentence compares. The first column names each row; `best` is the source's own. */
 export type TableScene = Base & {kind: 'table'; title: string | null; columns: string[]; rows: string[][]; best: string | null; highlight: string[]; caption: string | null};
 /** A grid of values coloured by size: attention weights, a confusion matrix. `scale` is [low, high] of the colour ramp. */
-export type MatrixScene = Base & {kind: 'matrix'; title: string | null; rows: string[]; columns: string[]; values: number[][]; scale: [number, number]; numbers: boolean; axis: string | null};
+/** `center`, when set, is the value that means no change: cells above it shade toward the accent, cells below toward rose. */
+export type MatrixScene = Base & {kind: 'matrix'; title: string | null; rows: string[]; columns: string[]; values: number[][]; scale: [number, number]; center: number | null; numbers: boolean; axis: string | null};
 /** The source's own words. `highlights` are [first, last] word indexes of the phrases to mark. */
 export type QuoteScene = Base & {kind: 'quote'; quote: string; highlights: [number, number][]; attribution: string | null};
 /** The source's own figure, with the parts worth seeing pointed out. Callout positions are percentages of the image. */

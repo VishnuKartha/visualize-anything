@@ -48,6 +48,11 @@ export const numbersIn = (text) => {
       if (/\b(table|tables|figure|figures|fig\.?|section|sec\.?|eq\.?|equation|algorithm|alg\.?|appendix|chapter|listing|page|p\.|§)\s*$/i.test(plain.slice(Math.max(0, tokens[i].index - 12), tokens[i].index))) continue;
       let value = Number(raw.replace(/,(?=\d{3})/g, '').replace(/,$/, ''));
       let shown = raw.replace(/,$/, '');
+      // A minus sign that stands alone before the digits ("-0.04", a chart's loss) is part of the value; a dash between two numbers ("3-4") is not.
+      if (/[-−]/.test(before) && !/[\w.]/.test(plain[tokens[i].index - 2] || '')) {
+        value = -value;
+        shown = `-${shown}`;
+      }
       const scale = tokens[i + 1]?.[0].toLowerCase();
       if (scale in SCALES || scale === 'hundred') {
         value *= SCALES[scale] || 100;

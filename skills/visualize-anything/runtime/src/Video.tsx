@@ -18,7 +18,7 @@ import {StatView} from './scenes/Stat';
 import {TitleView} from './scenes/Title';
 import {TraceView} from './scenes/Trace';
 import {FadeContext, StageContext} from './StageContext';
-import {MONO, STAGE, theme} from './theme';
+import {MONO, STAGE, glide, theme} from './theme';
 import type {ExplainerProps, Scene} from './types';
 
 const GRID = 64;
@@ -78,11 +78,15 @@ const SceneShell: React.FC<{scene: Scene; captions: boolean}> = ({scene, caption
   const frame = useCurrentFrame();
   // Fade through the backdrop between scenes, except where the next scene carries the same picture on.
   const fadeIn = scene.fadeIn === false ? 1 : interpolate(frame, [0, 9], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
-  const fadeOut = scene.fadeOut === false ? 1 : interpolate(frame, [scene.frames - 7, scene.frames - 1], [1, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
-  const opacity = fadeIn * fadeOut;
-  // A heading that changes at a carried-on join is faded across it, not swapped. One that stays the same stays put.
   const {scenes} = useContext(StageContext);
   const at = scenes.findIndex((entry) => entry.id === scene.id);
+  // A fade-out eases in: a linear fade of a dense, bright picture puts most of its change in the first frame,
+  // which reads as a cut. The video's last scene fades to nothing, alone, so it also fades longer.
+  const last = at === scenes.length - 1;
+  const outFrames = last ? Math.min(20, Math.max(8, Math.floor(scene.frames / 4))) : 8;
+  const fadeOut = scene.fadeOut === false ? 1 : 1 - glide(frame, scene.frames - outFrames, outFrames - 1);
+  const opacity = fadeIn * fadeOut;
+  // A heading that changes at a carried-on join is faded across it, not swapped. One that stays the same stays put.
   const changesIn = scene.fadeIn === false && scenes[at - 1]?.heading !== scene.heading;
   const changesOut = scene.fadeOut === false && scenes[at + 1]?.heading !== scene.heading;
   const carry =

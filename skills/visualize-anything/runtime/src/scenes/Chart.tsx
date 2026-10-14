@@ -12,19 +12,11 @@ const COLORS = [theme.accent, theme.cyan, theme.violet, theme.amber];
 const PAD = {left: 150, right: 70, top: 96, bottom: 108};
 const DIM = 0.3;
 
-/** A round number at or above `value` that divides into four clean steps. */
-const niceTop = (value: number) => {
-  if (value <= 0) return 1;
-  const power = 10 ** Math.floor(Math.log10(value));
-  const lead = value / power;
-  return (lead <= 1 ? 1 : lead <= 2 ? 2 : lead <= 4 ? 4 : lead <= 5 ? 5 : lead <= 8 ? 8 : 10) * power;
-};
-
-/** A round step at or above `value`: 1, 2, 2.5, or 5 times a power of ten. */
+/** A round step at or above `value`: 1, 1.5, 2, 2.5, 3, 4, 5, 6, or 8 times a power of ten, so the axis ends near the data. */
 const niceStep = (value: number) => {
   const power = 10 ** Math.floor(Math.log10(value));
   const lead = value / power;
-  return (lead <= 1 ? 1 : lead <= 2 ? 2 : lead <= 2.5 ? 2.5 : lead <= 5 ? 5 : 10) * power;
+  return ([1, 1.5, 2, 2.5, 3, 4, 5, 6, 8].find((step) => lead <= step + 1e-9) ?? 10) * power;
 };
 
 /**
@@ -40,6 +32,25 @@ const fit = (values: number[]) => {
     const from = Math.max(low >= 0 ? 0 : -Infinity, Math.floor((low - span * 0.08) / step) * step);
     if (from + step * 4 >= high + span * 0.08) return {from, to: from + step * 4};
   }
+};
+
+/**
+ * The value axis of a bar or line chart. It always holds zero, so a bar's length is its value. With
+ * only positive values it runs from zero to a round top in four steps, as before; when a value goes
+ * below zero (a loss against a control), it runs from a round floor to a round top in round steps.
+ */
+const valueAxis = (low: number, high: number): {from: number; to: number; ticks: number[]} => {
+  if (low >= 0) {
+    // Four round steps from zero, the top as near the largest value as a round step allows.
+    const to = 4 * niceStep(high / 4);
+    return {from: 0, to, ticks: [0, 1, 2, 3, 4].map((line) => Number(((to * line) / 4).toFixed(6)))};
+  }
+  const step = niceStep((Math.max(high, 0) - low) / 5);
+  const from = Math.floor(low / step) * step;
+  const to = Math.max(step, Math.ceil(high / step) * step);
+  const ticks: number[] = [];
+  for (let value = from; value <= to + step / 1000; value += step) ticks.push(Number(value.toFixed(6)));
+  return {from, to, ticks};
 };
 
 const tick = (value: number) => (Math.abs(value) >= 1000 ? value.toLocaleString('en-US') : String(Number(value.toFixed(4))));
@@ -66,11 +77,41 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
   };
   const count = scene.labels.length;
   const many = scene.series.length > 1;
-  const plot = {x: PAD.left, y: PAD.top, w: body.w - PAD.left - PAD.right, h: body.h - PAD.top - PAD.bottom};
+  // Labels that do not fit under their slot are set at an angle, and the plot leaves room below for them.
+  const labelSize = count > 8 ? 24 : 30;
+  const slotWidth = (body.w - PAD.left - PAD.right) / Math.max(1, count);
+  const longest = Math.max(0, ...scene.labels.map((label) => label.length));
+  const tilted = !(scene.chart === 'scatter') && longest * labelSize * 0.56 > slotWidth * 0.94;
+  const bottom = tilted ? Math.min(260, 40 + longest * labelSize * 0.56 * 0.64) : PAD.bottom;
+  const plot = {x: PAD.left, y: PAD.top, w: body.w - PAD.left - PAD.right, h: body.h - PAD.top - bottom};
   // A scatter places each point by two measurements; its points are counted across the series in order.
   const scatter = scene.chart === 'scatter';
   const dots = scene.series.flatMap((entry, seriesIndex) => (entry.points || []).map((point) => ({...point, seriesIndex, series: entry.label})));
-  const ys = scatter ? fit(dots.map((dot) => dot.y)) : {from: 0, to: niceTop(Math.max(...scene.series.flatMap((entry) => entry.values)))};
+  const spread = (entry: ChartScene['series'][number], index: number) => entry.errors?.[index] ?? 0;
+  // Series that share a `stack` key are drawn one on top of the other in one bar (a cost and its parts);
+  // every other series gets a bar of its own beside them.
+  const columns: number[][] = [];
+  const keys: string[] = [];
+  scene.series.forEach((entry, seriesIndex) => {
+    const key = scene.chart === 'bar' && entry.stack ? `stack:${entry.stack}` : `own:${seriesIndex}`;
+    const at = keys.indexOf(key);
+    if (at < 0) {
+      keys.push(key);
+      columns.push([seriesIndex]);
+    } else columns[at].push(seriesIndex);
+  });
+  const columnOf = (seriesIndex: number) => columns.findIndex((members) => members.includes(seriesIndex));
+  const baseOf = (seriesIndex: number, index: number) => {
+    const members = columns[columnOf(seriesIndex)];
+    return members.slice(0, members.indexOf(seriesIndex)).reduce((sum, member) => sum + scene.series[member].values[index], 0);
+  };
+  const stackTops = columns.filter((members) => members.length > 1).flatMap((members) => scene.labels.map((_, index) => members.reduce((sum, member) => sum + scene.series[member].values[index], 0)));
+  const lows = scene.series.flatMap((entry) => entry.values.map((value, index) => value - spread(entry, index)));
+  const highs = scene.series.flatMap((entry) => entry.values.map((value, index) => value + spread(entry, index)));
+  const ys = scatter ? fit(dots.map((dot) => dot.y)) : valueAxis(Math.min(...lows), Math.max(...highs, ...stackTops));
+  const ticks: number[] = 'ticks' in ys ? (ys.ticks as number[]) : [0, 1, 2, 3, 4].map((line) => ys.from + ((ys.to - ys.from) * line) / 4);
+  // A chart of changes (some values below zero) writes each value with its sign.
+  const signed = !scatter && lows.some((value) => value < 0) && scene.series.some((entry) => entry.values.some((value) => value < 0));
   const xs = scatter ? fit(dots.map((dot) => dot.x)) : {from: 0, to: 1};
   const top = ys.to;
   const xOf = (value: number) => plot.x + (plot.w * (value - xs.from)) / (xs.to - xs.from);
@@ -80,7 +121,7 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
   const singled = Array.isArray(step?.focus);
   const enter = ramp(frame, 0, 20);
   // A value is written above its mark when there is room for all of them, or when it is the one in focus.
-  const roomy = count * scene.series.length <= 8;
+  const roomy = count * Math.max(1, columns.length) <= 8;
   const size = slot / scene.series.length < 130 ? 28 : 34;
 
   const marks = scatter ? (
@@ -108,23 +149,49 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
     scene.labels.map((label, index) => {
       const grown = entered(index, 26, 5);
       const start = arrival(scene.steps, index, 5);
-      const group = Math.min(slot * 0.64, 190 * scene.series.length);
-      const width = group / scene.series.length;
+      const group = Math.min(slot * 0.64, 190 * columns.length);
+      const width = group / columns.length;
       return scene.series.map((entry, seriesIndex) => {
         const value = entry.values[index];
         const on = focus(label, entry.label);
-        const x = plot.x + slot * index + (slot - group) / 2 + width * seriesIndex;
-        const height = (plot.h * value * grown) / top;
-        const color = many ? COLORS[seriesIndex % COLORS.length] : singled || previous?.focus ? fallBack(on) : theme.accent;
+        const column = columnOf(seriesIndex);
+        const members = columns[column];
+        const stacked = members.length > 1;
+        const base = baseOf(seriesIndex, index);
+        const x = plot.x + slot * index + (slot - group) / 2 + width * column;
+        // Bars grow from the zero line: up for a value above it, down for one below. A stacked part grows from the top of the part below it.
+        const zero = yOf(base * grown);
+        const end = yOf((base + value) * grown);
+        const below = value < 0;
+        const color = many ? COLORS[seriesIndex % COLORS.length] : below ? theme.rose : singled || previous?.focus ? fallBack(on) : theme.accent;
         const counting = start === null ? 0 : ramp(frame, start, 26);
+        const whisker = spread(entry, index);
         return (
-          <g key={`${index}-${seriesIndex}`} opacity={many ? lerp(DIM, 1, on) : 1}>
-            <rect x={x + 3} y={plot.y + plot.h - height} width={width - 6} height={height} rx={Math.min(10, width / 6)} fill={color} />
-            {(roomy || on > 0.5) && grown > 0 ? (
+          <g key={`${index}-${seriesIndex}`} opacity={many ? lerp(DIM, 1, on) : below && (singled || previous?.focus) ? lerp(DIM + 0.25, 1, on) : 1}>
+            <rect x={x + 3} y={Math.min(zero, end)} width={width - 6} height={Math.abs(zero - end)} rx={Math.min(10, width / 6, Math.abs(zero - end) / 2)} fill={color} />
+            {whisker > 0 && grown > 0.98 ? (
+              <g stroke={theme.text} strokeWidth={3} opacity={0.7 * Math.min(1, (grown - 0.98) * 50)}>
+                <line x1={x + width / 2} x2={x + width / 2} y1={yOf(value - whisker)} y2={yOf(value + whisker)} />
+                <line x1={x + width / 2 - 10} x2={x + width / 2 + 10} y1={yOf(value - whisker)} y2={yOf(value - whisker)} />
+                <line x1={x + width / 2 - 10} x2={x + width / 2 + 10} y1={yOf(value + whisker)} y2={yOf(value + whisker)} />
+              </g>
+            ) : null}
+            {stacked && grown > 0 && Math.abs(zero - end) > size + 10 && (roomy || on > 0.5) ? (
+              // A part of a stack is labelled inside itself; the stack's total goes above it.
+              <text data-va-text="value" x={x + width / 2} y={(zero + end) / 2 + size * 0.35} textAnchor="middle" fontFamily={SANS} fontSize={size * 0.85} fontWeight={700} fill={theme.bg} opacity={Math.min(1, grown * 1.6) * lerp(0.55, 1, on)} style={{fontVariantNumeric: 'tabular-nums'}}>
+                {partWay(value, counting)}
+              </text>
+            ) : null}
+            {stacked && seriesIndex === members[members.length - 1] && grown > 0 ? (
+              <text data-va-text="value" x={x + width / 2} y={end - 16} textAnchor="middle" fontFamily={SANS} fontSize={size} fontWeight={700} fill={theme.text} opacity={Math.min(1, grown * 1.6)} style={{fontVariantNumeric: 'tabular-nums'}}>
+                {partWay(Number((base + value).toFixed(6)), counting)}
+              </text>
+            ) : null}
+            {!stacked && (roomy || on > 0.5) && grown > 0 ? (
               <text
                 data-va-text="value"
                 x={x + width / 2}
-                y={plot.y + plot.h - height - 16}
+                y={below ? yOf(value * grown - whisker * grown) + size + 12 : yOf(value * grown + whisker * grown) - 16}
                 textAnchor="middle"
                 fontFamily={SANS}
                 fontSize={size}
@@ -133,6 +200,7 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
                 opacity={Math.min(1, grown * 1.6) * lerp(0.55, 1, on)}
                 style={{fontVariantNumeric: 'tabular-nums'}}
               >
+                {signed && value > 0 ? '+' : ''}
                 {partWay(value, counting)}
                 {scene.unit && !many ? ` ${scene.unit}` : ''}
               </text>
@@ -196,11 +264,12 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
         }}
       >
         <svg width={body.w} height={body.h} style={{position: 'absolute', inset: 0}}>
-          {[0, 1, 2, 3, 4].map((line) => {
-            const value = ys.from + ((top - ys.from) * line) / 4;
+          {ticks.map((value, line) => {
+            // The zero line is the one the bars stand on; it is drawn firmer than the rest.
+            const base = scatter ? line === 0 : Math.abs(value) < 1e-9;
             return (
               <g key={line}>
-                <line x1={plot.x} x2={plot.x + plot.w} y1={yOf(value)} y2={yOf(value)} stroke={line ? theme.panelBorder : theme.dim} strokeWidth={line ? 1 : 2} />
+                <line x1={plot.x} x2={plot.x + plot.w} y1={yOf(value)} y2={yOf(value)} stroke={base ? theme.dim : theme.panelBorder} strokeWidth={base ? 2 : 1} />
                 <text data-va-text="axis" x={plot.x - 20} y={yOf(value) + 9} textAnchor="end" fontFamily={MONO} fontSize={24} fill={theme.muted}>
                   {tick(value)}
                 </text>
@@ -225,10 +294,11 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
               key={label}
               data-va-text="axis"
               x={plot.x + slot * (index + 0.5)}
-              y={plot.y + plot.h + 52}
-              textAnchor="middle"
+              y={plot.y + plot.h + (tilted ? 34 : 52)}
+              textAnchor={tilted ? 'end' : 'middle'}
+              transform={tilted ? `rotate(-40 ${plot.x + slot * (index + 0.5)} ${plot.y + plot.h + 34})` : undefined}
               fontFamily={SANS}
-              fontSize={count > 8 ? 24 : 30}
+              fontSize={labelSize}
               fontWeight={600}
               fill={theme.text}
               opacity={lerp(0.45, 1, entered(index, 14, 5)) * lerp(0.6, 1, focus(label, null))}

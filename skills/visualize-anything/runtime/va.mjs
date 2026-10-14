@@ -42,7 +42,8 @@ const USAGE = `Usage: va <command> [args]
   render <project>            Render scene by scene, join, add narration → out/video.mp4 (+ .srt, .vtt, thumbnail.png)
   qc <project>                Check the rendered video: complete, audible, in sync, picture not frozen
   review <project>            Write the brief for an independent reviewer (--verify <report> for a follow-up round;
-                              --plan before anything is built: one brief each for the newcomer, practitioner, and expert)
+                              --plan before anything is built: one brief each for the newcomer, practitioner, and expert;
+                              --graphics at the very end: every scene cut from the MP4, judged once for better graphics)
   build <project>             facts → prose → tts → diagram → manim → hyperframes → render
   studio <project>            Open Remotion Studio on the project for interactive preview
 
@@ -54,7 +55,7 @@ const parse = (argv) => {
   const positional = [];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (['--draft', '--force', '--plan', '--figures'].includes(arg)) flags[arg.slice(2)] = true;
+    if (['--draft', '--force', '--plan', '--figures', '--graphics'].includes(arg)) flags[arg.slice(2)] = true;
     else if (['--out', '--dir', '--at', '--verify'].includes(arg)) flags[arg.slice(2)] = argv[(i += 1)];
     else if (arg.startsWith('--')) throw new VaError(`Unknown option ${arg}`);
     else positional.push(arg);
