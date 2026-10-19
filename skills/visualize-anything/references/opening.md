@@ -2,7 +2,7 @@
 
 The first seconds control whether the viewer stays. A good opening has no title at the start and no announcement. The subject is on screen immediately. It starts from a thing the viewer knows. In a few sentences it gets to the most interesting fact about the subject.
 
-Before you write, agree two items:
+Before you write, select two items. Do not ask the user to select them:
 
 - the context: where this viewer is now
 - the hook: the surprise from there
@@ -18,7 +18,7 @@ A hook without context is the most frequent cause of a bad opening. "The publish
 
 ## Start where the viewer is
 
-The context is the first thing that the opening says. It tells where the viewer in the brief is now, and the one step from there to the subject. Agree it with the hook, before the storyboard. Record it in the brief as `context`.
+The context is the first thing that the opening says. It tells where the viewer in the brief is now, and the one step from there to the subject. Select it with the hook, before the storyboard. Record it in the brief as `context`.
 
 Write the answers to these questions:
 
@@ -43,7 +43,7 @@ Context is not an introduction. To know the difference, ask if the hook needs it
 
 ## Find the hook
 
-The hook is the core of the problem that the subject solves, or the most interesting fact about its solution. Agree it with the user before the storyboard. Record it in the brief.
+The hook is the core of the problem that the subject solves, or the most interesting fact about its solution. Select it before the storyboard. Record it in the brief.
 
 Write the answers to these questions from the source before you select:
 
@@ -85,9 +85,9 @@ A hook can pass these tests and be weak, because its content is weak. Do two mor
 - **It is specific.** "Binary search is efficient" has the shape of a claim and no content. "A million items, twenty looks" is the same claim with a picture. Use the number, the named failure, or the specific case.
 - **The turn is real.** The word "but" between two things that do not conflict is not a turn. A real turn is one of these: the expected result against the real result, the visible cause against the real cause, or the obvious approach against the approach that works.
 
-If a candidate fails two or more of these tests, write it again before you offer it.
+If a candidate fails two or more of these tests, write it again before you select.
 
-Write two or three candidates of different kinds. Give them to the user with the brief. Put your recommendation first. Show the recommended candidate as the viewer will hear it: the context before it, the hook, and the first line of the next scene. The user selects all three parts. Record the context. Record the hook with a star on the word or number that it turns on:
+Write two or three candidates of different kinds. Select the strongest. Read it as the viewer will hear it: the context before it, the hook, and the first line of the next scene. Tell the user the hook that you selected, in one line, and continue. Record the context. Record the hook with a star on the word or number that it turns on:
 
 ```json
 "brief": {
@@ -184,7 +184,7 @@ A strong hook before a video that starts again is two videos. The opening must c
 - **A term arrives with the thing that it names.** Say "lo and hi" when the two markers come on screen, not one sentence before. Do not define a thing before the viewer has a reason to want the word.
 - **The picture continues.** If two scenes show the same thing, mark the second scene `continues`. It starts on the last frame of the first scene ([taste.md](taste.md)).
 - **Write the narration as one text. Then divide it.** `script.md` is the full narration as one continuous text. Write it before a scene exists. Scenes and beats are cuts that you make afterwards. A line that you wrote as the next sentence of a paragraph continues. A line that you wrote to fill a scene does not. `va route` makes sure that the storyboard says the words of the script, in order, and no other words.
-- **Read it aloud from the start to the end** before you show it to the user. If you must stop and say "anyway", the join is incorrect.
+- **Read it aloud from the start to the end** before you divide it. If you must stop and say "anyway", the join is incorrect.
 
 | Last line of a scene | A first line that starts again | A first line that continues |
 |---|---|---|

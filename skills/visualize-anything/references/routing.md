@@ -17,7 +17,7 @@ Set `"subject"` at the top of the storyboard. It controls whether system diagram
 | `system` | How separate components work together | Diagrams hold it. `code` shows the important lines. Use `manim` only for a quantity that changes. |
 | `mixed` | The two: an algorithm and the system that it is in | All kinds. Decide each scene on its merits. |
 
-Also record the `brief` that you agreed with the user: `audience`, `length` in seconds, `focus`, `context`, `hook`. The router reports a video that is more than one fifth longer or shorter than the length in the brief.
+Also record the `brief`: `audience`, `length` in seconds, `focus`, `context`, `hook`. The router reports a video that is more than one fifth longer or shorter than the length in the brief.
 
 Also record the `sources`: the material that the video is made from. Its kinds are code, a paper, a design doc, documentation, or a topic with no source. A video can have more than one. `subject` tells what the idea is. `sources` tells what the material is. Each scene also tells which sources it uses, before you select its `need`. The router applies the rules of a document to the parts of a scene that come from a document. See [sources.md](sources.md).
 
