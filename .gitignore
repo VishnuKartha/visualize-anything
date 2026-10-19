@@ -9,3 +9,8 @@ __pycache__/
 .visualize/*/out/
 # a paper read in by `va paper`: somebody else's text and figures, fetched again when needed
 .visualize/*/paper/
+# papers and repos fetched as sources: somebody else's work, fetched again when needed
+.visualize/papers/
+.visualize/repos/
+# render output, rewritten on every render
+.visualize/*/render.log
