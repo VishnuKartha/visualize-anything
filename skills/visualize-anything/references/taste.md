@@ -18,7 +18,7 @@ A check that fires is advice with a reason, unless the table says that it blocks
 | Animate an algorithm, do not draw a flowchart of it | The branch is part of the behaviour. Show it on the data | `va route` (blocks) |
 | Open on a Manim animation, and say the hook over it | The first ten seconds control whether the viewer stays. A card, a chart, or a block of code does not show the hook as it occurs | `va route` (blocks) |
 | Give the context before the hook | A hook works only for a viewer who knows the subject. Without context, a reversal is two numbers | `va route` (the brief has a `context`), the newcomer reviewer |
-| Agree the hook before the storyboard | It is the core of the problem or the most interesting part. All other parts are arranged around it | `va route` (it is in the brief, in the opening, and in the ending) |
+| Select the hook before the storyboard | It is the core of the problem or the most interesting part. All other parts are arranged around it | `va route` (it is in the brief, in the opening, and in the ending) |
 | Write the narration as one text, then divide it | Lines that you write one scene at a time do not continue from each other | `va route` (the storyboard says `script.md`, in order, and no other words) |
 | Each scene continues from the scene before it | A hook before a video that starts again is two videos | `va route` (scenes that start again), the reviewer |
 | The title promises a result | "Introduction to X" gives no reason to click | `va route` |

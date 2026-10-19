@@ -39,7 +39,7 @@ The house rules are in [references/taste.md](references/taste.md). Read them bef
 - **Know the material.** Code, a paper, a design doc, documentation, or a topic with no source: identify the kinds at the brief and record them as `sources`. Each scene tells which sources it uses. The part of a scene that comes from a document obeys the rules of a document. See [references/sources.md](references/sources.md).
 - **Do not show code in a paper video.** A paper is explained with its idea and its evidence. The exception is a scene that uses a code source that you declared next to the paper. See [references/paper.md](references/paper.md), "Its pictures".
 - **Animate an algorithm. Do not draw a flowchart of it.** Keep one picture of the data for the full behaviour. Use Archify only when the subject is a system of separate parts.
-- **Open on an animation. Give the context first, then the hook.** The first scene is always a Manim scene. The router rejects all other openings. Start from a thing the viewer knows. Use one or two sentences and a picture the viewer recognises. Then show the hook on that picture. The hook is the core of the problem, or the most interesting fact about the answer. Agree the context and the hook with the user before you write. Do not say the hook to a viewer who does not know the subject. This is the most frequent cause of a bad opening. Do not start with a title card, a lecture, or a link.
+- **Open on an animation. Give the context first, then the hook.** The first scene is always a Manim scene. The router rejects all other openings. Start from a thing the viewer knows. Use one or two sentences and a picture the viewer recognises. Then show the hook on that picture. The hook is the core of the problem, or the most interesting fact about the answer. Select the context and the hook yourself before you write. Do not say the hook to a viewer who does not know the subject. This is the most frequent cause of a bad opening. Do not start with a title card, a lecture, or a link.
 - **Then name the work.** Immediately after the opening, say in one line that this is the aim of the work. Show a title card with its name (`"need": "name"`). A paper video always has a title card.
 - **Each scene continues from the scene before it.** Do not start a scene with "now let's look at".
 - **End on the picture.** Do not end on a slide of bullets. The recap shows each takeaway next to the moment that proved it. The last line of the recap returns to the hook. A short `credit` scene then gives the name of the work.
@@ -60,7 +60,7 @@ You do not select renderers directly. You declare the `need` of each scene: the 
 - Each claim in the narration must come from a source that you read: the code, or for a paper video, the paper. When code is on screen, quote real lines with `file` and `range`. Do not type code from memory.
 - A paper video does not show code. Explain each mechanism of a paper as a full-frame animation, and show the evidence of the paper. The router gives an error for a code scene in a paper video.
 - Each number comes from a run of that code. `va facts` must pass before you build. If a fact is different, the code is correct. Change the sentence.
-- Agree the context and the hook with the user before you write the storyboard. The video opens on a Manim animation. The animation gives the context and then shows the hook. Do not start with a title card. Do not point to the source at the start. Do not say the hook before the viewer knows the subject.
+- Select the context and the hook before you write the storyboard. Do not ask the user to select them. The video opens on a Manim animation. The animation gives the context and then shows the hook. Do not start with a title card. Do not point to the source at the start. Do not say the hook before the viewer knows the subject.
 - Show the name of the work on a title card immediately after the opening. Show it again in the last scene.
 - You write the `thumbnail`. It is a hook frame. Read [references/opening.md](references/opening.md) before you write the brief.
 - Report accurately. Say which checks you ran. Say which stills you looked at.
@@ -88,19 +88,22 @@ Typst typesets the formulas in Manim scenes. LaTeX is not necessary. Write `Math
 
 Each arrow is a gate. `va facts` errors, routing errors, and a missing Vale stop the build. The two reviews stop the build until each finding has a disposition.
 
-### 0. Agree the brief
+### 0. Set the brief
 
-A full build renders for some minutes. Agree the content before you start. From the request, find these items and give them to the user in one short message:
+A full build renders for some minutes. Ask the user only about these three items, and only about the items that the request leaves open. Ask in one short message:
 
-- the material: the kinds of source that the request gives (code, a paper, a design doc, documentation, or a topic with no source). Frequently there is more than one: a design doc and the service that it describes, or a paper and its released code. If it is not clear, ask the user. Let the user select more than one.
-- the subject: the file, function, paper, or system
+- the material: the kinds of source that the request gives (code, a paper, a design doc, documentation, or a topic with no source). Frequently there is more than one: a design doc and the service that it describes, or a paper and its released code. Let the user select more than one.
 - the audience: the things they know
 - the length: the default is 60 to 120 seconds
+
+If the request answers all three, do not ask. Decide the other items yourself:
+
+- the subject: the file, function, paper, or system
 - the focus: the one question that the video answers
 - the context
 - the hook
 
-The context and the hook control the opening. Do not assume them. Read the source until you can answer the questions in [references/opening.md](references/opening.md).
+Do not ask the user to select the focus, the context, or the hook. The context and the hook control the opening. Read the source until you can answer the questions in [references/opening.md](references/opening.md).
 
 For the context, answer these questions:
 
@@ -120,12 +123,10 @@ Then do these steps:
 1. Write the context.
 2. Write two or three candidate hooks of different kinds.
 3. Test each candidate as that file tells you.
-4. Give the candidates to the user. Put your recommendation first.
-5. Show the recommended opening as the viewer will hear it: the context, the hook, and the first line of the next scene.
+4. Select the strongest candidate.
+5. Tell the user the hook that you selected, in one line, and continue. Do not wait for an answer.
 
-If the user told you to go straight through, select the strongest candidate. Tell the user which candidate you selected and why.
-
-For the other items: if the request leaves a decision open and the decision changes the video, ask. If not, tell the user your assumption and continue. Record the result as `brief` in the storyboard. Record the context as `brief.context` and the hook as `brief.hook`. Record the material as `sources`. The later steps use it: the router applies the rules of a document to the scenes from a document, and the reviewers get the full source.
+Record the result as `brief` in the storyboard. Record the context as `brief.context` and the hook as `brief.hook`. Record the material as `sources`. The later steps use it: the router applies the rules of a document to the scenes from a document, and the reviewers get the full source.
 
 ### 1. Understand
 
@@ -249,14 +250,7 @@ VA review <project> --plan     # writes out/review/plan-1-<viewer>.md, one brief
 
 If you cannot start subagents, tell the user that the plan was not reviewed.
 
-**Approval gate.** Before you synthesize or render, show these items to the user and wait for approval or changes:
-
-- the full script
-- the routing table, with the place in the script where each scene starts
-- the facts table
-- the findings of the three viewers, and your disposition for each
-
-A change to a sentence costs nothing now. After the render, it costs a render. Skip the gate only if the user told you to go straight through.
+Do not stop for approval of the plan. When each finding has a disposition and `va route` and `va facts` pass, continue to TTS.
 
 ### 5. TTS
 
