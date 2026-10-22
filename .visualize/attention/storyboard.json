@@ -1,0 +1,696 @@
+{
+  "title": "How attention alone overtook recurrent translation",
+  "subject": "algorithm",
+  "sources": [
+    {
+      "id": "paper",
+      "kind": "paper",
+      "title": "Attention Is All You Need",
+      "path": "paper",
+      "url": "https://arxiv.org/abs/1706.03762"
+    }
+  ],
+  "brief": {
+    "audience": "ML practitioners who know RNNs and sequence-to-sequence models, but not the Transformer's internals",
+    "length": 170,
+    "focus": "how replacing recurrence with self-attention made translation both better and far cheaper to train",
+    "context": "A recurrent network reads a sentence one word at a time, so within a sentence seven words take seven steps in a row; attention already helped, but rode on top of that recurrence.",
+    "hook": "Throw the recurrence away and keep only attention: a model trained for *twelve hours* comes out ahead of every published English-to-German system, ensembles included."
+  },
+  "voice": "am_michael",
+  "rate": "+15%",
+  "sourceRoot": ".",
+  "thumbnail": {
+    "text": "Attention only.\n*12 hours*.",
+    "from": "paths",
+    "beat": 2
+  },
+  "vocabulary": [
+    {
+      "word": "word",
+      "not": [
+        "token"
+      ],
+      "defined": "open"
+    },
+    {
+      "word": "step",
+      "not": [
+        "operation",
+        "hop"
+      ],
+      "defined": "open"
+    },
+    {
+      "word": "score",
+      "not": [
+        "logit",
+        "compatibility"
+      ],
+      "defined": "attend"
+    },
+    {
+      "word": "weight",
+      "not": [
+        "probability"
+      ],
+      "defined": "attend"
+    }
+  ],
+  "claims": [
+    {
+      "abstract": 1,
+      "scene": "open"
+    },
+    {
+      "abstract": 2,
+      "scene": "open"
+    },
+    {
+      "abstract": 3,
+      "scene": "paths"
+    },
+    {
+      "abstract": 4,
+      "scene": "results"
+    },
+    {
+      "abstract": 5,
+      "scene": "results"
+    },
+    {
+      "abstract": 6,
+      "scene": "results"
+    },
+    {
+      "abstract": 7,
+      "omit": "Constituency parsing is a second task with its own table; a two-minute video spends its evidence on translation, the task the method was built for."
+    }
+  ],
+  "facts": [
+    {
+      "id": "words",
+      "value": 7,
+      "what": "words in the example sentence, The cat that the dog chased ran"
+    },
+    {
+      "id": "rnn-steps",
+      "value": 7,
+      "what": "steps in a row a recurrent network takes to read the sentence, one per word"
+    },
+    {
+      "id": "cat-to-ran",
+      "value": 5,
+      "what": "positions from cat back to ran, the word that needs it as its subject"
+    },
+    {
+      "id": "toy-dk",
+      "value": 4,
+      "what": "key size of the toy attention the animation draws"
+    },
+    {
+      "id": "toy-scale",
+      "value": 2.0,
+      "what": "square root of the toy key size: what the toy scores are divided by"
+    },
+    {
+      "id": "cat-score",
+      "value": 5.9,
+      "what": "dot product of ran's query with cat's key, in the toy"
+    },
+    {
+      "id": "cat-weight-raw",
+      "value": 0.94,
+      "what": "softmax weight on cat before scaling, in the toy"
+    },
+    {
+      "id": "cat-weight",
+      "value": 0.62,
+      "what": "softmax weight on cat after dividing by the square root of the key size, in the toy"
+    },
+    {
+      "id": "top-is-cat",
+      "value": true,
+      "what": "cat gets the largest weight after scaling"
+    },
+    {
+      "id": "top-is-cat-raw",
+      "value": true,
+      "what": "cat gets the largest weight before scaling"
+    },
+    {
+      "id": "dk",
+      "value": 64,
+      "what": "key size per head in the paper (Section 3.2.2: d_k = d_model / h = 64)"
+    },
+    {
+      "id": "sqrt-dk",
+      "value": 8.0,
+      "what": "square root of the paper's key size"
+    },
+    {
+      "id": "spread",
+      "value": 8.0,
+      "what": "standard deviation of the dot product of two random 64-dimensional vectors with unit-variance components"
+    },
+    {
+      "id": "spread-scaled",
+      "value": 1.0,
+      "what": "the same spread after dividing by the square root of 64"
+    },
+    {
+      "id": "heads",
+      "value": 8,
+      "what": "attention heads in the paper's model (Section 3.2.2)"
+    },
+    {
+      "id": "base-hours",
+      "value": 12,
+      "what": "hours the base model trained (Section 5.2: 100,000 steps or 12 hours)"
+    },
+    {
+      "id": "gpus",
+      "value": 8,
+      "what": "P100 GPUs the models trained on (Section 5.2)"
+    },
+    {
+      "id": "big-days",
+      "value": 3.5,
+      "what": "days the big model trained (Section 5.2: 300,000 steps)"
+    },
+    {
+      "id": "base-bleu",
+      "value": 27.3,
+      "what": "BLEU of the base Transformer, EN-DE newstest2014 (Table 2)"
+    },
+    {
+      "id": "big-bleu",
+      "value": 28.4,
+      "what": "BLEU of the big Transformer, EN-DE newstest2014 (Table 2)"
+    },
+    {
+      "id": "best-earlier",
+      "value": 26.36,
+      "what": "best earlier EN-DE BLEU in Table 2 (ConvS2S Ensemble)"
+    },
+    {
+      "id": "best-earlier-is-ensemble",
+      "value": true,
+      "what": "the best earlier EN-DE result in Table 2 is an ensemble"
+    },
+    {
+      "id": "base-beats-all-earlier",
+      "value": true,
+      "what": "the base model's EN-DE BLEU beats every earlier row of Table 2, ensembles included"
+    },
+    {
+      "id": "big-margin",
+      "value": 2.04,
+      "what": "BLEU points the big model clears the best earlier EN-DE result by"
+    },
+    {
+      "id": "big-margin-over-2",
+      "value": true,
+      "what": "that margin is over two points, as the abstract says"
+    },
+    {
+      "id": "big-margin-points",
+      "value": 2,
+      "what": "whole BLEU points of that margin"
+    },
+    {
+      "id": "enfr-big",
+      "value": 41.8,
+      "what": "BLEU of the big Transformer, EN-FR newstest2014 (Table 2)"
+    },
+    {
+      "id": "base-cheapest",
+      "value": true,
+      "what": "the base model has the lowest EN-DE training cost in Table 2"
+    },
+    {
+      "id": "pairs-7",
+      "value": 49,
+      "what": "scores self-attention computes for the seven-word sentence: every word against every word"
+    },
+    {
+      "id": "long-words",
+      "value": 1000,
+      "what": "a longer input, in words, for the limit"
+    },
+    {
+      "id": "pairs-long",
+      "value": 1000000,
+      "what": "scores for a thousand words"
+    },
+    {
+      "id": "wmt-year",
+      "value": 2014,
+      "what": "the WMT test year in Table 2"
+    },
+    {
+      "id": "d-model",
+      "value": 512,
+      "what": "width of the model's vectors (Section 3.1: d_model = 512)"
+    },
+    {
+      "id": "self-attention-cheaper-below-d",
+      "value": true,
+      "what": "Table 1: self-attention costs n^2·d per layer and recurrence n·d^2, so self-attention is cheaper while n < d"
+    },
+    {
+      "id": "crossover-words",
+      "value": 512,
+      "what": "sentence length at which Table 1's n^2·d equals n·d^2 for d = 512"
+    },
+    {
+      "id": "top-weight-raw",
+      "value": 0.88,
+      "what": "mean largest softmax weight over seven random 64-dimensional dot products, unscaled"
+    },
+    {
+      "id": "top-weight-scaled",
+      "value": 0.39,
+      "what": "the same, after dividing by the square root of 64"
+    },
+    {
+      "id": "r-the0",
+      "value": 0.0,
+      "what": "toy weight before scaling: the0"
+    },
+    {
+      "id": "r-cat1",
+      "value": 0.94,
+      "what": "toy weight before scaling: cat1"
+    },
+    {
+      "id": "r-that2",
+      "value": 0.0,
+      "what": "toy weight before scaling: that2"
+    },
+    {
+      "id": "r-the3",
+      "value": 0.0,
+      "what": "toy weight before scaling: the3"
+    },
+    {
+      "id": "r-dog4",
+      "value": 0.01,
+      "what": "toy weight before scaling: dog4"
+    },
+    {
+      "id": "r-chased5",
+      "value": 0.02,
+      "what": "toy weight before scaling: chased5"
+    },
+    {
+      "id": "r-ran6",
+      "value": 0.02,
+      "what": "toy weight before scaling: ran6"
+    },
+    {
+      "id": "w-the0",
+      "value": 0.04,
+      "what": "toy weight after scaling: the0"
+    },
+    {
+      "id": "w-cat1",
+      "value": 0.62,
+      "what": "toy weight after scaling: cat1"
+    },
+    {
+      "id": "w-that2",
+      "value": 0.04,
+      "what": "toy weight after scaling: that2"
+    },
+    {
+      "id": "w-the3",
+      "value": 0.04,
+      "what": "toy weight after scaling: the3"
+    },
+    {
+      "id": "w-dog4",
+      "value": 0.08,
+      "what": "toy weight after scaling: dog4"
+    },
+    {
+      "id": "w-chased5",
+      "value": 0.09,
+      "what": "toy weight after scaling: chased5"
+    },
+    {
+      "id": "w-ran6",
+      "value": 0.08,
+      "what": "toy weight after scaling: ran6"
+    },
+    {
+      "id": "s-the0",
+      "value": 0.4,
+      "what": "toy score (dot product with ran's query): the0"
+    },
+    {
+      "id": "s-cat1",
+      "value": 5.9,
+      "what": "toy score (dot product with ran's query): cat1"
+    },
+    {
+      "id": "s-that2",
+      "value": 0.6,
+      "what": "toy score (dot product with ran's query): that2"
+    },
+    {
+      "id": "s-the3",
+      "value": 0.4,
+      "what": "toy score (dot product with ran's query): the3"
+    },
+    {
+      "id": "s-dog4",
+      "value": 1.7,
+      "what": "toy score (dot product with ran's query): dog4"
+    },
+    {
+      "id": "s-chased5",
+      "value": 2.1,
+      "what": "toy score (dot product with ran's query): chased5"
+    },
+    {
+      "id": "s-ran6",
+      "value": 1.9,
+      "what": "toy score (dot product with ran's query): ran6"
+    },
+    {
+      "id": "x-gnmt-rl",
+      "value": 23.0,
+      "what": "training cost, 10^18 FLOPs, EN-DE (Table 2): gnmt-rl"
+    },
+    {
+      "id": "x-convs2s",
+      "value": 9.6,
+      "what": "training cost, 10^18 FLOPs, EN-DE (Table 2): convs2s"
+    },
+    {
+      "id": "x-moe",
+      "value": 20.0,
+      "what": "training cost, 10^18 FLOPs, EN-DE (Table 2): moe"
+    },
+    {
+      "id": "x-gnmt-rl-ensemble",
+      "value": 180.0,
+      "what": "training cost, 10^18 FLOPs, EN-DE (Table 2): gnmt-rl-ensemble"
+    },
+    {
+      "id": "x-convs2s-ensemble",
+      "value": 77.0,
+      "what": "training cost, 10^18 FLOPs, EN-DE (Table 2): convs2s-ensemble"
+    },
+    {
+      "id": "x-base",
+      "value": 3.3,
+      "what": "training cost, 10^18 FLOPs, EN-DE (Table 2): base"
+    },
+    {
+      "id": "x-big",
+      "value": 23.0,
+      "what": "training cost, 10^18 FLOPs, EN-DE (Table 2): big"
+    },
+    {
+      "id": "y-gnmt-rl",
+      "value": 24.6,
+      "what": "BLEU, EN-DE (Table 2): gnmt-rl"
+    },
+    {
+      "id": "y-convs2s",
+      "value": 25.16,
+      "what": "BLEU, EN-DE (Table 2): convs2s"
+    },
+    {
+      "id": "y-moe",
+      "value": 26.03,
+      "what": "BLEU, EN-DE (Table 2): moe"
+    },
+    {
+      "id": "y-gnmt-rl-ensemble",
+      "value": 26.3,
+      "what": "BLEU, EN-DE (Table 2): gnmt-rl-ensemble"
+    },
+    {
+      "id": "y-convs2s-ensemble",
+      "value": 26.36,
+      "what": "BLEU, EN-DE (Table 2): convs2s-ensemble"
+    },
+    {
+      "id": "y-base",
+      "value": 27.3,
+      "what": "BLEU, EN-DE (Table 2): base"
+    },
+    {
+      "id": "y-big",
+      "value": 28.4,
+      "what": "BLEU, EN-DE (Table 2): big"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "open",
+      "need": "motion",
+      "why": "Opening: the recurrent network the viewer knows, stepping through the sentence with a count of steps, then the hook said over the same sentence.",
+      "class": "Opening",
+      "script": "manim/attention.py",
+      "beats": [
+        {
+          "say": "A recurrent network reads a sentence one word at a time."
+        },
+        {
+          "say": "Each hidden state waits for the one before it, so within a sentence, seven words take seven steps in a row."
+        },
+        {
+          "say": "Attention already let the decoder look back at every word, but it rode on top of that recurrence."
+        },
+        {
+          "say": "Throw the recurrence away and keep only attention. A model built that way, trained for twelve hours on eight GPUs, comes out ahead of every published English-to-German system, ensembles included."
+        }
+      ]
+    },
+    {
+      "id": "title",
+      "need": "name",
+      "why": "The viewer now knows the claim; this is the paper that makes it, by name.",
+      "kicker": "The paper",
+      "title": "Attention Is All You Need",
+      "subtitle": "Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser, Polosukhin",
+      "beats": [
+        {
+          "say": "That is what the paper Attention Is All You Need sets out to show."
+        }
+      ]
+    },
+    {
+      "id": "paths",
+      "need": "motion",
+      "ref": "Table 1",
+      "why": "Table 1 on the sentence: recurrence reaches cat from ran in five serial steps, convolution in a stack of layers, self-attention in one direct link that every word makes at once.",
+      "class": "Paths",
+      "script": "manim/attention.py",
+      "beats": [
+        {
+          "say": "So what was the recurrence costing? In this sentence, ran needs its subject, cat, five words back."
+        },
+        {
+          "say": "In the recurrent network, cat travels through five steps of hidden state, none of them in parallel."
+        },
+        {
+          "say": "Convolutional models like ConvS2S do run in parallel, but a distant pair needs a stack of layers to meet."
+        },
+        {
+          "say": "Self-attention, a sentence attending to its own words, links ran to cat in one step. In the encoder, every word does this at once.",
+          "land": true
+        },
+        {
+          "say": "The authors argue that paths this short make distant links easier to learn."
+        }
+      ]
+    },
+    {
+      "id": "attend",
+      "need": "motion",
+      "continues": true,
+      "why": "The link up close, on the same sentence: ran's query against every key, divided by the square root of the key size, the scores as bars, softmax into weights that land on cat, and the weighted sum.",
+      "class": "Attend",
+      "script": "manim/attention.py",
+      "beats": [
+        {
+          "say": "Up close, each word's vector also includes a stamp of its position, since attention by itself ignores order. From it come a query, a key and a value, three learned projections."
+        },
+        {
+          "say": "The query of ran is dotted with every key and divided by the square root of the key size: one score per word."
+        },
+        {
+          "say": "Softmax turns the scores into weights, and most of the weight goes to cat."
+        },
+        {
+          "say": "The output for ran is the weighted sum of the values."
+        }
+      ]
+    },
+    {
+      "id": "scale",
+      "need": "math",
+      "continues": false,
+      "why": "Why the paper divides by the square root of d_k: the spread of random 64-dimensional dot products, before and after, beside what that spread does to a softmax.",
+      "class": "Scale",
+      "script": "manim/attention.py",
+      "beats": [
+        {
+          "say": "Why divide before the softmax?",
+          "predict": true
+        },
+        {
+          "say": "The model runs several attention heads side by side, each with keys of sixty-four dimensions, and random dot products of that size spread about eight times wider."
+        },
+        {
+          "say": "The authors suspect that pushes the softmax toward all-or-nothing, where gradients are tiny."
+        },
+        {
+          "say": "Dividing by eight brings the spread back to one."
+        }
+      ]
+    },
+    {
+      "id": "results",
+      "need": "chart",
+      "chart": "scatter",
+      "ref": "Table 2",
+      "after": "attend",
+      "title": "WMT *2014* English-to-German",
+      "why": "Quality against training cost is a trade-off, so each system in Table 2 is one point: the Transformer is up and to the left of everything before it.",
+      "axis": "BLEU, EN-DE (higher is better)",
+      "across": "estimated training cost, 10^18 FLOPs (lower is better)",
+      "series": [
+        {
+          "label": "Earlier systems",
+          "points": [
+            {
+              "x": 23.0,
+              "y": 24.6,
+              "label": "GNMT + RL"
+            },
+            {
+              "x": 9.6,
+              "y": 25.16,
+              "label": "ConvS2S"
+            },
+            {
+              "x": 20.0,
+              "y": 26.03,
+              "label": "MoE"
+            },
+            {
+              "x": 180.0,
+              "y": 26.3,
+              "label": "GNMT + RL ens."
+            },
+            {
+              "x": 77.0,
+              "y": 26.36,
+              "label": "ConvS2S ens."
+            }
+          ]
+        },
+        {
+          "label": "Transformer",
+          "points": [
+            {
+              "x": 3.3,
+              "y": 27.3,
+              "label": "base"
+            },
+            {
+              "x": 23.0,
+              "y": 28.4,
+              "label": "big"
+            }
+          ]
+        }
+      ],
+      "beats": [
+        {
+          "say": "Training cost, as the authors estimate it, runs along the bottom, with English-to-German BLEU up the side.",
+          "show": 5
+        },
+        {
+          "say": "The base model, the twelve-hour one, is above and to the left of every earlier system, on the least compute.",
+          "show": 6,
+          "focus": [
+            "base"
+          ]
+        },
+        {
+          "say": "The big model clears the best by more than two points, and sets a new single-model record on English-to-French.",
+          "show": 7,
+          "focus": [
+            "big"
+          ],
+          "note": "EN-FR, big model: 41.8 BLEU after 3.5 days on 8 P100 GPUs"
+        }
+      ]
+    },
+    {
+      "id": "limit",
+      "need": "math",
+      "ref": "Table 1",
+      "why": "The limit the paper names in Table 1 and Section 4: every pair gets a score, so cost grows with the square of the length, and it only beats recurrence while n < d.",
+      "class": "Limit",
+      "script": "manim/attention.py",
+      "beats": [
+        {
+          "say": "The price is paid in pairs. Every word scores every word, itself included. A thousand word pieces make a million scores, per head and per layer."
+        },
+        {
+          "say": "By the paper's own count, that is cheaper per layer than recurrence only while a sentence has fewer words than its vectors have dimensions, 512 here. Training runs the decoder at once too, with later words masked, but generating output is still one word at a time."
+        }
+      ]
+    },
+    {
+      "id": "recap",
+      "need": "recap",
+      "why": "Recap: each takeaway beside the moment that showed it, ending on the hook's twelve hours.",
+      "title": "What to keep",
+      "items": [
+        {
+          "text": "Any two words linked in one step",
+          "from": "paths"
+        },
+        {
+          "text": "Scores divided by √d_k before the softmax",
+          "from": "scale"
+        },
+        {
+          "text": "12 hours: ahead of every earlier EN-DE result",
+          "from": "results",
+          "beat": 1
+        }
+      ],
+      "beats": [
+        {
+          "say": "So attention links any two words in one step, and the encoder computes every link at once."
+        },
+        {
+          "say": "That design, trained for twelve hours, came out ahead of every published English-to-German system."
+        }
+      ]
+    },
+    {
+      "id": "credit",
+      "need": "credit",
+      "why": "Close: name the paper again, and where to find it.",
+      "kicker": "The paper",
+      "title": "Attention Is All You Need",
+      "subtitle": "Vaswani et al. · arxiv.org/abs/1706.03762",
+      "beats": [
+        {
+          "say": "The paper is Attention Is All You Need, by Vaswani and colleagues."
+        }
+      ]
+    }
+  ]
+}
