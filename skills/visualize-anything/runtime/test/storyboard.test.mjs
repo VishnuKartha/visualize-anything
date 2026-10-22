@@ -329,13 +329,16 @@ test('an evidence scene is checked for its own fields and comes back in one shap
   const compare = load({need: 'contrast', left: {label: 'A', tone: 'negative', points: ['slow', {text: 'exact', tone: 'positive'}]}, right: {label: 'B', points: ['fast']}});
   assert.deepEqual(compare.panels.map((panel) => panel.points.map((point) => point.tone)), [['negative', 'positive'], ['neutral']]);
   const chart = load({need: 'chart', labels: ['Round 1', 'Round 4'], values: [71, 41], unit: 's'});
-  assert.deepEqual([chart.chart, chart.series], ['bar', [{label: null, values: [71, 41], errors: null, stack: null}]]);
+  assert.deepEqual([chart.chart, chart.series], ['bar', [{label: null, tone: null, values: [71, 41], errors: null, stack: null}]]);
   // A cost and its parts: two series sharing a stack are one bar.
   const parts = load({need: 'chart', labels: ['Reddit', 'products'], series: [{label: 'split', values: [313.7, 179.3], stack: 'EDiS'}, {label: 'training', values: [518.7, 404.5], stack: 'EDiS'}, {label: 'Full GCN', values: [713.4, 1154]}]});
   assert.deepEqual(parts.series.map((entry) => entry.stack), ['EDiS', 'EDiS', null]);
   // A chart of changes against a control goes below zero, and carries the ± the source reports.
   const gains = load({need: 'chart', labels: ['Cora', 'Physics'], series: [{values: [2.7, -0.04], errors: [0.98, 0.09]}]});
-  assert.deepEqual(gains.series, [{label: null, values: [2.7, -0.04], errors: [0.98, 0.09], stack: null}]);
+  assert.deepEqual(gains.series, [{label: null, tone: null, values: [2.7, -0.04], errors: [0.98, 0.09], stack: null}]);
+  // A series can keep the colour its meaning has elsewhere in the video.
+  const toned = load({need: 'chart', chart: 'scatter', axis: 'score (higher is better)', across: 'cost (lower is better)', series: [{label: 'earlier', tone: 'cyan', points: [{x: 1, y: 2}]}, {label: 'ours', tone: 'accent', points: [{x: 0.5, y: 3}]}]});
+  assert.deepEqual(toned.series.map((entry) => entry.tone), ['cyan', 'accent']);
   // A grid of changes is coloured both ways from a centre: zero by default when the scale crosses it, or the one given (1 for ratios).
   assert.equal(load({need: 'matrix', rows: ['a', 'b'], columns: ['x', 'y'], values: [[1, -2], [0.5, 3]]}).center, 0);
   assert.equal(load({need: 'matrix', rows: ['a', 'b'], columns: ['x', 'y'], values: [[0.2, 0.4], [0.6, 0.8]]}).center, null);

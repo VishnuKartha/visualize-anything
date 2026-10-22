@@ -72,7 +72,7 @@ export type ChartScene = Base & {
   across: string | null;
   labels: string[];
   /** `errors` is the ± the source reports for each value, drawn as a whisker; null when it reports none. */
-  series: {label: string | null; values: number[]; errors?: number[] | null; stack?: string | null; points?: {x: number; y: number; label: string | null}[]}[];
+  series: {label: string | null; tone?: string | null; values: number[]; errors?: number[] | null; stack?: string | null; points?: {x: number; y: number; label: string | null}[]}[];
 };
 /** The rows of a results table the sentence compares. The first column names each row; `best` is the source's own. */
 export type TableScene = Base & {kind: 'table'; title: string | null; columns: string[]; rows: string[][]; best: string | null; highlight: string[]; caption: string | null};

@@ -198,6 +198,12 @@ const normalizeEvidence = (scene, beats, where, {errors, warnings, paths, strict
     });
   };
   const finite = (value) => typeof value === 'number' && Number.isFinite(value);
+  // A series may name its colour (accent, cyan, violet, amber, muted) so a meaning keeps its colour from scene to scene.
+  const seriesTone = (entry, at) => {
+    if (entry?.tone === undefined || entry?.tone === null) return null;
+    if (!['accent', 'cyan', 'violet', 'amber', 'muted'].includes(entry.tone)) errors.push(`${at}: "tone" must be accent, cyan, violet, amber, or muted.`);
+    return entry.tone;
+  };
   if (scene.kind === 'chart') {
     out.chart = scene.chart ?? 'bar';
     if (!['bar', 'line', 'scatter'].includes(out.chart)) errors.push(`${where}: "chart" must be "bar", "line", or "scatter".`);
@@ -215,6 +221,7 @@ const normalizeEvidence = (scene, beats, where, {errors, warnings, paths, strict
         if (authored.length > 1 && !text(entry?.label)) errors.push(`${at}: with more than one series, each needs a "label" for the legend.`);
         return {
           label: text(entry?.label),
+          tone: seriesTone(entry, at),
           values: [],
           points: list(entry?.points).map((point, pointIndex) => {
             if (!finite(point?.x) || !finite(point?.y) || point.x < 0 || point.y < 0) errors.push(`${at} point ${pointIndex + 1}: needs "x" and "y", numbers zero or more.`);
@@ -250,7 +257,8 @@ const normalizeEvidence = (scene, beats, where, {errors, warnings, paths, strict
         const stack = text(entry?.stack);
         if (stack && out.chart !== 'bar') errors.push(`${at}: "stack" puts series on top of each other in one bar; it needs a bar chart.`);
         if (stack && values.some((value) => finite(value) && value < 0)) errors.push(`${at}: a stacked series adds to the bar below it, so its values must be zero or more.`);
-        return {label: text(entry?.label), values, errors: spread, stack};
+        return {label: text(entry?.label),
+          tone: seriesTone(entry, `${where} series ${index + 1}`), values, errors: spread, stack};
       });
       checkFocus(new Set([...out.labels, ...out.series.map((entry) => entry.label).filter(Boolean)]), "chart's labels or series");
     }

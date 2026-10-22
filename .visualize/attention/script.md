@@ -13,7 +13,7 @@ Up close, each word's vector also includes a stamp of its position, since attent
 
 Why divide before the softmax? The model runs several attention heads side by side, each with keys of sixty-four dimensions, and random dot products of that size spread about eight times wider. The authors suspect that pushes the softmax toward all-or-nothing, where gradients are tiny. Dividing by eight brings the spread back to one.
 
-Training cost, as the authors estimate it, runs along the bottom, with English-to-German BLEU up the side. The base model, the twelve-hour one, is above and to the left of every earlier system, on the least compute. The big model clears the best by more than two points, and sets a new single-model record on English-to-French.
+On translation, training cost, as the authors estimate it, runs along the bottom, with English-to-German BLEU up the side. The base model, the twelve-hour one, is above and to the left of every earlier system, on the least compute. The big model clears the best by more than two points, and sets a new single-model record on English-to-French.
 
 The price is paid in pairs. Every word scores every word, itself included. A thousand word pieces make a million scores, per head and per layer. By the paper's own count, that is cheaper per layer than recurrence only while a sentence has fewer words than its vectors have dimensions, 512 here. Training runs the decoder at once too, with later words masked, but generating output is still one word at a time.
 

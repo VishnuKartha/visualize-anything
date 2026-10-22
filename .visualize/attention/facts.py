@@ -33,6 +33,7 @@ def flops(cell):
 # The sentence the video uses throughout, and what recurrence costs on it.
 
 SENTENCE = "The cat that the dog chased ran".split()
+CONV_K = 3
 subject, verb = SENTENCE.index("cat"), SENTENCE.index("ran")
 
 # ---------------------------------------------------------------------------------------------
@@ -121,6 +122,9 @@ def slug(name):
 
 print(json.dumps({
     "words": len(SENTENCE),
+    "conv-kernel": CONV_K,
+    # a centred kernel of width k widens each position's reach by (k - 1) / 2 words each way per layer
+    "conv-layers": -(-(verb - subject) // ((CONV_K - 1) // 2)),
     "rnn-steps": len(SENTENCE),
     "cat-to-ran": verb - subject,
     "toy-dk": D_TOY,

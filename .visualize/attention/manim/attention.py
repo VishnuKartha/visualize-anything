@@ -101,7 +101,7 @@ class Paths(VAScene):
 
         dots, arrows, ups = states(row, 0.9)
         rnn = VGroup(*[dots[i] for i in range(CAT, RAN + 1)], *[arrows[i] for i in range(CAT, RAN)])
-        rnn_count = Tally(end=fact("cat-to-ran"), unit=("step", "steps"), owner="recurrent", font_size=48, color=CYAN).move_to([-4.3, 2.55, 0])
+        rnn_count = Tally(end=fact("cat-to-ran"), unit=("step", "steps"), owner="recurrent", font_size=48, color=CYAN).move_to([-5.2, 2.55, 0])
         with self.beat(1) as b:
             self.play(FadeIn(dots[CAT]), FadeIn(rnn_count.set(0)), run_time=0.6)
             b.until("five steps")
@@ -111,36 +111,30 @@ class Paths(VAScene):
             b.until("none of them in parallel")
             self.play(Indicate(rnn, color=CYAN, scale_factor=1.03), run_time=0.8)
 
-        # convolution: kernel-3 layers stacked until cat and ran meet
-        layers = []
-        reach = [(CAT, RAN)]
-        lo, hi = CAT, RAN
-        y = top(row, 0, 0.9)[1]
-        pyr = VGroup()
-        level = 0
-        while hi - lo > 0:
-            level += 1
-            lo2, hi2 = lo + 1, hi - 1 if hi - lo > 1 else hi
-            if hi - lo <= 2:
-                lo2 = hi2 = (lo + hi) / 2
-            xs = lambda i: row.boxes[0].get_center()[0] + i * (row.boxes[1].get_center()[0] - row.boxes[0].get_center()[0])
-            pa = np.array([xs(lo), y + 0.55 * (level - 1), 0]); pb = np.array([xs(hi), y + 0.55 * (level - 1), 0])
-            qa = np.array([xs(lo2), y + 0.55 * level, 0]); qb = np.array([xs(hi2), y + 0.55 * level, 0])
-            pyr.add(Line(pa, qa, stroke_color=VIOLET, stroke_width=3), Line(pb, qb, stroke_color=VIOLET, stroke_width=3))
-            lo, hi = lo2, hi2
-            if lo == hi:
-                break
-        conv_tag = tag(pyr, "ConvS2S: a stack of layers", UP, color=VIOLET)
+        # convolution: each layer of a width-3 kernel widens ran's reach by one word; the stack climbs until it covers cat
+        x_of = lambda i: row.boxes[i].get_center()[0]
+        y0, dy, cell = top(row, 0, 0.55)[1], 0.42, 0.34
+        stairs = VGroup(*[VGroup(*[Square(cell, stroke_color=VIOLET, stroke_width=2.5, fill_color=VIOLET, fill_opacity=0.35 if i in (CAT, RAN) else 0.12)
+                                   .move_to([x_of(i), y0 + dy * (l - 1), 0]) for i in range(RAN - l, RAN + 1)])
+                          for l in range(1, fact("conv-layers") + 1)])
+        layers = Tally(end=fact("conv-layers"), unit=("layer", "layers"), owner="ConvS2S", font_size=48, color=VIOLET).move_to([-5.2, 1.25, 0])
         with self.beat(2) as b:
-            self.play(rnn.animate.set_opacity(0.25), rnn_count.animate.set_opacity(0.35), run_time=0.5)
+            self.play(FadeOut(rnn), rnn_count.animate.set_opacity(0.35), run_time=0.5)
+            b.until("run in parallel")
+            self.play(FadeIn(stairs[0]), FadeIn(layers.set(1)), run_time=0.5)
+            b.until("a distant pair")
+            for l in range(1, len(stairs)):
+                self.play(FadeIn(stairs[l], shift=UP * 0.1), run_time=0.3)
+                layers.set(l + 1)
             b.until("stack of layers")
-            self.play(LaggedStart(*[Create(l) for l in pyr], lag_ratio=0.15), FadeIn(conv_tag), run_time=1.6)
+            self.play(Indicate(stairs[-1][0], color=VIOLET, scale_factor=1.3), run_time=0.7)
+        pyr = VGroup(stairs, layers)
 
         hop = link(row, RAN, CAT, ACCENT, height=1.75, width=6)
         one = Tally(end=1, unit=("step", "steps"), owner="self-attention", font_size=48, color=ACCENT).move_to([4.3, 2.55, 0])
         rest = VGroup(*[link(row, i, j, ACCENT, width=2, rise=0.15).set_stroke(opacity=0.4) for i in range(N) for j in range(i + 1, N) if (i, j) != (CAT, RAN)])
         with self.beat(3) as b:
-            self.play(pyr.animate.set_opacity(0.25), FadeOut(conv_tag), FadeOut(far), run_time=0.5)
+            self.play(FadeOut(stairs), layers.animate.set_opacity(0.35), FadeOut(far), run_time=0.5)
             b.until("links ran to cat")
             self.play(Create(hop), run_time=1.1)
             self.play(FadeIn(one.set(1)), run_time=0.4)
@@ -148,7 +142,7 @@ class Paths(VAScene):
             self.play(*[Create(r) for r in rest], run_time=1.0)
 
         with self.beat(4) as b:
-            self.play(FadeOut(pyr), FadeOut(rnn), FadeOut(rest), run_time=0.6)
+            self.play(FadeOut(rest), run_time=0.6)
             path_rnn = Math("O(n)", font_size=44, color=CYAN).next_to(rnn_count, RIGHT, buff=0.4)
             path_att = Math("O(1)", font_size=44, color=ACCENT).next_to(one, LEFT, buff=0.4)
             b.until("paths this short")
@@ -168,8 +162,9 @@ class Attend(VAScene):
         made_up = Text("made-up vectors, d_k = 4", font=SANS, font_size=28, color=MUTED).move_to([-4.4, -2.15, 0])
         formula = Math("op(\"softmax\")((Q K^T) / sqrt(d_k)) V", font_size=44, color=TEXT).move_to([2.2, 2.75, 0])
         pos = Text("+ position", font=SANS, font_size=28, color=VIOLET).move_to([1.5, -2.15, 0])
-        q = Text("q", font=MONO, font_size=34, color=CURRENT, weight=BOLD).next_to(row.boxes[RAN], UP, buff=0.2)
-        ks = VGroup(*[Text("k", font=MONO, font_size=30, color=CYAN).next_to(row.boxes[i], UP, buff=0.2) for i in range(N - 1)])
+        ks = VGroup(*[Text("k", font=MONO, font_size=30, color=CYAN).next_to(row.boxes[i], UP, buff=0.2).shift(LEFT * 0.25) for i in range(N)])
+        vs = VGroup(*[Text("v", font=MONO, font_size=30, color=VIOLET).next_to(row.boxes[i], UP, buff=0.2).shift(RIGHT * 0.25) for i in range(N)])
+        q = Text("q", font=MONO, font_size=34, color=CURRENT, weight=BOLD).next_to(ks[RAN], UP, buff=0.12)
         with self.beat(0) as b:
             self.play(FadeOut(hop), FadeIn(made_up), run_time=0.6)
             b.until("its position")
@@ -178,8 +173,11 @@ class Attend(VAScene):
             self.play(FadeIn(q, shift=UP * 0.1), run_time=0.4)
             b.until("a key")
             self.play(LaggedStart(*[FadeIn(k, shift=UP * 0.1) for k in ks], lag_ratio=0.06), run_time=0.6)
+            b.until("a value")
+            self.play(LaggedStart(*[FadeIn(v, shift=UP * 0.1) for v in vs], lag_ratio=0.06), run_time=0.6)
             b.until("learned projections")
             self.play(Write(formula), run_time=0.9)
+            self.play(ks.animate.set_opacity(0.35), vs.animate.set_opacity(0.35), run_time=0.4)
 
         # scores: the toy dot products over sqrt(4) = 2, as bars over each word
         scale = 0.42
@@ -192,7 +190,7 @@ class Attend(VAScene):
             self.play(FadeOut(pos), run_time=0.4)
             b.until("dotted with every key")
             self.play(LaggedStart(*[GrowFromEdge(bar, DOWN) for bar in bars], lag_ratio=0.08), FadeIn(score_tag), run_time=1.2)
-            self.play(ks.animate.set_opacity(0.3), q.animate.set_opacity(0.4), made_up.animate.set_opacity(0.4), run_time=0.4)
+            self.play(ks.animate.set_opacity(0.3), vs.animate.set_opacity(0.3), q.animate.set_opacity(0.4), made_up.animate.set_opacity(0.4), run_time=0.4)
             b.until("square root")
             self.play(Indicate(formula, color=AMBER, scale_factor=1.05), run_time=0.8)
 
@@ -213,8 +211,10 @@ class Attend(VAScene):
                               stroke_width=max(1.0, 10 * weights[i]), stroke_opacity=0.9) for i in range(N)])
         with self.beat(3) as b:
             b.until("weighted sum")
-            self.play(FadeOut(formula), FadeIn(out), run_time=0.5)
-            self.play(LaggedStart(*[Create(f) for f in flows], lag_ratio=0.05), run_time=1.0)
+            self.play(FadeOut(formula), FadeIn(out), vs.animate.set_opacity(1), run_time=0.5)
+            moving = VGroup(*[vs[i].copy().scale(0.6 + 1.6 * weights[i]) for i in range(N)])
+            self.play(LaggedStart(*[Create(f) for f in flows], lag_ratio=0.05),
+                      *[moving[i].animate.move_to(out.get_bottom() + DOWN * 0.15).set_opacity(0.0 if i != CAT else 1) for i in range(N)], run_time=1.2)
 
 
 class Scale(VAScene):
@@ -227,11 +227,12 @@ class Scale(VAScene):
             self.play(Write(formula), run_time=1.0)
             self.play(Circumscribe(formula[-9:-1], color=AMBER), run_time=1.0)
 
-        ax = axes([-30, 30, 10], [0, 0.45, 0.1], x_length=6.2, y_length=3.2, tips=False).move_to([-3.4, -0.5, 0])
+        ax = axes([-24, 24, 8], [0, 0.45, 0.1], x_length=6.2, y_length=3.0, tips=False,
+                  x_axis_config={"include_numbers": True, "numbers_to_include": [-16, -8, 0, 8, 16], "font_size": 28}).move_to([-3.4, -0.4, 0])
         normal = lambda s: (lambda x: np.exp(-x * x / (2 * s * s)) / (s * np.sqrt(2 * np.pi)))
-        wide = curve(ax, normal(fact("spread")), color=ROSE, x_range=[-30, 30])
+        wide = curve(ax, normal(fact("spread")), color=ROSE, x_range=[-24, 24])
         wide_tag = Text(f"q·k, d_k = {fact('dk')}:  spread ≈ {fact('spread'):.0f}", font=MONO, font_size=28, color=ROSE).next_to(ax, UP, buff=0.2)
-        unit = Text("entries: mean 0, variance 1", font=SANS, font_size=28, color=MUTED).next_to(ax, DOWN, buff=0.25)
+        unit = Text("q, k entries: mean 0, variance 1", font=SANS, font_size=28, color=MUTED).next_to(ax, DOWN, buff=0.55)
         with self.beat(1) as b:
             self.play(formula.animate.scale(0.7).move_to([0, 2.8, 0]), FadeIn(ax), run_time=0.8)
             b.until("sixty-four dimensions")
@@ -260,7 +261,7 @@ class Scale(VAScene):
         soft_top = Text(f"top weight ≈ {fact('top-weight-scaled'):.2f}", font=MONO, font_size=28, color=ACCENT).move_to(raw_tag)
         with self.beat(3) as b:
             b.until("Dividing by eight")
-            self.play(ReplacementTransform(wide, narrow), ReplacementTransform(wide_tag, narrow_tag), run_time=1.1)
+            self.play(wide.animate.set_opacity(0.3), Create(narrow), ReplacementTransform(wide_tag, narrow_tag), run_time=1.1)
             self.play(Transform(raw, soft), Transform(raw_tag, soft_top), run_time=0.9)
 
 

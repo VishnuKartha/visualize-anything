@@ -23,7 +23,7 @@
   "thumbnail": {
     "text": "Attention only.\n*12 hours*.",
     "from": "paths",
-    "beat": 2
+    "beat": 4
   },
   "vocabulary": [
     {
@@ -247,6 +247,16 @@
       "id": "wmt-year",
       "value": 2014,
       "what": "the WMT test year in Table 2"
+    },
+    {
+      "id": "conv-kernel",
+      "value": 3,
+      "what": "kernel width of the convolution the animation draws (centred, width 3)"
+    },
+    {
+      "id": "conv-layers",
+      "value": 5,
+      "what": "layers of centred width-3 convolution before ran's reach includes cat"
     },
     {
       "id": "d-model",
@@ -568,6 +578,7 @@
       "series": [
         {
           "label": "Earlier systems",
+          "tone": "muted",
           "points": [
             {
               "x": 23.0,
@@ -592,43 +603,44 @@
             {
               "x": 77.0,
               "y": 26.36,
-              "label": "ConvS2S ens."
+              "label": "ConvS2S ens. 26.36"
             }
           ]
         },
         {
           "label": "Transformer",
+          "tone": "accent",
           "points": [
             {
               "x": 3.3,
               "y": 27.3,
-              "label": "base"
+              "label": "base 27.3"
             },
             {
               "x": 23.0,
               "y": 28.4,
-              "label": "big"
+              "label": "big 28.4"
             }
           ]
         }
       ],
       "beats": [
         {
-          "say": "Training cost, as the authors estimate it, runs along the bottom, with English-to-German BLEU up the side.",
+          "say": "On translation, training cost, as the authors estimate it, runs along the bottom, with English-to-German BLEU up the side.",
           "show": 5
         },
         {
           "say": "The base model, the twelve-hour one, is above and to the left of every earlier system, on the least compute.",
           "show": 6,
           "focus": [
-            "base"
+            "base 27.3"
           ]
         },
         {
           "say": "The big model clears the best by more than two points, and sets a new single-model record on English-to-French.",
           "show": 7,
           "focus": [
-            "big"
+            "big 28.4"
           ],
           "note": "EN-FR, big model: 41.8 BLEU after 3.5 days on 8 P100 GPUs"
         }
@@ -666,8 +678,7 @@
         },
         {
           "text": "12 hours: ahead of every earlier EN-DE result",
-          "from": "results",
-          "beat": 1
+          "from": "results"
         }
       ],
       "beats": [

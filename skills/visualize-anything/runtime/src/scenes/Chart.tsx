@@ -9,6 +9,8 @@ import {Evidence, arrival, bodyOf, partWay, stepAt} from './parts';
 // `focus` names the labels or series the sentence is about; the rest step back.
 
 const COLORS = [theme.accent, theme.cyan, theme.violet, theme.amber];
+// A series can name its colour, so one meaning keeps one colour across the video; otherwise it takes its turn.
+const TONES: Record<string, string> = {accent: theme.accent, cyan: theme.cyan, violet: theme.violet, amber: theme.amber, muted: theme.muted};
 const PAD = {left: 150, right: 70, top: 96, bottom: 108};
 const DIM = 0.3;
 
@@ -58,6 +60,8 @@ const tick = (value: number) => (Math.abs(value) >= 1000 ? value.toLocaleString(
 /** How lit a label or series is under a step's focus: everything, when nothing is singled out. */
 const lit = (step: Step | undefined, label: string, series: string | null) =>
   !Array.isArray(step?.focus) || step.focus.includes(label) || (series !== null && step.focus.includes(series)) ? 1 : 0;
+
+const seriesColor = (scene: {series: {tone?: string | null}[]}, index: number) => TONES[scene.series[index]?.tone ?? ''] ?? COLORS[index % COLORS.length];
 
 /** A single series: the bars in focus keep the accent, and the others fall back to slate. */
 const fallBack = (on: number) => {
@@ -128,7 +132,7 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
     dots.map((dot, index) => {
       const arrived = entered(index, 18, 6);
       if (arrived <= 0) return null;
-      const color = many ? COLORS[dot.seriesIndex % COLORS.length] : theme.accent;
+      const color = many ? seriesColor(scene, dot.seriesIndex) : theme.accent;
       const on = singled || previous?.focus ? focus(dot.label || '', dot.series) : 1;
       const x = xOf(dot.x);
       const y = yOf(dot.y);
@@ -163,7 +167,7 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
         const zero = yOf(base * grown);
         const end = yOf((base + value) * grown);
         const below = value < 0;
-        const color = many ? COLORS[seriesIndex % COLORS.length] : below ? theme.rose : singled || previous?.focus ? fallBack(on) : theme.accent;
+        const color = many ? seriesColor(scene, seriesIndex) : below ? theme.rose : singled || previous?.focus ? fallBack(on) : theme.accent;
         const counting = start === null ? 0 : ramp(frame, start, 26);
         const whisker = spread(entry, index);
         return (
@@ -211,7 +215,7 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
     })
   ) : (
     scene.series.map((entry, seriesIndex) => {
-      const color = COLORS[seriesIndex % COLORS.length];
+      const color = seriesColor(scene, seriesIndex);
       const points = entry.values.map((value, index) => ({x: plot.x + slot * (index + 0.5), y: yOf(value), value}));
       const lengths = points.slice(1).map((point, index) => Math.hypot(point.x - points[index].x, point.y - points[index].y));
       // The line has reached as far as its points have arrived: each segment is drawn while its far point comes in.
@@ -316,7 +320,7 @@ export const ChartView: React.FC<{scene: ChartScene}> = ({scene}) => {
           <div style={{position: 'absolute', right: 56, top: 26, display: 'flex', gap: 36}}>
             {scene.series.map((entry, index) => (
               <div key={index} data-va-text="legend" style={{display: 'flex', alignItems: 'center', gap: 12, fontFamily: SANS, fontSize: 28, fontWeight: 600, color: theme.text, opacity: lerp(0.45, 1, focus('', entry.label))}}>
-                <span style={{width: 18, height: 18, borderRadius: 5, backgroundColor: COLORS[index % COLORS.length]}} />
+                <span style={{width: 18, height: 18, borderRadius: 5, backgroundColor: seriesColor(scene, index)}} />
                 {entry.label}
               </div>
             ))}

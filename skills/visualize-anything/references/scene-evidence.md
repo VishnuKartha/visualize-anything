@@ -131,6 +131,7 @@ Write the points in parallel. If the left panel says what it remembers and what 
 | `values` | One number for each label. Or `series`: one to four of `{"label", "values"}` for grouped bars or some lines, with a legend. A value can be less than zero. |
 | `errors` | Optional, in a series: the ± that the source reports for each value. Each is drawn as a whisker on its bar. |
 | `stack` | Optional, in a series of a bar chart: series with the same `stack` are one bar, each drawn on top of the one before. Use it for a total and its parts: a run time that is setup plus training. Each part shows its value inside it, and the bar shows the total above it. |
+| `tone` | Optional, in a series: `accent`, `cyan`, `violet`, `amber`, or `muted`. Without it, the series take the colours in turn. Give it when a meaning has a colour earlier in the video, so the chart does not give that colour to a different thing. |
 | `chart` | `"bar"` (the default), `"line"`, or `"scatter"`. A line is for an ordered axis (rounds, sizes, time). Bars are for separate things. A scatter is for a trade-off. |
 | `unit` | Written after each value when there is one series: `"s"`, `"%"`. |
 | `axis` | A short line in the corner of the chart. It says what is measured and which direction is better. |
