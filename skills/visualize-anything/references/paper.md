@@ -7,6 +7,7 @@ VA init <slug>
 VA paper <project> 2610.12374                    # an arXiv id
 VA paper <project> https://arxiv.org/abs/1706.03762
 VA paper <project> ~/papers/attention.pdf        # or a PDF on disk
+VA paper <project> ~/Downloads/1706.03762v7.html # or an arXiv HTML page, saved from a browser
 ```
 
 The command writes `paper/` in the project:
@@ -17,7 +18,7 @@ The command writes `paper/` in the project:
 | `paper.json` | The same data, for the checks: `abstract`, `claims`, `sections`, `figures`, `tables`, `licence`. |
 | `figures/` | Each figure as an image. |
 
-For an arXiv paper, the tool reads the HTML edition of arXiv if there is one. That edition marks the sections, captions, and tables. If there is none, and for a local file, the tool reads the PDF:
+For an arXiv paper, the tool reads the HTML edition of arXiv if there is one. That edition marks the sections, captions, and tables. If arxiv.org cannot be reached from your machine, save its HTML page in a browser and give the tool that file. The tool reads it as it reads the online edition. It gets the figures and the licence from arXiv only if arXiv can be reached. If there is no HTML edition, and for a local PDF, the tool reads the PDF:
 
 - The abstract and the sections are reliable.
 - The tool crops each figure from above its caption. Look at each figure before you use it.

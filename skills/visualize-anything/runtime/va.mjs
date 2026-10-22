@@ -27,7 +27,7 @@ const USAGE = `Usage: va <command> [args]
   setup                       Install runtime dependencies and the pinned Archify renderer
   doctor                      Report what is installed and what is missing
   init <slug> [--dir <path>]  Create .visualize/<slug>/ with a starter storyboard.json
-  paper <project> <source>    Read a paper into the project (arXiv id or address, or a PDF): abstract first, then sections, figures, tables
+  paper <project> <source>    Read a paper into the project (arXiv id or address, a PDF, or a saved arXiv HTML page): abstract first, then sections, figures, tables
   sources <project>           List what each declared source holds: a design doc's or docs' sections, figures, tables, code blocks
                               (--figures exports each figure to a PNG in figures/; a paper is read with 'va paper')
   route <project>             Review every routing decision: need → renderer, with reasons; then the prose check

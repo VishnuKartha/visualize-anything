@@ -134,7 +134,7 @@ Record the result as `brief` in the storyboard. Record the context as `brief.con
 
 ```bash
 VA init <slug>
-VA paper <project> <arXiv id, address, or PDF>
+VA paper <project> <arXiv id, address, PDF, or saved arXiv HTML page>
 ```
 
 This writes `paper/paper.md`. Read that file. The abstract is first, with one numbered claim on each line. The abstract has priority over the body. Take the focus and the hook from its claims. Account for each claim in the `claims` of the storyboard. Read [references/paper.md](references/paper.md) before you write the brief.

@@ -121,7 +121,7 @@ export const check = async (paths) => {
 
 /** Read a paper into the project: its abstract and what it claims, its sections, figures, and tables. */
 export const paper = async (paths, source) => {
-  if (!source) fail('Usage: va paper <project> <source>, where the source is an arXiv id (2610.12374), an arXiv address, or the path of a PDF.');
+  if (!source) fail('Usage: va paper <project> <source>, where the source is an arXiv id (2610.12374), an arXiv address, the path of a PDF, or a saved arXiv HTML page.');
   const out = path.join(paths.dir, 'paper');
   const result = await run('uv', ['run', '--quiet', path.join(RUNTIME_DIR, 'python', 'paper.py'), '--source', source, '--out', out], {capture: true, allowFail: true});
   if (result.code !== 0) fail(`Could not read the paper.\n${(result.stderr || result.stdout).trim().split('\n').slice(-8).join('\n')}`);

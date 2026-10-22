@@ -9,6 +9,7 @@ Paper ingestion for visualize-anything: a paper, read into the project before an
     uv run paper.py --source 2610.12374 --out <project>/paper
     uv run paper.py --source https://arxiv.org/abs/1706.03762 --out <project>/paper
     uv run paper.py --source ~/papers/attention.pdf --out <project>/paper
+    uv run paper.py --source ~/Downloads/1706.03762v7.html --out <project>/paper   # a saved arXiv HTML page
 
 It writes:
 
@@ -97,12 +98,22 @@ def licence_of(identifier: str) -> dict:
 
 
 def from_arxiv_html(identifier: str, out: Path) -> dict | None:
-    from bs4 import BeautifulSoup
-
     try:
         raw, landed = fetch(f"https://arxiv.org/html/{identifier}")
     except Exception:
         return None
+    return from_html(raw, landed, identifier, out, "arXiv HTML")
+
+
+def saved_html_id(raw: bytes) -> str | None:
+    """The arXiv id of a saved HTML edition: its image paths start with it (1706.03762v7/Figures/...)."""
+    found = re.search(rb'(?:src|href)="(?:https?://arxiv\.org/html/)?(\d{4}\.\d{4,5}v\d+)/', raw)
+    return found.group(1).decode() if found else None
+
+
+def from_html(raw: bytes, landed: str, identifier: str | None, out: Path, read_from: str) -> dict | None:
+    from bs4 import BeautifulSoup
+
     soup = BeautifulSoup(raw, "lxml")
     if not soup.select_one(".ltx_document, .ltx_page_main"):
         return None
@@ -169,7 +180,7 @@ def from_arxiv_html(identifier: str, out: Path) -> dict | None:
         kind = "references" if "ltx_bibliography" in node.get("class", []) else "appendix" if "ltx_appendix" in node.get("class", []) else "body"
         sections.append({"heading": clean(heading.get_text(" ")) if heading else "", "kind": kind, "text": text, "figures": cited(text, "figure"), "tables": cited(text, "table")})
 
-    return {"source": f"https://arxiv.org/abs/{identifier}", "read_from": "arXiv HTML", "id": identifier, "title": title, "authors": authors, "abstract": abstract,
+    return {"source": f"https://arxiv.org/abs/{identifier}" if identifier else landed, "read_from": read_from, "id": identifier, "title": title, "authors": authors, "abstract": abstract,
             "sections": sections, "figures": sorted(figures, key=lambda f: f["n"]), "tables": sorted(tables, key=lambda t: t["n"])}
 
 
@@ -638,11 +649,21 @@ def main() -> None:
             paper = from_pdf(out / "paper.pdf", out, f"https://arxiv.org/abs/{identifier}")
             paper["id"] = identifier
         paper["licence"] = licence_of(identifier)
+    elif local.exists() and local.suffix.lower() in (".html", ".htm"):
+        # An arXiv HTML edition saved from a browser, for when arxiv.org cannot be reached from here.
+        # Its figures are fetched from arXiv if it can be reached, and are otherwise left out.
+        raw = local.read_bytes()
+        identifier = saved_html_id(raw)
+        landed = f"https://arxiv.org/html/{identifier}/" if identifier else local.resolve().as_uri()
+        paper = from_html(raw, landed, identifier, out, "a saved arXiv HTML page")
+        if paper is None:
+            sys.exit(f"paper: {args.source!r} is not an arXiv HTML edition (no LaTeXML document in it).")
+        paper["licence"] = licence_of(identifier) if identifier else {"url": None, "open": None}
     elif local.exists() and local.suffix.lower() == ".pdf":
         paper = from_pdf(local, out, str(local))
         paper["licence"] = {"url": None, "open": None}
     else:
-        sys.exit(f"paper: cannot read {args.source!r}. Give an arXiv id (2610.12374), an arXiv address, or the path of a PDF.")
+        sys.exit(f"paper: cannot read {args.source!r}. Give an arXiv id (2610.12374), an arXiv address, the path of a PDF, or a saved arXiv HTML page.")
 
     if not paper["abstract"]:
         sys.exit("paper: no abstract was found, and the abstract is what the video is planned from. If this is a PDF without one, add it to paper.json by hand and rerun the check.")
