@@ -17,6 +17,6 @@ Training cost, as the authors estimate it, runs along the bottom, with English-t
 
 The price is paid in pairs. Every word scores every word, itself included. A thousand word pieces make a million scores, per head and per layer. By the paper's own count, that is cheaper per layer than recurrence only while a sentence has fewer words than its vectors have dimensions, 512 here. Training runs the decoder at once too, with later words masked, but generating output is still one word at a time.
 
-So attention links any two words in one step, and the encoder computes every link at once. That design, trained for twelve hours, came out ahead of every published English-to-German system.
+So attention links any two words in one step, and the encoder computes every link at once. Scaling the scores, the authors suspect, keeps the softmax trainable. That design, trained for twelve hours, came out ahead of every published English-to-German system.
 
 The paper is Attention Is All You Need, by Vaswani and colleagues.

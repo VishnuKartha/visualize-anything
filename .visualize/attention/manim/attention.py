@@ -290,6 +290,8 @@ class Limit(VAScene):
         with self.beat(1) as b:
             b.until("cheaper per layer")
             self.play(FadeOut(per), big.animate.set_opacity(0.35), Write(cheaper), run_time=1.0)
+            b.until("512 here")
+            self.play(Circumscribe(cheaper, color=AMBER), run_time=1.0)
             b.until("later words masked")
             self.play(*[sq.animate.set_fill(ROSE, 0.25).set_stroke(ROSE) for sq in masked], FadeIn(mask_tag), run_time=0.9)
             b.until("one word at a time")

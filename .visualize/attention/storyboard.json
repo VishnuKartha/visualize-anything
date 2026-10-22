@@ -513,7 +513,7 @@
     {
       "id": "attend",
       "need": "motion",
-      "continues": true,
+      "continues": false,
       "why": "The link up close, on the same sentence: ran's query against every key, divided by the square root of the key size, the scores as bars, softmax into weights that land on cat, and the weighted sum.",
       "class": "Attend",
       "script": "manim/attention.py",
@@ -673,6 +673,9 @@
       "beats": [
         {
           "say": "So attention links any two words in one step, and the encoder computes every link at once."
+        },
+        {
+          "say": "Scaling the scores, the authors suspect, keeps the softmax trainable."
         },
         {
           "say": "That design, trained for twelve hours, came out ahead of every published English-to-German system."
