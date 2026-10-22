@@ -724,7 +724,8 @@
         },
         {
           "text": "12 hours: ahead of every earlier EN-DE result",
-          "from": "results"
+          "from": "results",
+          "beat": 2
         }
       ],
       "beats": [

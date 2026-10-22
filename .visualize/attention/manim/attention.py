@@ -134,7 +134,7 @@ class Paths(VAScene):
         one = Tally(end=1, unit=("step", "steps"), owner="self-attention", font_size=48, color=ACCENT).move_to([4.3, 2.55, 0])
         rest = VGroup(*[link(row, i, j, ACCENT, width=2, rise=0.15).set_stroke(opacity=0.4) for i in range(N) for j in range(i + 1, N) if (i, j) != (CAT, RAN)])
         with self.beat(3) as b:
-            self.play(FadeOut(stairs), layers.animate.set_opacity(0.35), FadeOut(far), run_time=0.5)
+            self.play(FadeOut(stairs), FadeOut(layers), FadeOut(far), run_time=0.5)
             b.until("links ran to cat")
             self.play(Create(hop), run_time=1.1)
             self.play(FadeIn(one.set(1)), run_time=0.4)
@@ -164,7 +164,7 @@ class Attend(VAScene):
         pos = Text("+ position", font=SANS, font_size=28, color=VIOLET).move_to([1.5, -2.15, 0])
         ks = VGroup(*[Text("k", font=MONO, font_size=30, color=CYAN).next_to(row.boxes[i], UP, buff=0.2).shift(LEFT * 0.25) for i in range(N)])
         vs = VGroup(*[Text("v", font=MONO, font_size=30, color=VIOLET).next_to(row.boxes[i], UP, buff=0.2).shift(RIGHT * 0.25) for i in range(N)])
-        q = Text("q", font=MONO, font_size=34, color=CURRENT, weight=BOLD).next_to(ks[RAN], UP, buff=0.12)
+        q = Text("q", font=MONO, font_size=34, color=CURRENT, weight=BOLD).next_to(row.boxes[RAN], RIGHT, buff=0.15).align_to(row.boxes[RAN], UP)
         with self.beat(0) as b:
             self.play(FadeOut(hop), FadeIn(made_up), run_time=0.6)
             b.until("its position")
@@ -175,9 +175,10 @@ class Attend(VAScene):
             self.play(LaggedStart(*[FadeIn(k, shift=UP * 0.1) for k in ks], lag_ratio=0.06), run_time=0.6)
             b.until("a value")
             self.play(LaggedStart(*[FadeIn(v, shift=UP * 0.1) for v in vs], lag_ratio=0.06), run_time=0.6)
+            proj = Math("q, k, v = x W_Q, x W_K, x W_V", font_size=36, color=MUTED).move_to([-3.2, 2.75, 0])
             b.until("learned projections")
-            self.play(Write(formula), run_time=0.9)
-            self.play(ks.animate.set_opacity(0.35), vs.animate.set_opacity(0.35), run_time=0.4)
+            self.play(FadeIn(proj), run_time=0.3)
+            self.play(Write(formula), ks.animate.set_opacity(0.35), vs.animate.set_opacity(0.35), run_time=0.6)
 
         # scores: the toy dot products over sqrt(4) = 2, as bars over each word
         scale = 0.42
@@ -187,7 +188,7 @@ class Attend(VAScene):
                         .move_to([row.boxes[i].get_center()[0], base_y, 0], aligned_edge=DOWN) for i, s in enumerate(scaled)])
         score_tag = Text("score", font=SANS, font_size=28, color=CYAN).next_to(bars[0], UP, buff=0.25)
         with self.beat(1) as b:
-            self.play(FadeOut(pos), run_time=0.4)
+            self.play(FadeOut(pos), FadeOut(proj), run_time=0.4)
             b.until("dotted with every key")
             self.play(LaggedStart(*[GrowFromEdge(bar, DOWN) for bar in bars], lag_ratio=0.08), FadeIn(score_tag), run_time=1.2)
             self.play(ks.animate.set_opacity(0.3), vs.animate.set_opacity(0.3), q.animate.set_opacity(0.4), made_up.animate.set_opacity(0.4), run_time=0.4)
@@ -214,7 +215,8 @@ class Attend(VAScene):
             self.play(FadeOut(formula), FadeIn(out), vs.animate.set_opacity(1), run_time=0.5)
             moving = VGroup(*[vs[i].copy().scale(0.6 + 1.6 * weights[i]) for i in range(N)])
             self.play(LaggedStart(*[Create(f) for f in flows], lag_ratio=0.05),
-                      *[moving[i].animate.move_to(out.get_bottom() + DOWN * 0.15).set_opacity(0.0 if i != CAT else 1) for i in range(N)], run_time=1.2)
+                      moving[CAT].animate.move_to(out.get_bottom() + DOWN * 0.15),
+                      *[FadeOut(moving[i]) for i in range(N) if i != CAT], run_time=1.2)
 
 
 class Scale(VAScene):
@@ -234,7 +236,7 @@ class Scale(VAScene):
         wide_tag = Text(f"q·k, d_k = {fact('dk')}:  spread ≈ {fact('spread'):.0f}", font=MONO, font_size=28, color=ROSE).next_to(ax, UP, buff=0.2)
         unit = Text("q, k entries: mean 0, variance 1", font=SANS, font_size=28, color=MUTED).next_to(ax, DOWN, buff=0.55)
         with self.beat(1) as b:
-            self.play(formula.animate.scale(0.7).move_to([0, 2.8, 0]), FadeIn(ax), run_time=0.8)
+            self.play(formula.animate.scale(0.7).move_to([0, 2.45, 0]), FadeIn(ax), run_time=0.8)
             b.until("sixty-four dimensions")
             self.play(Create(wide), FadeIn(wide_tag), FadeIn(unit), run_time=1.2)
             b.until("eight times wider")
@@ -287,7 +289,7 @@ class Limit(VAScene):
 
         cheaper = Math("n^2 d < n d^2 <=> n < d = 512", font_size=40, color=TEXT).move_to([3.0, -1.55, 0])
         masked = VGroup(*[grid[i * N + j] for i in range(N) for j in range(N) if j > i])
-        mask_tag = Text("later words masked", font=SANS, font_size=28, color=ROSE).next_to(grid, UP, buff=0.2)
+        mask_tag = Text("decoder, in training: later words masked", font=SANS, font_size=28, color=ROSE).next_to(grid, UP, buff=0.2)
         with self.beat(1) as b:
             b.until("cheaper per layer")
             self.play(FadeOut(per), big.animate.set_opacity(0.35), Write(cheaper), run_time=1.0)
