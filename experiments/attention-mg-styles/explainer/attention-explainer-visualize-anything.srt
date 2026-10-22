@@ -1,0 +1,299 @@
+1
+00:00:00,500 --> 00:00:03,240
+A recurrent network reads a sentence one word
+
+2
+00:00:03,240 --> 00:00:03,836
+at a time.
+
+3
+00:00:04,133 --> 00:00:06,678
+Each hidden state waits for the one before it,
+
+4
+00:00:06,678 --> 00:00:09,507
+so within a sentence, seven words take seven
+
+5
+00:00:09,507 --> 00:00:10,469
+steps in a row.
+
+6
+00:00:10,767 --> 00:00:13,239
+Attention already let the decoder look back at
+
+7
+00:00:13,239 --> 00:00:16,359
+every word, but it rode on top of that recurrence.
+
+8
+00:00:16,667 --> 00:00:18,789
+Throw the recurrence away and keep only
+
+9
+00:00:18,789 --> 00:00:21,483
+attention. A model built that way,
+
+10
+00:00:21,483 --> 00:00:23,949
+trained for twelve hours on eight GPUs,
+
+11
+00:00:23,949 --> 00:00:26,162
+comes out ahead of every published
+
+12
+00:00:26,162 --> 00:00:29,411
+English-to-German system, ensembles included.
+
+13
+00:00:30,633 --> 00:00:33,033
+That is what the paper Attention Is All You
+
+14
+00:00:33,033 --> 00:00:34,233
+Need sets out to show.
+
+15
+00:00:35,467 --> 00:00:37,457
+So what was the recurrence costing?
+
+16
+00:00:37,457 --> 00:00:39,806
+In this sentence, ran needs its subject,
+
+17
+00:00:39,806 --> 00:00:41,347
+cat, five words back.
+
+18
+00:00:41,633 --> 00:00:44,209
+In the recurrent network, cat travels through
+
+19
+00:00:44,209 --> 00:00:47,441
+five steps of hidden state, none of them in parallel.
+
+20
+00:00:47,767 --> 00:00:50,892
+Convolutional models like ConvS2S do run in
+
+21
+00:00:50,892 --> 00:00:53,950
+parallel, but a distant pair needs a stack of
+
+22
+00:00:53,950 --> 00:00:54,775
+layers to meet.
+
+23
+00:00:55,067 --> 00:00:57,889
+Self-attention, a sentence attending to its
+
+24
+00:00:57,889 --> 00:01:00,815
+own words, links ran to cat in one step.
+
+25
+00:01:00,815 --> 00:01:03,419
+In the encoder, every word does this at once.
+
+26
+00:01:04,400 --> 00:01:06,821
+The authors argue that paths this short make
+
+27
+00:01:06,821 --> 00:01:08,672
+distant links easier to learn.
+
+28
+00:01:09,900 --> 00:01:12,359
+Up close, each word's vector also includes a
+
+29
+00:01:12,359 --> 00:01:14,983
+stamp of its position, since attention by
+
+30
+00:01:14,983 --> 00:01:16,803
+itself ignores order.
+
+31
+00:01:16,803 --> 00:01:19,428
+From it come a query, a key and a value,
+
+32
+00:01:19,428 --> 00:01:20,892
+three learned projections.
+
+33
+00:01:21,200 --> 00:01:23,718
+The query of ran is dotted with every key and
+
+34
+00:01:23,718 --> 00:01:26,503
+divided by the square root of the key size:
+
+35
+00:01:26,503 --> 00:01:27,872
+one score per word.
+
+36
+00:01:28,167 --> 00:01:30,575
+Softmax turns the scores into weights,
+
+37
+00:01:30,575 --> 00:01:32,319
+and most of the weight goes to cat.
+
+38
+00:01:32,600 --> 00:01:35,816
+The output for ran is the weighted sum of the values.
+
+39
+00:01:37,033 --> 00:01:39,049
+Why divide before the softmax?
+
+40
+00:01:40,833 --> 00:01:43,497
+The model runs several attention heads side by
+
+41
+00:01:43,497 --> 00:01:46,900
+side, each with keys of sixty-four dimensions,
+
+42
+00:01:46,900 --> 00:01:49,683
+and random dot products of that size spread
+
+43
+00:01:49,683 --> 00:01:51,201
+about eight times wider.
+
+44
+00:01:51,533 --> 00:01:53,891
+The authors suspect that pushes the softmax
+
+45
+00:01:53,891 --> 00:01:56,789
+toward all-or-nothing, where gradients are tiny.
+
+46
+00:01:57,067 --> 00:01:59,947
+Dividing by eight brings the spread back to one.
+
+47
+00:02:01,167 --> 00:02:04,991
+On translation, training cost,
+
+48
+00:02:04,991 --> 00:02:07,857
+as the authors estimate it, runs along the
+
+49
+00:02:07,857 --> 00:02:08,559
+bottom, with English-to-German BLEU up the side.
+
+50
+00:02:08,867 --> 00:02:13,976
+The base model, the twelve-hour one,
+
+51
+00:02:13,976 --> 00:02:14,802
+is above and to the left of every earlier
+
+52
+00:02:14,802 --> 00:02:15,155
+system, on the least compute.
+
+53
+00:02:15,433 --> 00:02:17,878
+The big model clears the best by more than two
+
+54
+00:02:17,878 --> 00:02:20,238
+points, and sets a new single-model
+
+55
+00:02:20,238 --> 00:02:21,817
+record on English-to-French.
+
+56
+00:02:23,333 --> 00:02:25,400
+The price is paid in pairs.
+
+57
+00:02:25,400 --> 00:02:28,512
+Every word scores every word, itself included.
+
+58
+00:02:28,512 --> 00:02:31,295
+A thousand word pieces make a million scores,
+
+59
+00:02:31,295 --> 00:02:32,717
+per head and per layer.
+
+60
+00:02:33,033 --> 00:02:35,721
+By the paper's own count, that is cheaper per
+
+61
+00:02:35,721 --> 00:02:37,933
+layer than recurrence only while a sentence
+
+62
+00:02:37,933 --> 00:02:39,844
+has fewer words than its vectors have
+
+63
+00:02:39,844 --> 00:02:42,711
+dimensions, 512 here.
+
+64
+00:02:42,711 --> 00:02:45,255
+Training runs the decoder at once too,
+
+65
+00:02:45,255 --> 00:02:48,156
+with later words masked, but generating output
+
+66
+00:02:48,156 --> 00:02:49,881
+is still one word at a time.
+
+67
+00:02:51,067 --> 00:02:54,066
+So attention links any two words in one step,
+
+68
+00:02:54,066 --> 00:02:56,539
+and the encoder computes every link at once.
+
+69
+00:02:56,833 --> 00:02:59,247
+Scaling the scores, the authors suspect,
+
+70
+00:02:59,247 --> 00:03:00,769
+keeps the softmax trainable.
+
+71
+00:03:01,067 --> 00:03:03,722
+That design, trained for twelve hours,
+
+72
+00:03:03,722 --> 00:03:05,110
+came out ahead of every
+
+73
+00:03:05,110 --> 00:03:07,019
+published English-to-German system.
+
+74
+00:03:08,233 --> 00:03:10,673
+The paper is Attention Is All You Need,
+
+75
+00:03:10,673 --> 00:03:12,361
+by Vaswani and colleagues.

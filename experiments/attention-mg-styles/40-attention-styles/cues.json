@@ -1,0 +1,58 @@
+{
+ "_doc": "One timing sheet for picture and sound. Seconds. The chain: the pen closes word i's loop at steps[i]. hold = the pen rests on 'ran'. link = the one arc ran -> cat. bloom = every other pair's arc grows at once. fill = line-to-fill of the dome from the anchor at 'ran'. wordmark / tagline / rules = the sign-off.",
+ "words": [
+  "the",
+  "cat",
+  "that",
+  "the",
+  "dog",
+  "chased",
+  "ran"
+ ],
+ "steps": [
+  0.3,
+  0.62,
+  0.94,
+  1.26,
+  1.58,
+  1.9,
+  2.22
+ ],
+ "hold": [
+  2.22,
+  2.55
+ ],
+ "link": [
+  2.55,
+  3.45
+ ],
+ "bloom": [
+  3.95,
+  4.65
+ ],
+ "fill": [
+  5.55,
+  6.75
+ ],
+ "glint": [
+  8.8,
+  9.6
+ ],
+ "camera": {
+  "follow_until": 2.25,
+  "dolly": [
+   2.25,
+   3.3
+  ],
+  "zoom_start": 1.55,
+  "drift_end": 1.035
+ },
+ "wordmark": 7.05,
+ "tagline": 7.55,
+ "rules": [
+  7.65,
+  8.45
+ ],
+ "label_steps": 2.3,
+ "label_link": 3.45
+}
