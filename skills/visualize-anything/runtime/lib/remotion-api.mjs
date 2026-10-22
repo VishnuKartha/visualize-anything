@@ -15,8 +15,10 @@ export const withRenderer = async (publicDir, work) => {
   // Remotion's own headless browser is the default. It draws on the system's display clock, so
   // with the display asleep or the session locked it never produces a frame and every render
   // would time out. Full Chrome's headless mode keeps its own clock, so fall back to it.
-  let mode = {};
-  let browser = await openBrowser('chrome', {logLevel: 'error'});
+  // VA_CHROME names a browser on purpose: use it, and never download Remotion's own (which fails offline, or
+  // behind a proxy that refuses remotion.media, as an error nothing here can catch).
+  let mode = process.env.VA_CHROME ? {browserExecutable: process.env.VA_CHROME, chromeMode: 'chrome-for-testing'} : {};
+  let browser = await openBrowser('chrome', {logLevel: 'error', ...mode});
   const common = () => ({serveUrl, puppeteerInstance: browser, logLevel: 'error', ...mode});
   try {
     await selectComposition({...common(), id: 'Explainer', inputProps: {}, timeoutInMilliseconds: PROBE_TIMEOUT});

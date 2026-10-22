@@ -174,7 +174,8 @@ export const authoredText = (storyboard) => {
   for (const scene of storyboard.scenes) {
     scene.beats.forEach((beat, index) => {
       out.push({where: `${scene.id} beat ${index + 1}`, text: beat.say});
-      for (const shown of [beat.text, ...(beat.cues || []).map((cue) => cue.text)]) {
+      // A note is on screen too: the qualification set under an evidence scene or beside a code panel.
+      for (const shown of [beat.text, beat.note, ...(beat.cues || []).flatMap((cue) => [cue.text, cue.note])]) {
         if (shown) out.push({where: `${scene.id} beat ${index + 1}, on screen`, text: shown});
       }
     });

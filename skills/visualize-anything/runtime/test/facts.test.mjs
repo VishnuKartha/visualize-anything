@@ -142,3 +142,8 @@ test('each viewer gets the same plan and their own instructions; only those who 
 test('a place in a document is not a number to check', () => {
   assert.deepEqual(numbersIn('Table 2 and Figure 4, Section 3.1, but 15 percent').map((number) => number.value), [15]);
 });
+
+test('a note under a picture is on screen, so its numbers are held to the ledger', () => {
+  const scenes = [{id: 'r', kind: 'chart', beats: [{say: 'It is quick.', note: '3.5 days on 8 P100 GPUs', cues: [{at: 'quick', note: 'about 41.8'}]}], labels: ['A'], values: [1]}];
+  assert.deepEqual(unbackedNumbers({scenes, facts: [{id: 'one', value: 1}]}).map((number) => [number.value, number.where]), [[3.5, 'r beat 1, on screen'], [8, 'r beat 1, on screen'], [41.8, 'r beat 1, on screen']]);
+});
