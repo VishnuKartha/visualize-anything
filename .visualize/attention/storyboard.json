@@ -627,13 +627,47 @@
       "beats": [
         {
           "say": "On translation, training cost, as the authors estimate it, runs along the bottom, with English-to-German BLEU up the side.",
-          "show": 5
+          "show": 1,
+          "cues": [
+            {
+              "at": "training cost",
+              "show": 2
+            },
+            {
+              "at": "authors estimate",
+              "show": 3
+            },
+            {
+              "at": "along the bottom",
+              "show": 4
+            },
+            {
+              "at": "English-to-German BLEU",
+              "show": 5
+            }
+          ]
         },
         {
           "say": "The base model, the twelve-hour one, is above and to the left of every earlier system, on the least compute.",
           "show": 6,
           "focus": [
             "base 27.3"
+          ],
+          "cues": [
+            {
+              "at": "every earlier system",
+              "focus": [
+                "base 27.3",
+                "ConvS2S ens. 26.36",
+                "MoE"
+              ]
+            },
+            {
+              "at": "least compute",
+              "focus": [
+                "base 27.3"
+              ]
+            }
           ]
         },
         {
@@ -642,7 +676,19 @@
           "focus": [
             "big 28.4"
           ],
-          "note": "EN-FR, big model: 41.8 BLEU after 3.5 days on 8 P100 GPUs"
+          "cues": [
+            {
+              "at": "clears the best",
+              "focus": [
+                "big 28.4",
+                "ConvS2S ens. 26.36"
+              ]
+            },
+            {
+              "at": "English-to-French",
+              "note": "EN-FR, big model: 41.8 BLEU after 3.5 days on 8 P100 GPUs"
+            }
+          ]
         }
       ]
     },
